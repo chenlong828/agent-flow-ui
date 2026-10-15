@@ -1,0 +1,85 @@
+---
+layer: design
+module: global
+status: current
+updated: 2025-10-14
+---
+
+# 开发环境配置（本机实况）
+
+本文档记录在本机开发、运行、验证本项目所需的全部环境事实。所有条目均经过实际操作验证，不是理论配置说明。环境变化时更新本文档并同步检查坑档案（`docs/history/pitfalls.md`）中的存续条件。
+
+## 1. 项目本体与本地运行
+
+- 项目形态：纯前端高保真交互原型，原生 HTML / CSS / JavaScript，零第三方依赖，无构建步骤。
+- 静态服务器：项目根目录 `server.js`，Node.js 原生模块实现，无任何 npm 依赖。
+- 启动方式与端口：
+  - 默认端口 3000，可用环境变量 `PORT` 覆盖（例如 `PORT=3001 node server.js`）。
+  - 根路径 `/` 返回 302 跳转到 `/pages/workflow-list.html`。
+  - 本次会话中以分离（detached）方式常驻运行，日志输出到 `/tmp/agentflow-server.log`。
+- 验证服务是否存活：`curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/pages/workflow-list.html`，期望 200。
+
+## 2. 网络代理（本机固定事实）
+
+- 本机默认**直连**网络，环境变量中不配置任何代理。
+- 本机 `127.0.0.1:2080` 常驻一个 SOCKS5 代理，可同时访问被限制的境外站点与国内站点；命令行使用时加前缀 `ALL_PROXY=socks5h://127.0.0.1:2080 <命令>`（`socks5h` 表示域名解析也走代理）。
+- 适用命令：`curl`、`git`、多数命令行下载工具。
+- 内置的网页抓取工具（web 类工具）**不走**这个代理；需要代理才能访问的站点必须在 bash 中用 curl 加前缀完成。
+- 实际用到代理的场景（本次会话真实发生）：下载 Playwright 的 WebKit 浏览器构建包——直连和 npmmirror 镜像均返回 404，只有通过代理访问 `cdn.playwright.dev` 才能拿到。
+
+## 3. Playwright 与 WebKit 浏览器（自动化测试核心）
+
+这是本项目做引擎级验证的基础设施，安装过程每一步都有坑，完整记录如下。
+
+### 3.1 安装位置与约定
+
+- Playwright 库安装在 `/tmp/dsh/node_modules`（项目目录之外，保持项目零依赖的约定）。
+- 浏览器构建存放目录：`/tmp/dsh/pw-browsers`，运行时通过环境变量 `PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers` 指定。
+- 测试脚本统一放 `/tmp/dsh/`，命名习惯：`wk-*.js`（WebKit 相关）、用途写在脚本头部注释。
+
+### 3.2 安装步骤（按顺序执行）
+
+1. 安装 Playwright 库时必须重定向 npm 缓存目录（默认的 `~/.npm` 在本机被屏蔽，会直接报权限错误）：
+   ```bash
+   npm_config_cache=/tmp/dsh/.npm-cache npm install playwright@1.49.1 --prefix /tmp/dsh
+   ```
+2. `npx playwright install webkit` 会尝试从 CDN 下载浏览器构建，**直连与 npmmirror 镜像都返回 404**，不要反复重试。改为手动下载（必须走代理）：
+   ```bash
+   curl -x socks5h://127.0.0.1:2080 -o /tmp/dsh/webkit.zip \
+     "https://cdn.playwright.dev/dbazure/download/playwright/builds/webkit/2104/webkit-mac-15-arm64.zip"
+   ```
+   下载得到的文件大小应为 65870767 字节，可用 `ls -l` 核对（版本号 2104 与 Playwright 1.49.1 对应；若升级 Playwright，构建号会变化，从报错信息里读出期望的构建号）。
+3. 解压到 `PLAYWRIGHT_BROWSERS_PATH` 指向的目录下，目录名必须与 Playwright 期望的一致（报错信息中会写出，例如 `webkit-2104`），然后在解压出的目录内创建空文件 `INSTALLATION_COMPLETE`（Playwright 用它判断安装已完成，缺了会认为未安装）。
+4. 运行任何测试脚本时都带上环境变量：
+   ```bash
+   PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers node /tmp/dsh/wk-xxx.js
+   ```
+
+### 3.3 能做什么、不能做什么
+
+- 能做：真实 WebKit 引擎渲染、层叠与遮挡断言、坐标与拖拽验证、截图、localStorage 持久化验证、`pageerror` 事件收集 JavaScript 运行时错误。
+- 已知局限（均有实测证据，详见坑档案）：
+  - 无头 Chrome 在本机启动即崩溃（报 `Failed to create headless user data directory container`，随后进程 Trap），**不要再尝试 Chrome，直接用 WebKit**。
+  - 合成鼠标事件（`page.mouse`）的坐标与页面内部命中测试在缩放场景下不一致，验证拖拽必须改用页面内程序化派发事件（详见《调试方案》文档第 4 节）。
+  - 该 WebKit 构建对 CSS `zoom` 的支持是残缺的（计算值存在、布局无视），不能用它推断真实 Safari 的 zoom 行为。
+
+## 4. Safari 手工调试链路（真机引擎）
+
+- Safari 远程自动化（safaridriver / WebDriver）需要先执行 `sudo safaridriver --enable`（对应系统设置里的「允许远程自动化」）；未开启时连接直接被拒。本次会话未启用（没有 sudo 权限交互），自动化一律走上面的 Playwright WebKit。
+- 用户侧手工验收路径（告知用户的操作）：
+  - 强制刷新绕过陈旧缓存：`Command + Option + R`。用户报「页面不显示/样式错乱」时，第一响应永远是让用户强刷，再要控制台报错（`Option + Command + C` 打开 Web 检查器的控制台）。
+  - Web 检查器附加：Safari 菜单「开发」→ 选中页面即可断点、看网络、执行表达式。
+
+## 5. JavaScriptCore 语法冒烟（最轻量的引擎检查）
+
+- 系统自带 JavaScriptCore 命令行解释器，路径：
+  ```
+  /System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Helpers/jsc
+  ```
+- 用途：把浏览器端 JavaScript 文件在 Safari 同源的 JavaScript 引擎里跑一遍，抓 `SyntaxError`（语法不兼容 Safari 的情况，例如过早使用某新语法）。运行时的 `ReferenceError: Can't find variable: DF / window / document` 是**预期噪音**（浏览器全局对象在命令行不存在），出现这类错误恰恰说明语法解析已通过。
+- 局限：只能查语法，查不出 DOM 绑定作用域错误、层叠错误等任何行为问题。
+
+## 6. 相关文档
+
+- 调试方法与断言模板：`docs/design/debugging-and-testing.md`
+- 坑档案（环境类坑的存续条件）：`docs/history/pitfalls.md`

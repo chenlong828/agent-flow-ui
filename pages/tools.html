@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>工具与集成 · AgentFlow</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<style>
+/* ---- 工具与集成 · 页面私有样式（前缀 tl-） ---- */
+.tl-hide { display:none !important; }
+.tl-count { cursor:pointer; font-weight:600; }
+.tl-count:hover { text-decoration:none; color:var(--c-primary-d); }
+.tl-hlink { cursor:pointer; }
+.tl-hlink:hover { text-decoration:none; color:#0f766e; }
+.tl-empty-title { font-size:14px; font-weight:600; color:var(--t-2); margin-bottom:4px; }
+.tl-empty-sub { font-size:12px; }
+
+/* 调试抽屉 */
+.tl-prow { margin-bottom:10px; }
+.tl-pmeta { display:flex; align-items:center; gap:6px; margin-bottom:4px; flex-wrap:wrap; }
+.tl-pkey { font-weight:600; font-size:12px; color:var(--t-2); }
+.tl-pdesc { font-size:11px; color:var(--t-3); }
+.tl-run-row { display:flex; align-items:center; gap:10px; margin:2px 0 8px; }
+.tl-run-row .hint { font-size:11px; color:var(--t-3); }
+.tl-cmd { color:#64748b; }
+.tl-pre { white-space:pre; }
+.tl-hist-item { display:flex; align-items:center; gap:8px; padding:7px 2px; border-bottom:1px dashed var(--c-line); font-size:12px; }
+.tl-hist-item:last-child { border-bottom:none; }
+.tl-hist-item .sp { flex:1; }
+.tl-hist-empty { color:var(--t-3); font-size:12px; padding:6px 0; }
+.tl-ok-t { color:var(--c-ok); font-weight:600; }
+.tl-err-t { color:var(--c-fail); font-weight:600; }
+
+/* 注册/编辑弹窗 */
+.tl-frow { display:grid; grid-template-columns:1fr 92px 1.6fr 28px; gap:6px; margin-bottom:6px; align-items:center; }
+.tl-frow .icon-btn { width:26px; height:26px; }
+
+/* 引用弹层 */
+.tl-ref-item { display:flex; gap:10px; align-items:flex-start; padding:8px 2px; border-bottom:1px dashed var(--c-line); }
+.tl-ref-item:last-child { border-bottom:none; }
+.tl-ref-item .sub { font-size:11px; color:var(--t-3); margin-top:1px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="../assets/js/mock-data.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/pages/tools.js"></script>
+</body>
+</html>
