@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>工作区详情 · AgentFlow</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<style>
+  .wd-topline { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .wd-topline .sub { font-size:12px; color:var(--t-3); }
+  .wd-block { margin-bottom:14px; }
+  .wd-grid2 { display:grid; grid-template-columns:1.15fr 1fr; gap:14px; align-items:start; margin-bottom:14px; }
+  .wd-frow { display:grid; grid-template-columns:170px 1fr; gap:6px 10px; align-items:center; margin-bottom:14px; }
+  .wd-frow > label { font-size:12px; color:var(--t-2); font-weight:600; }
+  .wd-frow .hint { grid-column:2; font-size:11px; color:var(--t-3); margin-top:-2px; }
+  .wd-card-h-btn { margin-left:auto; }
+  .wd-kv-mask { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:var(--t-3); margin-left:6px; }
+  .wd-policy { font-size:12px; color:var(--t-2); margin-bottom:12px; }
+  @media (max-width:1100px) { .wd-grid2 { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="../assets/js/mock-data.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/pages/workspace-common.js"></script>
+<script src="../assets/js/pages/workspace-detail.js"></script>
+</body>
+</html>

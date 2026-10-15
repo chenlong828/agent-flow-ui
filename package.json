@@ -1,0 +1,9 @@
+{
+  "name": "agent-flow-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "研发智能体工作流编排服务 — 高保真交互原型（纯前端，Node 零依赖静态服务）",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

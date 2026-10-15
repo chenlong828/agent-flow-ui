@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专家管理 · AgentFlow</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<style>
+  /* ===== 专家管理私有样式（前缀 ex-） ===== */
+  .ex-sub { font-size:12px; color:var(--t-3); }
+  .ex-mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; }
+  .ex-pre { white-space:pre-wrap; font-size:13px; line-height:1.7; color:var(--t-2); min-width:0; }
+  .ex-sum { font-size:12px; color:var(--t-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+
+  /* ② Skill 有序列表 */
+  .ex-skill-item { display:flex; align-items:flex-start; gap:8px; padding:8px 10px; border:1px solid var(--c-line); border-radius:6px; margin-bottom:6px; background:var(--c-panel); }
+  .ex-skill-item .ex-idx { width:20px; height:20px; border-radius:50%; background:#eef2f7; color:var(--t-2); font-size:11px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+  .ex-move { border:1px solid var(--c-line-2); background:var(--c-panel); border-radius:4px; width:22px; height:22px; line-height:1; cursor:pointer; color:var(--t-2); font-size:13px; flex-shrink:0; padding:0; }
+  .ex-move:hover:not(:disabled) { border-color:var(--c-primary); color:var(--c-primary); }
+  .ex-move:disabled { opacity:.35; cursor:not-allowed; }
+  .ex-x { cursor:pointer; color:var(--t-3); font-style:normal; font-size:14px; padding:0 2px; flex-shrink:0; line-height:20px; }
+  .ex-x:hover { color:var(--c-fail); }
+
+  /* ③ 工具 / ⑤ 参考知识 行 */
+  .ex-row { display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border:1px solid var(--c-line); border-radius:6px; margin-bottom:6px; background:var(--c-panel); }
+  .ex-ref-add { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+
+  /* ④ 渐进式披露 */
+  .ex-wc { border:1px solid var(--c-line); border-radius:6px; padding:8px 12px; margin-bottom:8px; background:var(--c-panel); }
+  .ex-wc summary { cursor:pointer; font-size:13px; font-weight:600; color:var(--t-1); }
+  .ex-wc[open] summary { margin-bottom:6px; }
+
+  /* 抽屉区块锚点定位 */
+  .ex-sec { scroll-margin-top:12px; }
+  .ex-flash { animation:exflash 1.4s ease-out; }
+  @keyframes exflash { 0% { background:#eff6ff; } 100% { background:transparent; } }
+
+  /* 新建弹窗色板 */
+  .ex-swatches { display:flex; gap:8px; flex-wrap:wrap; }
+  .ex-swatch { position:relative; width:28px; height:28px; border-radius:7px; cursor:pointer; display:inline-flex; }
+  .ex-swatch input { position:absolute; inset:0; opacity:0; margin:0; cursor:pointer; }
+  .ex-swatch i { position:absolute; inset:0; border-radius:7px; border:2px solid transparent; transition:.12s; pointer-events:none; }
+  .ex-swatch input:checked + i { border-color:#111827; box-shadow:inset 0 0 0 2px #fff; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="../assets/js/mock-data.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/pages/experts.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>工作流 · AgentFlow</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<style>
+/* ===== 工作流列表 · 私有样式（前缀 wl-） ===== */
+.wl-tabrow { display:flex; align-items:flex-end; gap:14px; margin-bottom:14px; }
+.wl-tabrow .tabs { flex:1; margin-bottom:0; }
+.wl-tabrow .search-box { margin-bottom:6px; }
+.wl-viewbar { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:12px; font-size:12px; color:var(--t-3); }
+.wl-card .ic-desc { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.wl-meta { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--t-2); flex-wrap:wrap; }
+.wl-meta .sep { color:var(--t-3); }
+.wl-lastrun { display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+.wl-lastrun:hover { opacity:.8; }
+.wl-never { color:var(--t-3); }
+.wl-more { border:none; background:transparent; cursor:pointer; color:var(--t-3); padding:3px 5px; border-radius:4px; display:inline-flex; align-items:center; line-height:1; }
+.wl-more:hover { background:rgba(0,0,0,.06); color:var(--t-1); }
+.wl-acts { display:flex; align-items:center; gap:6px; }
+.wl-tpl-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+.wl-tpl { border:1px solid var(--c-line); border-radius:6px; padding:8px 10px; cursor:pointer; background:var(--c-panel); }
+.wl-tpl:hover { border-color:#b6c6e3; }
+.wl-tpl.on { border-color:var(--c-primary); background:var(--c-primary-bg); }
+.wl-tpl .t1 { font-size:12px; font-weight:600; color:var(--t-1); }
+.wl-tpl .t2 { font-size:11px; color:var(--t-3); margin-top:2px; }
+.wl-radio { display:inline-flex; align-items:center; gap:4px; margin-right:16px; cursor:pointer; font-size:12px; color:var(--t-1); }
+.wl-req { color:var(--c-fail); }
+.wl-ro { background:var(--c-line); color:var(--t-2); cursor:default; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="../assets/js/mock-data.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/pages/workflow-list.js"></script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Harness 管理 · AgentFlow</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<style>
+  /* ---- Harness 管理页私有样式（前缀 ha-） ---- */
+  .ha-name { display:flex; align-items:center; gap:2px; }
+  .ha-type { white-space:nowrap; color:var(--t-2); }
+  .ha-load { display:flex; align-items:center; gap:8px; min-width:130px; }
+  .ha-load .progress { flex:1; }
+  .ha-load .n { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:var(--t-2); white-space:nowrap; }
+  .ha-acts { white-space:nowrap; }
+  .ha-acts .btn.link { padding:2px 4px; }
+  tr.ha-dim td { opacity:.55; }
+  tr.ha-dim td .rowlink:hover { opacity:1; }
+
+  /* 详情抽屉 */
+  .ha-kv-name { font-weight:700; }
+  .ha-chips-box { display:flex; flex-direction:column; gap:8px; }
+  .ha-chips-add { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .ha-chips-add .lbl { font-size:11px; color:var(--t-3); flex-shrink:0; }
+  .ha-pchip { cursor:pointer; background:#eef2f7; }
+  .ha-pchip:hover { background:#e0e9f5; }
+  .ha-pchip.on { opacity:.4; cursor:default; }
+  .ha-pchip.on:hover { background:#eef2f7; }
+  .ha-quota { display:flex; gap:16px; flex-wrap:wrap; }
+  .ha-quota .field { margin-bottom:0; min-width:180px; }
+  .ha-mini-tbl th { padding:6px 10px; }
+  .ha-mini-tbl td { padding:6px 10px; }
+  .ha-hb { display:flex; flex-direction:column; gap:7px; }
+  .ha-hb .row { display:flex; align-items:baseline; gap:8px; font-size:12px; color:var(--t-2); }
+  .ha-hb .row .dot { align-self:center; margin-right:0; }
+  .ha-hb .row .clock { font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--t-1); min-width:118px; }
+  .ha-hb .row .sub { font-size:11px; color:var(--t-3); }
+  .ha-hb .row.bad .clock, .ha-hb .row.bad .sub { color:var(--c-fail); }
+
+  /* 注册弹窗 */
+  .ha-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
+  .ha-form-grid .full { grid-column:1 / -1; }
+  .ha-test-wait { color:var(--t-3); font-size:12px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="../assets/js/mock-data.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/pages/harnesses.js"></script>
+</body>
+</html>
