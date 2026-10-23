@@ -26,4 +26,4 @@ updated: 2026-10-23
 
 ## 当前在飞
 
-- `works/2026-10-23-m1-traceability/`（M1 十页 REQ/SCN/组件追溯补齐；旁路）。
+无。
