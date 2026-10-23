@@ -1,7 +1,7 @@
 ---
 layer: design
 module: workflow-list
-status: designed
+status: verified
 flow: browse-workflows
 scenario: SCN-0002
 updated: 2026-10-23
@@ -31,11 +31,11 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）；本批只到 `designed`，未写 runner，因此不标 `verified`。
+执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0002-T1 | 正 | 列表条目数、统计 total 与 `MOCK.workflows.length` 相等；默认视图为卡片视图 | 待补 |
-| SCN-0002-T2 | 正 | 选择「专项子流程」后条目数等于该类型夹具数；搜索无匹配显示空态，清空后恢复 | 待补 |
-| SCN-0002-T3 | 正 | 新建合法名称后 `MOCK.workflows` 增加 1 条且列表 total +1；复制生成含「副本」的草稿 | 待补 |
-| SCN-0002-T4 | 反 | 删除被实例引用的工作流时确认框显示引用数；取消后条目数与引用关系不变 | 待补 |
+| SCN-0002-T1 | 正 | 列表卡片数、统计「共 n」与 MOCK.workflows.length 一致，默认卡片视图 | `tools/verify-m1-scenarios.js#SCN-0002-T1` |
+| SCN-0002-T2 | 正 | 选择「专项子流程」后条目数=夹具子集；搜索不存在名称显示空态；改搜「需求」恢复 1 条 | `tools/verify-m1-scenarios.js#SCN-0002-T2` |
+| SCN-0002-T3 | 正 | 新建合法名称后 MOCK.workflows +1 且为草稿；复制 w1 生成含「副本」的草稿再 +1 | `tools/verify-m1-scenarios.js#SCN-0002-T3` |
+| SCN-0002-T4 | 反 | 删除被 3 个实例引用的 w1 时确认框显示引用数；取消后条目与实例引用不变 | `tools/verify-m1-scenarios.js#SCN-0002-T4` |

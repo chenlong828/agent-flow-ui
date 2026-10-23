@@ -1,7 +1,7 @@
 ---
 layer: requirements
 module: workspaces
-status: accepted
+status: delivered
 updated: 2026-10-23
 ---
 
@@ -16,5 +16,5 @@ updated: 2026-10-23
 | 非目标 | 不做真实 git clone/worktree/目录初始化；连接测试为模拟，失败不阻断创建（已知偏差）；单目录模板；不做真实清理任务。 |
 | 约束 | 纯前端静态原型；新建固定三步；步① 必填校验；归档只追加 `archives`；删除需二次确认；不新增依赖。 |
 | 影响场景 | `SCN-0010`（`design/scenarios/workspace/workspace-config/configure-workspace/scenario.md`） |
-| 澄清记录 | 2026-10-23 回溯登记：列表/向导/详情/归档已存在；本次补 REQ/SCN，场景到 `designed`，未 `verified`。 |
-| 状态 | `accepted` |
+| 澄清记录 | 2026-10-23 回溯登记：列表/向导/详情/归档已存在；本次补 REQ/SCN；2026-10-23 M1 runner 40/40 通过，场景 `verified`，REQ 转 `delivered`。 |
+| 状态 | `delivered` |

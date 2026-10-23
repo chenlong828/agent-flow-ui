@@ -1,7 +1,7 @@
 ---
 layer: requirements
 module: analytics
-status: accepted
+status: delivered
 updated: 2026-10-23
 ---
 
@@ -16,5 +16,5 @@ updated: 2026-10-23
 | 非目标 | 不做真实指标采集与计算；不做导出；不做准出打分卡配置；近 12 周仅占位禁用。 |
 | 约束 | 纯前端静态原型；全部数字来自 `MOCK.analytics`；页面只读、不写业务集合；不新增依赖。 |
 | 影响场景 | `SCN-0009`（`design/scenarios/operations/performance/review-performance/scenario.md`） |
-| 澄清记录 | 2026-10-23 回溯登记：KPI/趋势/准出/审计已存在；本次补 REQ/SCN，场景到 `designed`，未 `verified`。 |
-| 状态 | `accepted` |
+| 澄清记录 | 2026-10-23 回溯登记：KPI/趋势/准出/审计已存在；本次补 REQ/SCN；2026-10-23 M1 runner 40/40 通过，场景 `verified`，REQ 转 `delivered`。 |
+| 状态 | `delivered` |

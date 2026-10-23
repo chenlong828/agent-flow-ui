@@ -233,6 +233,7 @@
     h += '<div class="kv" style="margin-bottom:2px"><span class="k">状态</span><span style="display:flex;align-items:center;gap:8px">' +
       DF.tag(ex.enabled ? '启用' : '停用', ex.enabled ? 'green' : 'gray') +
       '<span class="ex-sub">被 ' + refN + ' 个工作流节点引用</span></span></div>';
+    h += '<div class="kv" style="margin-bottom:2px"><span class="k">角色定位</span><span class="ex-pre">' + DF.esc(ex.role || '—') + '</span></div>';
 
     /* ① 角色描述 */
     h += '<div class="section-title" id="ex-sec-role">① 角色描述<span class="line"></span></div>';

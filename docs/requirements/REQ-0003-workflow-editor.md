@@ -1,7 +1,7 @@
 ---
 layer: requirements
 module: workflow-editor
-status: accepted
+status: delivered
 updated: 2026-10-23
 ---
 
@@ -16,5 +16,5 @@ updated: 2026-10-23
 | 非目标 | 不做真实执行引擎与后端保存；不做多人协同；不做权限；保存/发布只改内存夹具，刷新复位。 |
 | 约束 | 纯前端静态原型；坐标与缩放统一走 `toGraph` / `DF.zoomK`；校验错误未清零不得发布；不新增依赖。 |
 | 影响场景 | `SCN-0003`（`design/scenarios/flow/workflow-editor/edit-workflow/scenario.md`） |
-| 澄清记录 | 2026-10-23 回溯登记：编辑器与 6 类节点校验已存在；本次补 REQ/SCN，场景到 `designed`，未 `verified`。 |
-| 状态 | `accepted` |
+| 澄清记录 | 2026-10-23 回溯登记：编辑器与 6 类节点校验已存在；本次补 REQ/SCN；2026-10-23 M1 runner 40/40 通过，场景 `verified`，REQ 转 `delivered`。 |
+| 状态 | `delivered` |

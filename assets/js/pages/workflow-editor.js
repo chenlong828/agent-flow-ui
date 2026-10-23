@@ -809,6 +809,7 @@
   function payload() {
     const g = state.graph;
     return {
+      id: state.wf.id,
       name: document.getElementById('we-name') ? document.getElementById('we-name').value : state.wf.name,
       version: state.wf.ver, published: state.wf.published,
       stages: g.stages.map(s2 => ({ id: s2.id, name: s2.name, note: s2.note })),

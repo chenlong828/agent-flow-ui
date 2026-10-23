@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # 开发环境配置（本机实况）
@@ -35,7 +35,7 @@ updated: 2026-10-14
 
 - 依赖装在项目目录之外（保持零依赖约定）：历史用 `/tmp/dsh`，2026-10-23 复跑用 `/tmp/afdev-deps`。临时目录可能被清理，清理后按 3.2 重装。
 - 浏览器构建存放目录：`/tmp/dsh/pw-browsers`，运行时通过环境变量 `PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers` 指定。
-- 场景测试脚本已入库：`tools/verify-user-menu.js`（SCN-0001，引擎层）；结构层 `tools/smoke-test.js`（jsdom）。历史脚本随工序归档在 `history/works/`，不再作现行入口。
+- 场景测试脚本已入库：`tools/verify-user-menu.js`（SCN-0001，引擎层）、`tools/verify-m1-scenarios.js`（SCN-0002..0011，DOM/jsdom，10 场景 × 3 正 1 反）；结构层 `tools/smoke-test.js`（jsdom）。历史脚本随工序归档在 `history/works/`，不再作现行入口。
 
 ### 3.2 安装步骤（按顺序执行）
 
@@ -55,6 +55,7 @@ updated: 2026-10-14
    PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers \
    NODE_PATH=/tmp/afdev-deps/node_modules node tools/verify-user-menu.js
    NODE_PATH=/tmp/afdev-deps/node_modules node tools/smoke-test.js
+   NODE_PATH=/tmp/afdev-deps/node_modules node tools/verify-m1-scenarios.js
    ```
 5. 依赖安装（2026-10-23 复跑实际使用）：
    ```bash
@@ -69,6 +70,18 @@ updated: 2026-10-14
   - 无头 Chrome 在本机启动即崩溃（报 `Failed to create headless user data directory container`，随后进程 Trap），**不要再尝试 Chrome，直接用 WebKit**。
   - 合成鼠标事件（`page.mouse`）的坐标与页面内部命中测试在缩放场景下不一致，验证拖拽必须改用页面内程序化派发事件（详见《调试方案》文档第 4 节）。
   - 该 WebKit 构建对 CSS `zoom` 的支持是残缺的（计算值存在、布局无视），不能用它推断真实 Safari 的 zoom 行为。
+
+### 3.4 DOM 场景 runner（jsdom，保持零依赖门禁）
+
+- 用途：跑 `SCN-0002..0011` 的 3 正 1 反业务断言；执行层是 jsdom，不是真实引擎。
+- 安装（只在需要跑场景时安装，不写入 `package.json`）：
+  ```bash
+  npm_config_cache=/tmp/agentflow-npm-cache npm install --no-save --package-lock=false jsdom
+  ```
+  2026-10-23 实测 `jsdom@30.1.3` 可跑通 40/40。
+- 运行：`npm run test:scenarios`；单场景 `node tools/verify-m1-scenarios.js SCN-0007`。
+- runner 在 `127.0.0.1:0` 自起临时静态 HTTP，结束后关闭；不依赖 `:3000`，也不要求先启动 `server.js`。必须走 HTTP 而不是 `file://`：页面用 `sessionStorage` 传递 `df-new-workspace`，不透明源下会直接抛错。
+- `npm test` 不包含此脚本，保持零依赖；jsdom 缺失时脚本会给出安装提示。
 
 ## 4. Safari 手工调试链路（真机引擎）
 

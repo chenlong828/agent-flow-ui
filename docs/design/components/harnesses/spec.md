@@ -14,7 +14,7 @@ updated: 2026-10-23
 
 ## 0 模块卡
 
-> 追溯：`REQ-0007` / `SCN-0007`（designed，未 verified）。
+> 追溯：`REQ-0007` / `SCN-0007`（verified；DOM/jsdom 3 正 1 反）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
@@ -24,11 +24,11 @@ updated: 2026-10-23
 - 公开契约：页面入口 `pages/harnesses.html`；操作 `CMP-harnesses#list`（统计卡 + 表格渲染）、`#register`（注册弹窗，含连接测试）、`#detail`（详情抽屉，只读）、`#toggle`（启用/停用）、`#delete`（删除）；不变量 ①在线/离线/负载状态展示一致：统计卡与表格行状态点、健康列同源同判据（`_disabled` 优先置灰；离线取 `health==='离线'`；高负载取未停用未离线且 `running/max ≥ 80%`，且「在线」计数只计 `health==='在线'` 且未停用）；②并发上限与配额为正数：注册与编辑均校验 `max ≥ 1`（`parseInt` 后拒绝非正数），`max ≤ 0` 时负载按 0 处理；名称全池唯一（注册与编辑都查重，重名拒绝）；③删除有二次确认：删除必经 `DF.modal.confirm`，`running > 0` 时删除按钮禁用；停用必经二次确认（有运行任务时附加警示），启用不确认直接生效。
 - 依赖：`DF`（`renderShell`、`drawer.open`、`modal.form/confirm`、`table/empty/statRow/statCard`、`tag/dot/icon/esc`、`relTime/ts/fmtClock`、`toast`）/ `MOCK`；不依赖其他页面组件（跳实例详情只走 URL 约定，不共享 JS 状态）。
 - 变化轴：健康判定与配额下发方式（当前 `health`/`heartbeatM`/`max`/`queuePolicy` 全为夹具字段，最可能先换成真实心跳探测 + 后端配额）。
-- 验证入口：`npm start` + `/pages/harnesses.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0007（designed，3 正 1 反测试方案已登记；runner 待补）。
-- 预算：源码 + 规格 + 测试约 28 KB（`harnesses.js` 21.5 KB + 本规格约 6.5 KB，无专属测试；上限 120k token，本组件远低于上限）。
+- 验证入口：`npm start` + `/pages/harnesses.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0007（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0007`）。
+- 预算：源码 + 规格 + 测试约 28 KB（`harnesses.js` 21.5 KB + 本规格约 6.5 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，本组件远低于上限）。
 - 单独运行：`npm start` → `/pages/harnesses.html`（详情抽屉内的实例跳转仅作 URL 出口，不参与本页渲染）。
 - 删除测试：删除后执行设施无法注册、查看、启停与删除，调度池失去管理入口；但 `MOCK.harnesses` 夹具仍被编辑器/实例详情/工具/密钥只读引用，管理复杂度会分散到各消费页，故保留为独立组件。
-- 已知偏差：M1 追溯已补（REQ-0007/SCN-0007），场景 designed、未 verified；仅冒烟，无行为级测试；心跳/健康为模拟数据（`heartbeatM`、`health` 为夹具字段，无真实探测，连接测试按接入地址是否为空模拟成功/失败）；停用标记 `_disabled` 是页面内存标记而非 `MOCK` 夹具字段，刷新复位；本节之后 §7 记的 `concurrencyMax` 与代码实际字段 `max` 不一致，以代码为准。
+- 已知偏差：M1 追溯已补（REQ-0007/SCN-0007），场景 verified（DOM/jsdom 3 正 1 反 40/40）；行为级断言已由 M1 runner 覆盖；心跳/健康为模拟数据（`heartbeatM`、`health` 为夹具字段，无真实探测，连接测试按接入地址是否为空模拟成功/失败）；停用标记 `_disabled` 是页面内存标记而非 `MOCK` 夹具字段，刷新复位；本节之后 §7 记的 `concurrencyMax` 与代码实际字段 `max` 不一致，以代码为准。
 
 ## 1 页面定位
 

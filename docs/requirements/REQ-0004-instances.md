@@ -1,7 +1,7 @@
 ---
 layer: requirements
 module: instances
-status: accepted
+status: delivered
 updated: 2026-10-23
 ---
 
@@ -16,5 +16,5 @@ updated: 2026-10-23
 | 非目标 | 不做真实调度器与执行引擎；fan-out 数千规模只做聚合统计 + 抽样；终止/重跑为原型状态迁移，不取消真实任务。 |
 | 约束 | 纯前端静态原型；实例状态机固定值；终止不可逆、暂停可恢复；人工批准/驳回互斥；不新增依赖。 |
 | 影响场景 | `SCN-0004`（`design/scenarios/operations/instances/control-instance/scenario.md`） |
-| 澄清记录 | 2026-10-23 回溯登记：列表/详情与状态迁移已存在；本次补 REQ/SCN，场景到 `designed`，未 `verified`。 |
-| 状态 | `accepted` |
+| 澄清记录 | 2026-10-23 回溯登记：列表/详情与状态迁移已存在；本次补 REQ/SCN；2026-10-23 M1 runner 40/40 通过，场景 `verified`，REQ 转 `delivered`。 |
+| 状态 | `delivered` |

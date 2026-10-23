@@ -25,7 +25,7 @@ node server.js
 │     └─ pages/           每个页面的逻辑 JS（node --check 可校验）
 │                         └─ workspace-common.js  工作区列表/详情共用模块（window.WSC）
 ├─ pages/                 页面 HTML（每页一个文件，私有样式内联 <style>）
-├─ tools/                 check-docs / gen-scenario-index / smoke-test / verify-user-menu
+├─ tools/                 check-docs / gen-scenario-index / smoke-test / verify-m1-scenarios / verify-user-menu
 ├─ docs/                  五态文档：需求 / 计划 / 现行设计 / 工序 / 历史（入口 docs/README.md）
 └─ reference/             原始参考资料 workflow_concept.pptx
 ```
@@ -49,5 +49,5 @@ node server.js
 
 - 所有数据来自 `assets/js/mock-data.js`（内存态），刷新即复位；不持久化、无后端。
 - 页面 JS 一律调用 `DF.*` 公共组件拼装 UI；组件地图、依赖方向与数据所有权见 `docs/design/architecture.md`，每个组件的契约见对应规格的 `## 0 模块卡`。
-- 门禁：`npm test`（语法 + 五态文档 + 场景索引）；冒烟：`npm run test:smoke`（需 jsdom）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
-- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件已补 `REQ-0002..0011` / `SCN-0002..0011`，场景为 `designed`、未 `verified`，详见 `docs/plan/roadmap.md` / `docs/plan/risks.md` R7/R10。
+- 门禁：`npm test`（语法 + 五态文档 + 场景索引）；冒烟：`npm run test:smoke`（需 jsdom）；业务场景：`npm run test:scenarios`（jsdom，10 场景 × 3 正 1 反）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
+- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件已补 `REQ-0002..0011` / `SCN-0002..0011`，场景 `verified`（40/40），REQ `delivered`；详见 `docs/plan/roadmap.md` 与 `docs/history/works/2026-10-23-m1-scenario-verification/result.md`。

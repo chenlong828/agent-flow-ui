@@ -1,7 +1,7 @@
 ---
 layer: requirements
 module: experts
-status: accepted
+status: delivered
 updated: 2026-10-23
 ---
 
@@ -16,5 +16,5 @@ updated: 2026-10-23
 | 非目标 | 不做真实 Agent 运行时与权限；不做 Skill/工具定义（各自组件负责）；停用只改夹具状态，不撤销已运行实例。 |
 | 约束 | 纯前端静态原型；五区详情结构固定；Skill/工具只能取自本页可见资产；被引用时停用需确认；不新增依赖。 |
 | 影响场景 | `SCN-0006`（`design/scenarios/assets/expert-registry/manage-expert/scenario.md`） |
-| 澄清记录 | 2026-10-23 回溯登记：卡片/五区抽屉/启停已存在；本次补 REQ/SCN，场景到 `designed`，未 `verified`。 |
-| 状态 | `accepted` |
+| 澄清记录 | 2026-10-23 回溯登记：卡片/五区抽屉/启停已存在；本次补 REQ/SCN；2026-10-23 M1 runner 40/40 通过，场景 `verified`，REQ 转 `delivered`。 |
+| 状态 | `delivered` |

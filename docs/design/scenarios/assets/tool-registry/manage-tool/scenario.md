@@ -1,7 +1,7 @@
 ---
 layer: design
 module: tools
-status: designed
+status: verified
 flow: manage-tool
 scenario: SCN-0008
 updated: 2026-10-23
@@ -31,11 +31,11 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）；本批只到 `designed`，未写 runner，因此不标 `verified`。
+执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0008-T1 | 正 | 行数与 `MOCK.tools.length` 相等；类型/状态筛选后的计数与夹具子集一致 | 待补 |
-| SCN-0008-T2 | 正 | 注册合法工具后新增「未验证」行；调试成功后状态变「可用」且 `runs` 增加 | 待补 |
-| SCN-0008-T3 | 正 | 引用方抽屉的专家/工作流条目数与 `findRefs` 扫描结果一致 | 待补 |
-| SCN-0008-T4 | 反 | `refCount > 0` 的工具删除按钮禁用；调试失败后状态仍为「未验证」或「不可用」 | 待补 |
+| SCN-0008-T1 | 正 | 行数同源；CLI 类型、未验证状态、关键词 trace 筛选均=夹具子集 | `tools/verify-m1-scenarios.js#SCN-0008-T1` |
+| SCN-0008-T2 | 正 | 注册后新增「未验证」工具；调试 t-factory 成功后转「可用」且 runs 增加 | `tools/verify-m1-scenarios.js#SCN-0008-T2` |
+| SCN-0008-T3 | 正 | 引用方抽屉条目数与 refCount 一致，共 5 处 | `tools/verify-m1-scenarios.js#SCN-0008-T3` |
+| SCN-0008-T4 | 反 | 全部 refCount>0 的工具删除禁用；t-replay 调试失败后仍为「不可用」 | `tools/verify-m1-scenarios.js#SCN-0008-T4` |

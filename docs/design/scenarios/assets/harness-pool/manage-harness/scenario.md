@@ -1,7 +1,7 @@
 ---
 layer: design
 module: harnesses
-status: designed
+status: verified
 flow: manage-harness
 scenario: SCN-0007
 updated: 2026-10-23
@@ -31,11 +31,11 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）；本批只到 `designed`，未写 runner，因此不标 `verified`。
+执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0007-T1 | 正 | 表格行数与 `MOCK.harnesses.length` 相等；在线/离线/高负载计数与夹具判据一致 | 待补 |
-| SCN-0007-T2 | 正 | 注册合法设施后表行 +1；重名或 `max=0` 时字段报错且不写集合 | 待补 |
-| SCN-0007-T3 | 正 | 停用确认后行显示已停用且不计入在线；删除空闲设施后行数 -1 | 待补 |
-| SCN-0007-T4 | 反 | `running > 0` 的设施删除按钮禁用；取消停用后仍为启用 | 待补 |
+| SCN-0007-T1 | 正 | 表格行数同源；总数/在线/离线/高负载卡与夹具判据一致 | `tools/verify-m1-scenarios.js#SCN-0007-T1` |
+| SCN-0007-T2 | 正 | 注册合法设施 +1；重名或 max=0 时提示且不写集合 | `tools/verify-m1-scenarios.js#SCN-0007-T2` |
+| SCN-0007-T3 | 正 | 停用确认后行显示已停用；删除空闲 h-devlap 后行数 -1 | `tools/verify-m1-scenarios.js#SCN-0007-T3` |
+| SCN-0007-T4 | 反 | running>0 的设施删除按钮禁用；取消停用后仍为启用 | `tools/verify-m1-scenarios.js#SCN-0007-T4` |

@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-13
+updated: 2026-10-23
 ---
 
 # 调试方案（分层测试策略与断言模板）
@@ -44,7 +44,7 @@ const pages = ['workflow-list', 'workflow-editor', 'skills', 'experts', 'harness
 })();
 ```
 
-带查询参数的页面（`workflow-editor.html?id=w1`、`instance-detail.html?id=INS-2042`、`workspace-detail.html?id=...`）按需追加参数。需要验证「字体大小设置跨页持久」时，先在第一页执行 `page.selectOption('#df-font', 'xl')` 再开始循环——同一个浏览器上下文内 localStorage 会延续。
+带查询参数的页面（`workflow-editor.html?id=w1`、`instance-detail.html?id=INS-2041`、`workspace-detail.html?id=...`）按需追加参数。需要验证「字体大小设置跨页持久」时，先在第一页执行 `page.selectOption('#df-font', 'xl')` 再开始循环——同一个浏览器上下文内 localStorage 会延续。
 
 ## 3. 层叠与遮挡断言（elementFromPoint 命中测试）
 

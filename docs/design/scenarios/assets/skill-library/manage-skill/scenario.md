@@ -1,7 +1,7 @@
 ---
 layer: design
 module: skills
-status: designed
+status: verified
 flow: manage-skill
 scenario: SCN-0005
 updated: 2026-10-23
@@ -31,11 +31,11 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）；本批只到 `designed`，未写 runner，因此不标 `verified`。
+执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0005-T1 | 正 | 列表条目数与 `MOCK.skills.length` 相等；分类筛选后计数与对应夹具子集相等 | 待补 |
-| SCN-0005-T2 | 正 | 详情抽屉显示五个章节；首章展开、其余折叠；摘要常驻 | 待补 |
-| SCN-0005-T3 | 正 | 保存编辑后版本号递增一档并写回内存；新建 Skill 版本为 v1.0 且总数 +1 | 待补 |
-| SCN-0005-T4 | 反 | 删除 `usedBy > 0` 的 Skill 被拒绝并提示引用数，`MOCK.skills` 长度不变 | 待补 |
+| SCN-0005-T1 | 正 | 列表条目数与计数同源；分类「检索」筛选后 4 条 | `tools/verify-m1-scenarios.js#SCN-0005-T1` |
+| SCN-0005-T2 | 正 | 详情抽屉 5 个 details，首章展开、其余折叠 | `tools/verify-m1-scenarios.js#SCN-0005-T2` |
+| SCN-0005-T3 | 正 | 编辑保存后版本递增且摘要写回；新建 Skill 为 v1.0 且总数 +1 | `tools/verify-m1-scenarios.js#SCN-0005-T3` |
+| SCN-0005-T4 | 反 | 删除 usedBy>0 的 Skill 被拒，提示 N 位专家引用，长度不变 | `tools/verify-m1-scenarios.js#SCN-0005-T4` |
