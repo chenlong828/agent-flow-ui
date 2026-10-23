@@ -3,13 +3,29 @@ layer: design
 module: ui-shell
 component: CMP-ui-shell
 status: active
-updated: 2026-10-13
+updated: 2026-10-23
 ---
 
 # 全局布局与设计约定
 
 > 导航定位：所有页面的外壳（全局约定）　|　形态：框架布局　|　前置文档：`design/product.md`
 > 产品占位名：**AgentFlow · 研发智能体工作流编排**（可在评审时更名）
+
+## 0 模块卡
+
+- 状态：active
+- 单元 / 层：组件 / L2 页面组件（跨页共享外壳）
+- 业务价值：为 12 个页面提供一致的导航、顶栏、面包屑、页头与字体缩放；没有它，每个页面都要重写外壳，用户区、通知角标与全局交互无处统一。
+- 负责 / 不负责：负责 `DF.renderShell` 生成的顶栏/左侧导航/面包屑/页头容器、用户区下拉、待确认角标、字体缩放双路径（zoom / transform 兜底）与 `DF` 公共组件原语；不负责任何页面的业务主体、业务数据写入与页面路由（由各 `CMP-*` 页面组件承担）。
+- 数据所有权：读 `MOCK.instances`（仅统计 `status === '等待人工确认'` 作为铃铛角标）；不写任何业务集合；写 localStorage `df-font`（字号 s/m/l/xl）与 `df-collapsed`（导航折叠），均为 UI 偏好，刷新保留；不写 sessionStorage。
+- 公开契约：入口 `DF.renderShell(...)`（12 页共用）；操作 `CMP-ui-shell#renderShell`（外壳渲染）、`#topbar`（环境/通知/用户区）、`#nav`（4 组 9 项 + 折叠）、`#font-scale`（字号切换与跨页持久）、`#bell`（待确认角标与跳转）、`#user-menu`（Key 管理 / 退出登录）；不变量 12 页外壳结构一致（顶栏 + 220px 导航 + 面包屑/页头/`#page-body` 三兄弟）；`DF.menu` 默认左缘语义、`alignRight` 右缘语义不得互换；缩放系数一律走 `DF.zoomK()` / `DF.zoomOnFixed()`，页面不得各自缓存。
+- 依赖：`MOCK`（只读角标）；不依赖任何页面组件；页面通过全局 `DF` 反向依赖本组件，属外壳契约。
+- 变化轴：导航分组/页面增减与顶栏全局操作（环境、通知、用户区）最可能变化，改这里会同时影响 12 页。
+- 验证入口：`node tools/verify-user-menu.js`（SCN-0001，45/45，2026-10-23 复跑）；`node tools/smoke-test.js`（12/12）；Safari 人工走查待验收（R9）。
+- 预算：`assets/js/ui.js` 约 18 KB + 本规格约 8 KB，无专属测试文件；上限 120k token，远低于上限。
+- 单独运行：`npm start` → 任一 `/pages/*.html`（外壳随页面加载）。
+- 删除测试：删除后 12 页同时失去导航、顶栏、用户区与字号能力，复杂度会复制到每个页面，故保留为唯一共享组件。
+- 已知偏差：M1 中的外壳能力无 REQ 追溯（仅用户区有 `REQ-0001` / `SCN-0001`）；Safari 人工走查未完成；WebKit 2104 的 html 级 zoom 探测失效，引擎证据只覆盖 transform 兜底路径（R1/R9）。
 
 ## 1 布局结构
 

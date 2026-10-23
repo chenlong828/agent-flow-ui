@@ -3,12 +3,28 @@ layer: design
 module: keys
 component: CMP-keys
 status: active
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # 个人 Key 管理
 
 > 导航：基础配置 / 个人 Key 管理　|　形态：列表 + 弹窗　|　前置：`design/components/ui-shell/spec.md`
+
+## 0 模块卡
+
+- 状态：active
+- 单元 / 层：组件 / L2 页面组件
+- 业务价值：为个人用户提供 git ssh-key 与 LLM API Key 的登记、掩码展示、有效性校验与用途绑定；没有它，工作区、Harness 与专家调用无法关联凭证，原型也无法演示「按用途治理密钥」。
+- 负责 / 不负责：负责 Key 列表（类型分栏/状态/掩码）、添加弹窗（git / LLM 两套表单）、指纹与模型信息展示、有效性校验（模拟）、绑定用途编辑、删除；不负责真实登录态与鉴权、密钥的安全存储/加密、工作区/Harness/专家的定义（各自组件）、真实调用凭证。
+- 数据所有权：读 `MOCK.keys`、`MOCK.experts`、`MOCK.harnesses`、`MOCK.workspaces`（绑定目标与引用展示）；写 `MOCK.keys`（新增 `push`、删除 `filter`、绑定用途写回，仅内存态，刷新复位）；弹窗编辑态只在内存，不落 localStorage/sessionStorage。
+- 公开契约：页面入口 `pages/keys.html`；操作 `CMP-keys#list`、`#create-git`、`#create-llm`、`#verify`、`#bind`、`#delete`；不变量 密钥只显示末 4 位掩码，完整值不在列表/详情回显；git 与 LLM 表单字段分离，不能互相提交；绑定目标只能从已存在的 `MOCK.workspaces` / `MOCK.harnesses` / `MOCK.experts` 中选择；删除必须二次确认；校验状态只取「有效/失效/未校验」三值。
+- 依赖：`DF`（外壳、表格、弹窗、表单、Toast、图标）/ `MOCK`；不依赖其他页面组件（跨页只走 URL）。
+- 变化轴：凭证供应商与 Key 类型（git / LLM 多供应商）最易变，新增类型须同步列表分栏、添加弹窗与绑定用途。
+- 验证入口：`npm start` + `/pages/keys.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；legacy-smoke（M1 基线无 SCN，仅页面加载期断言）。
+- 预算：`keys.js` 约 15 KB + 本规格约 5 KB，无专属测试；上限 120k token，远低于上限。
+- 单独运行：`npm start` → `/pages/keys.html`（绑定目标只读其他夹具集合）。
+- 删除测试：删除后凭证无法登记、校验与绑定，工作区/Harness/专家调用失去凭证来源；但真实鉴权不在原型内，复杂度会集中到各消费页，故保留为独立组件。
+- 已知偏差：M1 原型基线、无 REQ 追溯（无对应 SCN）；仅冒烟；密钥为演示数据、掩码展示；有效性校验与绑定影响均为模拟，无真实鉴权；删除/绑定只改内存夹具。
 
 ## 1 页面定位
 
