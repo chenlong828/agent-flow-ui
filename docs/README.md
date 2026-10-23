@@ -42,7 +42,7 @@ docs/
 ## 维护纪律（速记）
 
 - 新文档先问「属于哪一态」，按路径放置并写 frontmatter；layer 与目录矛盾、status 越出本层值域、module 与组件目录不符，发现即修；改完跑 `npm run check:docs`（零依赖，校验路径、值域、模块卡必备字段、works brief/result、`CMP-`/`SCN-`/`REQ-` 引用、旧路径残留）；
-- 组件规格必须在 `## 1` 前有 `## 0 模块卡`，13 个字段齐全（见 `works/2026-10-23-component-baseline/brief.md` 模板）；
+- 组件规格必须在 `## 1` 前有 `## 0 模块卡`，13 个字段齐全（见 `history/works/2026-10-23-component-baseline/brief.md` 模板）；
 - 场景索引 `design/scenarios/_index.md` 是生成物，用 `npm run docs:index` 重生成，`npm run docs:index:check` 校验无 diff，不手改；
 - 一处一事：同一事实只有一个权威文档，其他地方引用不复制；
 - 需求进 `requirements/`；工序 brief 必须引 `REQ-xxxx`，一个 REQ 同时只挂一个在飞工序；

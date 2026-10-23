@@ -17,7 +17,7 @@ updated: 2026-10-23
 
 | 交付 | 落点 | 提交 |
 |---|---|---|
-| 工序 brief、组件/数据底稿、模块卡模板 | `works/2026-10-23-component-baseline/brief.md` | `7e85cb9` |
+| 工序 brief、组件/数据底稿、模块卡模板 | `history/works/2026-10-23-component-baseline/brief.md` | `7e85cb9` |
 | 11 个 `CMP-*` 的 `## 0 模块卡` | `design/components/*/spec.md` | `0e8d9d9` |
 | architecture 现行真相（地图/依赖/契约/数据/验证/偏差） | `design/architecture.md` | `ff5fd72` |
 | check-docs 增强、场景索引生成器、npm 脚本 | `tools/`、`package.json`、`design/scenarios/_index.md`、`docs/README.md` | `bf9d301` |

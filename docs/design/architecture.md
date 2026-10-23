@@ -7,7 +7,7 @@ updated: 2026-10-23
 
 # 系统架构（现行真相）
 
-> 本文只写系统现在是什么。历史重构清单与效果数据不在此处（见 git `f7e3efb` 或 `works/2026-10-23-component-baseline/`）。组件边界、数据权属与验证入口以各 `design/components/<id>/spec.md` 的 `## 0 模块卡` 为准；本文只给系统级地图与约束。
+> 本文只写系统现在是什么。历史重构清单与效果数据见 git `f7e3efb`；本批审视与收口见 `history/works/2026-10-23-component-baseline/result.md`。组件边界、数据权属与验证入口以各 `design/components/<id>/spec.md` 的 `## 0 模块卡` 为准；本文只给系统级地图与约束。
 
 ## 1 技术基线与边界
 
@@ -152,6 +152,6 @@ updated: 2026-10-23
 ## 9 查阅与变更
 
 - 组件边界与契约：`design/components/<id>/spec.md` §0。
-- 工序与决策：`works/2026-10-23-component-baseline/brief.md`、`history/decisions/2026-10-23-skill-system-upgrade.md`。
+- 工序与决策：`history/works/2026-10-23-component-baseline/brief.md`、`history/decisions/2026-10-23-skill-system-upgrade.md`。
 - 编码防御规则：`design/code-refactoring.md`；测试方法：`design/debugging-and-testing.md`。
 - **变更规则**：改页面边界、数据所有权、CMP 操作或共享契约 → 先按 `arch-design-spec` 定级；P1 需人确认，更新对应模块卡 + 本文 + `check-docs`，再动代码。新增页面必须登记组件卡与验证入口，禁止静默扩页。
