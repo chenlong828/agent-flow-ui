@@ -1,7 +1,7 @@
 ---
-layer: works
+layer: history
 module: global
-status: active
+status: frozen
 updated: 2026-10-23
 ---
 
@@ -33,7 +33,7 @@ M1 的 11 个 `CMP-*` 中，`CMP-ui-shell` 已有 `REQ-0001` / `SCN-0001`，其�
 | T-02 | design | 10 个页面组件 | done | 10 张 REQ + 10 个场景 |
 | T-03 | change | global | done | 组件 frontmatter/模块卡追溯 + check-docs 强制 |
 | T-04 | change | global | done | 场景索引、architecture、roadmap/risks |
-| T-05 | verify | global | doing | 全量验证、分批提交、result.md |
+| T-05 | verify | global | done | 全量验证、分批提交、result.md |
 
 ## 映射（唯一事实源）
 
