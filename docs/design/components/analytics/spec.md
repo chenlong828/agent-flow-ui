@@ -3,12 +3,28 @@ layer: design
 module: analytics
 component: CMP-analytics
 status: active
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # 效能看板
 
 > 导航：运行与运营 / 效能看板　|　形态：轻量仪表盘　|　前置：`design/components/ui-shell/spec.md`
+
+## 0 模块卡
+
+- 状态：active
+- 单元 / 层：组件 / L2 页面组件
+- 业务价值：为管理者提供交付吞吐、缺陷率、阶段准出与 Skill 审计的只读回看；没有它，运行数据只能停在实例列表，无法回答「整体是否变好、卡在哪个阶段」。
+- 负责 / 不负责：负责 KPI 指标卡、吞吐/缺陷率趋势、阶段准出率、评审准出记录汇总与 Skill 审计列表的只读渲染；不负责实例原始轨迹与控制（`CMP-instances`）、Skill 的定义与启停（`CMP-skills`）、指标口径的采集与计算（原型为夹具）。
+- 数据所有权：只读 `MOCK.analytics`（`weeks/throughput/defectRate/successRate/avgDurationS/pendingConfirm/subtaskTotal/subtaskFailRate/stagePass/reviewRecords/skillAudit`）；不写任何 MOCK 集合，不写 localStorage/sessionStorage。
+- 公开契约：页面入口 `pages/analytics.html`；操作 `CMP-analytics#overview`、`#trend`、`#stage-pass`、`#review-records`、`#skill-audit`；不变量 所有数字与 `MOCK.analytics` 同源，页面不做二次业务计算；趋势默认近 8 周、可切近 4 周（近 12 周禁用，标注「数据积累中」）；阶段准出固定 4 个阶段；评审记录按夹具顺序（新→旧）分页展示，页面不重排；审计条目只读，不提供修复按钮。
+- 依赖：`DF`（外壳、统计卡、表格、Tabs、图标）/ `MOCK`；不依赖其他页面组件。
+- 变化轴：指标口径与数据来源（当前为夹具，接真实运行数据时最易变），新增指标须同时改卡片、趋势与空态。
+- 验证入口：`npm start` + `/pages/analytics.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；legacy-smoke（M1 基线无 SCN，仅页面加载期断言）。
+- 预算：`analytics.js` 约 8 KB + 本规格约 4 KB，无专属测试；上限 120k token，远低于上限。
+- 单独运行：`npm start` → `/pages/analytics.html`（全部数据来自 `MOCK.analytics`，无跨页依赖）。
+- 删除测试：删除后失去唯一的跨实例经营回看入口，指标会散落到实例页；但无业务写入，删除只影响可视化，故保留为独立只读组件。
+- 已知偏差：M1 原型基线、无 REQ 追溯（无对应 SCN）；仅冒烟；指标与记录均为模拟数据；准出汇总按「评审结果记录」呈现，不是 50 项打分卡配置（OQ-3）。
 
 ## 1 页面定位
 

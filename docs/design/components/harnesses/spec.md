@@ -3,12 +3,28 @@ layer: design
 module: harnesses
 component: CMP-harnesses
 status: active
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # Harness 管理
 
 > 导航：资产与注册 / Harness 管理　|　形态：列表 + 详情抽屉　|　前置：`design/components/ui-shell/spec.md`
+
+## 0 模块卡
+
+- 状态：active
+- 单元 / 层：组件 / L2 页面组件
+- 业务价值：为平台运维者提供执行设施（Agent 实际运行处）的注册、健康与配额管理；没有它，节点「按标签自动」调度无池可调，工作流只能绑死在单一设施上。
+- 负责 / 不负责：负责设施列表（统计卡 + 表格）、详情抽屉（基本信息/能力标签/配额/当前任务/心跳记录）、注册弹窗（含模拟连接测试）、抽屉编辑保存、启用停用与删除；不负责节点图的 Harness 选择与标签匹配（`CMP-workflow-editor`）、运行任务的实际调度与节点状态（`CMP-instances`）、工具的绑定（`CMP-tools`）、密钥绑定用途（`CMP-keys`）、外壳与公共组件（`CMP-ui-shell`）。
+- 数据所有权：读 `MOCK.harnesses`（列表、统计卡、详情抽屉、启停/删除定位；本页不读其他 MOCK 集合）；写 `MOCK.harnesses`（注册 `push`、删除 `splice`、启停写页面标记 `_disabled`、抽屉编辑保存改写 `name/type/address/accessMode/tags/max/queuePolicy/desc`，仅内存态，刷新复位）；抽屉编辑态 `draft`（含 `tags` 拷贝）只在内存，取消/关闭不落数据。无第二写入口：`MOCK.harnesses` 仅本页写，`instance-detail` / `tools` / `workflow-editor` / `keys` 均只读（`MOCK.byId` / 列表渲染），刷新即复位。
+- 公开契约：页面入口 `pages/harnesses.html`；操作 `CMP-harnesses#list`（统计卡 + 表格渲染）、`#register`（注册弹窗，含连接测试）、`#detail`（详情抽屉，只读）、`#toggle`（启用/停用）、`#delete`（删除）；不变量 ①在线/离线/负载状态展示一致：统计卡与表格行状态点、健康列同源同判据（`_disabled` 优先置灰；离线取 `health==='离线'`；高负载取未停用未离线且 `running/max ≥ 80%`，且「在线」计数只计 `health==='在线'` 且未停用）；②并发上限与配额为正数：注册与编辑均校验 `max ≥ 1`（`parseInt` 后拒绝非正数），`max ≤ 0` 时负载按 0 处理；名称全池唯一（注册与编辑都查重，重名拒绝）；③删除有二次确认：删除必经 `DF.modal.confirm`，`running > 0` 时删除按钮禁用；停用必经二次确认（有运行任务时附加警示），启用不确认直接生效。
+- 依赖：`DF`（`renderShell`、`drawer.open`、`modal.form/confirm`、`table/empty/statRow/statCard`、`tag/dot/icon/esc`、`relTime/ts/fmtClock`、`toast`）/ `MOCK`；不依赖其他页面组件（跳实例详情只走 URL 约定，不共享 JS 状态）。
+- 变化轴：健康判定与配额下发方式（当前 `health`/`heartbeatM`/`max`/`queuePolicy` 全为夹具字段，最可能先换成真实心跳探测 + 后端配额）。
+- 验证入口：`npm start` + `/pages/harnesses.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；legacy-smoke（M1 基线无 SCN，仅页面加载期断言）。
+- 预算：源码 + 规格 + 测试约 28 KB（`harnesses.js` 21.5 KB + 本规格约 6.5 KB，无专属测试；上限 120k token，本组件远低于上限）。
+- 单独运行：`npm start` → `/pages/harnesses.html`（详情抽屉内的实例跳转仅作 URL 出口，不参与本页渲染）。
+- 删除测试：删除后执行设施无法注册、查看、启停与删除，调度池失去管理入口；但 `MOCK.harnesses` 夹具仍被编辑器/实例详情/工具/密钥只读引用，管理复杂度会分散到各消费页，故保留为独立组件。
+- 已知偏差：M1 原型基线、无 REQ 追溯（无对应 SCN）；仅冒烟，无行为级测试；心跳/健康为模拟数据（`heartbeatM`、`health` 为夹具字段，无真实探测，连接测试按接入地址是否为空模拟成功/失败）；停用标记 `_disabled` 是页面内存标记而非 `MOCK` 夹具字段，刷新复位；本节之后 §7 记的 `concurrencyMax` 与代码实际字段 `max` 不一致，以代码为准。
 
 ## 1 页面定位
 

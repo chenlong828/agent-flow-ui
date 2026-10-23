@@ -3,12 +3,28 @@ layer: design
 module: instances
 component: CMP-instances
 status: active
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # 运行实例（列表 + 详情）
 
 > 导航：运行与运营 / 运行实例　|　形态：列表页 + 独立详情二级页　|　前置：`design/components/ui-shell/spec.md`
+
+## 0 模块卡
+
+- 状态：active
+- 单元 / 层：组件 / L2 页面组件（列表 + 详情两个页面入口）
+- 业务价值：为运行观察者与操作者提供实例进度、节点轨迹、等待人工确认与异常控制；没有它，工作流只能被定义，无法被观察、干预或留痕。
+- 负责 / 不负责：负责实例列表（状态 Tab/统计/进度/耗时）、详情页（流程轨迹、节点输入输出与留痕、fan-out 聚合与抽样明细）、发起运行/暂停恢复/终止/节点重试/从节点重跑/人工批准驳回；不负责工作流定义与画布编辑（`CMP-workflow-editor`）、专家/Harness/工作区等资产定义（各自组件）、外壳（`CMP-ui-shell`）。
+- 数据所有权：读 `MOCK.instances`、`MOCK.workflows`、`MOCK.workspaces`、`MOCK.experts`、`MOCK.harnesses`；写 `MOCK.instances`（发起运行 `unshift`、节点状态迁移、暂停/恢复/终止、重试计数、人工批准/驳回，仅内存态，刷新复位）；sessionStorage `df-new-instance` 用于列表页向详情页一次性传递新建实例；无第二写入口说明：实例集合仅本组件写，其余页面只读。
+- 公开契约：页面入口 `pages/instances.html` 与 `pages/instance-detail.html?id=<instanceId>`；操作 `CMP-instances#list`、`#start-run`、`#pause-resume`、`#terminate`、`#retry-node`、`#approve-reject`；不变量 实例状态只取「运行中/等待人工确认/回退重跑中/已暂停/成功/失败/已终止」；列表的「已结束」是成功/失败/已终止的聚合 Tab，不是独立状态；终止为不可逆终态，暂停可恢复；等待人工时批准与驳回互斥，驳回必须携带意见；fan-out 聚合统计（成功/失败/运行中/重试中）与子任务明细同源；节点停止后不得继续推进。
+- 依赖：`DF`（外壳、弹窗、表格、Tabs、Toast、时间格式化）/ `MOCK`；不依赖其他页面组件（跨页只走 URL 与 `df-new-instance`）。
+- 变化轴：实例/节点状态机与控制语义（暂停、终止、重试、重跑、人工驳回）最易变，新增状态须同步列表、详情、控制按钮与留痕。
+- 验证入口：`npm start` + `/pages/instances.html`、`/pages/instance-detail.html?id=INS-2042`；`node tools/smoke-test.js`（12 页冒烟，含两页）；legacy-smoke（M1 基线无 SCN，仅页面加载期断言）。
+- 预算：`instances.js` 约 7 KB + `instance-detail.js` 约 18 KB + 本规格约 9 KB，无专属测试；上限 120k token，远低于上限。
+- 单独运行：`npm start` → `/pages/instances.html`（详情页用 `?id=` 定位，缺省回落到夹具实例）。
+- 删除测试：删除后实例不可观察、不可控制、不可审批，工作流只剩定义；复杂度会集中到工作流列表/编辑器，故保留为独立组件。
+- 已知偏差：M1 原型基线、无 REQ 追溯（无对应 SCN）；仅冒烟，状态迁移与控制行为无引擎层断言；`df-new-instance` 的新建实例注入是演示路径，刷新复位；fan-out 数千规模为聚合视图 + 抽样，非逐条真实调度（OQ-6）。
 
 ## 1 页面定位
 

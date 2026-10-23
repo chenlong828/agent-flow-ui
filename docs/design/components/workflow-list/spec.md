@@ -3,12 +3,28 @@ layer: design
 module: workflow-list
 component: CMP-workflow-list
 status: active
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # 工作流列表
 
 > 导航：流程研发 / 工作流　|　形态：列表页（卡片/表格双视图）　|　前置：`design/components/ui-shell/spec.md`
+
+## 0 模块卡
+
+- 状态：active
+- 单元 / 层：组件 / L2 页面组件
+- 业务价值：为流程研发者提供工作流的统一浏览、检索与增删入口；没有它，用户只能靠 URL 直进编辑器，无法回答「有哪些流程、各自最近跑得如何」。
+- 负责 / 不负责：负责列表的筛选（类型 Tab + 名称搜索）、卡片/表格双视图、统计条、新建/复制/删除/导出 DSL 与发起运行弹窗；不负责节点图的编辑与保存（`CMP-workflow-editor`）、实例生命周期与详情（`CMP-instances`）、外壳与角标（`CMP-ui-shell`）。
+- 数据所有权：读 `MOCK.workflows`、`MOCK.instances`（统计条与删除引用计数）、`MOCK.workspaces`（运行弹窗的工作区下拉）；写 `MOCK.workflows`（新建/复制 push、删除 splice，仅内存态，刷新复位）；localStorage `wl-view`（视图记忆）。无第二写入口说明：`MOCK.workflows` 另由 `CMP-workflow-editor` 写入，属原型夹具多写入口（R8），本组件不独占；本组件不写 `MOCK.instances`（`#run` 仅提示并跳转实例页）。
+- 公开契约：页面入口 `pages/workflow-list.html`；操作 `CMP-workflow-list#list`（统计/筛选/双视图渲染）、`#create`（新建弹窗 → 编辑器草稿）、`#run`（发起运行弹窗）、`#copy`（生成「副本」草稿）、`#delete`（移除记录）、`#exportDsl`（下载 DSL JSON）；不变量 列表统计与 `MOCK` 同源一致（总数取 `MOCK.workflows.length`，运行中/等待人工确认/本周新增运行取 `MOCK.instances` 的 `status` 与 `startedM`）；删除必经 `DF.modal.confirm` 二次确认并显示实例引用数；类型分类固定为「研发主流程 / 专项子流程 / 批量审视任务」三值（`TYPES`），新建弹窗只允许这三值。
+- 依赖：`DF`（`renderShell`、`modal.*`、`menu`、`table/empty/statCard/tabsHtml`、`lsGet/lsSet`、`download`、`toast`）/ `MOCK`；不依赖其他页面组件（跨页只走 URL 约定，不共享 JS 状态）。
+- 变化轴：类型分类与统计口径（三值 Tab + 4 个统计项）最可能随业务扩展为标签化/自定义分类。
+- 验证入口：`npm start` + `/pages/workflow-list.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；legacy-smoke（M1 基线无 SCN，仅页面加载期断言）。
+- 预算：源码 + 规格 + 测试约 22 KB（`workflow-list.js` 16.6 KB + 本规格约 6 KB，无专属测试；上限 120k token，本组件远低于上限）。
+- 单独运行：`npm start` → `/pages/workflow-list.html`（其余页面仅作跳转目标，不参与本页渲染）。
+- 删除测试：删除后工作流入口消失，无法浏览/新建/复制/删除流程，复杂度会集中到编辑器（须自带列表与入口），故保留为独立组件。
+- 已知偏差：M1 原型基线、无 REQ 追溯（无对应 SCN）；仅冒烟，无行为级测试；`MOCK.workflows` 多写入口（本页 + 编辑器），刷新即复位；`#run` 不落 `MOCK.instances`（仅 toast + 跳转，实例由实例页夹具提供）；「本周新增运行」以 `startedM < 10080` 分钟近似自然周。
 
 ## 1 页面定位
 
