@@ -14,7 +14,7 @@ updated: 2026-10-13
 | 层次 | 工具 | 能抓到 | 抓不到 |
 |---|---|---|---|
 | 语法层 | `node --check`、JavaScriptCore 命令行解释器（路径见环境文档第 5 节） | 语法错误、引擎不兼容的新语法 | 一切行为问题 |
-| 结构层 | jsdom（安装于 /tmp/dsh，项目外） | DOM 结构、事件绑定是否执行、选择器作用域错误、函数抛错 | 层叠/遮挡、CSS zoom、fixed 定位、命中测试、真实布局尺寸 |
+| 结构层 | jsdom（项目外临时安装，如 `/tmp/afdev-deps`，命令见环境文档 3.2） | DOM 结构、事件绑定是否执行、选择器作用域错误、函数抛错 | 层叠/遮挡、CSS zoom、fixed 定位、命中测试、真实布局尺寸 |
 | 引擎层 | Playwright WebKit（真实 WebKit 无头浏览器） | 渲染结果、元素尺寸与位置、遮挡关系、持久化、控制台错误 | 真实 Safari 独有行为（如 CSS zoom 的完整实现） |
 | 人工层 | 用户 Safari 手工验收 | 全部真实行为 | 需要用户配合反馈 |
 
@@ -25,7 +25,7 @@ updated: 2026-10-13
 对所有页面循环加载，收集每个页面的 JavaScript 运行时错误（`pageerror` 事件），同时断言公共结构（顶部栏、字体选择器、侧栏宽度）。这个模式在本项目反复使用，直接复用：
 
 ```javascript
-const { webkit } = require('/tmp/dsh/node_modules/playwright');
+const { webkit } = require(process.env.PLAYWRIGHT_MODULE || 'playwright-core');
 const pages = ['workflow-list', 'workflow-editor', 'skills', 'experts', 'harnesses',
                'tools', 'instances', 'instance-detail', 'analytics',
                'workspaces', 'workspace-detail', 'keys'];
