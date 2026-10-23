@@ -50,4 +50,4 @@ node server.js
 - 所有数据来自 `assets/js/mock-data.js`（内存态），刷新即复位；不持久化、无后端。
 - 页面 JS 一律调用 `DF.*` 公共组件拼装 UI；组件地图、依赖方向与数据所有权见 `docs/design/architecture.md`，每个组件的契约见对应规格的 `## 0 模块卡`。
 - 门禁：`npm test`（语法 + 五态文档 + 场景索引）；冒烟：`npm run test:smoke`（需 jsdom）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
-- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件按「原型基线、无 REQ 追溯」登记，详见 `docs/plan/roadmap.md` / `docs/plan/risks.md`。
+- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件已补 `REQ-0002..0011` / `SCN-0002..0011`，场景为 `designed`、未 `verified`，详见 `docs/plan/roadmap.md` / `docs/plan/risks.md` R7/R10。

@@ -2,6 +2,8 @@
 layer: design
 module: analytics
 component: CMP-analytics
+requirement: REQ-0009
+scenario: SCN-0009
 status: active
 updated: 2026-10-23
 ---
@@ -12,6 +14,8 @@ updated: 2026-10-23
 
 ## 0 模块卡
 
+> 追溯：`REQ-0009` / `SCN-0009`（designed，未 verified）。
+
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为管理者提供交付吞吐、缺陷率、阶段准出与 Skill 审计的只读回看；没有它，运行数据只能停在实例列表，无法回答「整体是否变好、卡在哪个阶段」。
@@ -20,11 +24,11 @@ updated: 2026-10-23
 - 公开契约：页面入口 `pages/analytics.html`；操作 `CMP-analytics#overview`、`#trend`、`#stage-pass`、`#review-records`、`#skill-audit`；不变量 所有数字与 `MOCK.analytics` 同源，页面不做二次业务计算；趋势默认近 8 周、可切近 4 周（近 12 周禁用，标注「数据积累中」）；阶段准出固定 4 个阶段；评审记录按夹具顺序（新→旧）分页展示，页面不重排；审计条目只读，不提供修复按钮。
 - 依赖：`DF`（外壳、统计卡、表格、Tabs、图标）/ `MOCK`；不依赖其他页面组件。
 - 变化轴：指标口径与数据来源（当前为夹具，接真实运行数据时最易变），新增指标须同时改卡片、趋势与空态。
-- 验证入口：`npm start` + `/pages/analytics.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；legacy-smoke（M1 基线无 SCN，仅页面加载期断言）。
+- 验证入口：`npm start` + `/pages/analytics.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0009（designed，3 正 1 反测试方案已登记；runner 待补）。
 - 预算：`analytics.js` 约 8 KB + 本规格约 4 KB，无专属测试；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/analytics.html`（全部数据来自 `MOCK.analytics`，无跨页依赖）。
 - 删除测试：删除后失去唯一的跨实例经营回看入口，指标会散落到实例页；但无业务写入，删除只影响可视化，故保留为独立只读组件。
-- 已知偏差：M1 原型基线、无 REQ 追溯（无对应 SCN）；仅冒烟；指标与记录均为模拟数据；准出汇总按「评审结果记录」呈现，不是 50 项打分卡配置（OQ-3）。
+- 已知偏差：M1 追溯已补（REQ-0009/SCN-0009），场景 designed、未 verified；仅冒烟；指标与记录均为模拟数据；准出汇总按「评审结果记录」呈现，不是 50 项打分卡配置（OQ-3）。
 
 ## 1 页面定位
 
