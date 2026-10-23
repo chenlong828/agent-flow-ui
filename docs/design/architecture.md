@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2025-10-14
+updated: 2026-10-14
 ---
 
 # 代码结构与公共组件

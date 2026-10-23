@@ -1,7 +1,8 @@
 ---
 layer: history
+module: global
 status: frozen
-updated: 2025-10-14
+updated: 2026-10-14
 ---
 
 # 需求裁定记录（R1–R4 问答决策）

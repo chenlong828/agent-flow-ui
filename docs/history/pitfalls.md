@@ -2,7 +2,7 @@
 layer: history
 module: global
 status: frozen
-updated: 2026-10-13
+updated: 2026-10-23
 ---
 
 # 坑档案
@@ -117,6 +117,12 @@ updated: 2026-10-13
 - **现象**：用户报编辑器页面打不开；同源引擎实测渲染正常，判定为浏览器缓存了旧资源。
 - **存续条件**：只要静态资源无版本化文件名（当前无），永远可能发生。
 - **对策落点**：《调试方案》第 6 节响应流程（强刷优先）；长期对策是给静态资源加版本参数，当前原型阶段未做。
+
+### ENV-6 · jsdom 24 在 window.close() 后取不到 DOM
+- **现象**：冒烟脚本先 `dom.window.close()`、再读 `dom.window.document.getElementById('app')`，抛 `Cannot read properties of undefined (reading 'getElementById')`，12 页全判失败。
+- **根因**：jsdom 24 关闭后 `window` 被置空；断言与取样必须在 close 之前完成。
+- **存续条件**：只要沿用「先 close 再断言」的写法就会复发；jsdom 24.1.3 实测。
+- **对策落点**：`tools/smoke-test.js` 在 close 前取 `app` 存入变量再断言；《调试方案》第 2 节模板同理。
 
 ## 流程类
 

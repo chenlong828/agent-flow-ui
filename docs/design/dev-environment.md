@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2025-10-14
+updated: 2026-10-14
 ---
 
 # 开发环境配置（本机实况）
@@ -33,9 +33,9 @@ updated: 2025-10-14
 
 ### 3.1 安装位置与约定
 
-- Playwright 库安装在 `/tmp/dsh/node_modules`（项目目录之外，保持项目零依赖的约定）。
+- 依赖装在项目目录之外（保持零依赖约定）：历史用 `/tmp/dsh`，2026-10-23 复跑用 `/tmp/afdev-deps`。临时目录可能被清理，清理后按 3.2 重装。
 - 浏览器构建存放目录：`/tmp/dsh/pw-browsers`，运行时通过环境变量 `PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers` 指定。
-- 测试脚本统一放 `/tmp/dsh/`，命名习惯：`wk-*.js`（WebKit 相关）、用途写在脚本头部注释。
+- 场景测试脚本已入库：`tools/verify-user-menu.js`（SCN-0001，引擎层）；结构层 `tools/smoke-test.js`（jsdom）。历史脚本随工序归档在 `history/works/`，不再作现行入口。
 
 ### 3.2 安装步骤（按顺序执行）
 
@@ -50,10 +50,17 @@ updated: 2025-10-14
    ```
    下载得到的文件大小应为 65870767 字节，可用 `ls -l` 核对（版本号 2104 与 Playwright 1.49.1 对应；若升级 Playwright，构建号会变化，从报错信息里读出期望的构建号）。
 3. 解压到 `PLAYWRIGHT_BROWSERS_PATH` 指向的目录下，目录名必须与 Playwright 期望的一致（报错信息中会写出，例如 `webkit-2104`），然后在解压出的目录内创建空文件 `INSTALLATION_COMPLETE`（Playwright 用它判断安装已完成，缺了会认为未安装）。
-4. 运行任何测试脚本时都带上环境变量：
+4. 运行任何测试脚本时都带上环境变量（脚本在项目内）：
    ```bash
-   PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers node /tmp/dsh/wk-xxx.js
+   PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers \
+   NODE_PATH=/tmp/afdev-deps/node_modules node tools/verify-user-menu.js
+   NODE_PATH=/tmp/afdev-deps/node_modules node tools/smoke-test.js
    ```
+5. 依赖安装（2026-10-23 复跑实际使用）：
+   ```bash
+   npm_config_cache=/tmp/afdev-npm-cache npm install --prefix /tmp/afdev-deps jsdom@24.1.3 playwright-core@1.49.1
+   ```
+   注意 `playwright-core` 只装库、不自动下载浏览器；浏览器仍按第 2、3 步准备 WebKit 2104。
 
 ### 3.3 能做什么、不能做什么
 
