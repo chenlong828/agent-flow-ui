@@ -1,7 +1,7 @@
 ---
 layer: requirements
 module: skills
-status: accepted
+status: delivered
 updated: 2026-10-23
 ---
 
@@ -16,5 +16,5 @@ updated: 2026-10-23
 | 非目标 | 不做真实 Skill 执行与向量检索；不做跨版本 diff/回滚；引用计数使用夹具字段，不接真实反向索引。 |
 | 约束 | 纯前端静态原型；工作内容渐进披露；保存递增版本号；被专家引用时删除受保护；不新增依赖。 |
 | 影响场景 | `SCN-0005`（`design/scenarios/assets/skill-library/manage-skill/scenario.md`） |
-| 澄清记录 | 2026-10-23 回溯登记：列表/抽屉/版本递增已存在；本次补 REQ/SCN，场景到 `designed`，未 `verified`。 |
-| 状态 | `accepted` |
+| 澄清记录 | 2026-10-23 回溯登记：列表/抽屉/版本递增已存在；本次补 REQ/SCN；2026-10-23 M1 runner 40/40 通过，场景 `verified`，REQ 转 `delivered`。 |
+| 状态 | `delivered` |

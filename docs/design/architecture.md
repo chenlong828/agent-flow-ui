@@ -125,26 +125,27 @@ updated: 2026-10-23
 | 组件 | check-docs（模块卡 + REQ/SCN） | jsdom 12 页 | 场景 | 人工 Safari |
 |---|---|---|---|---|
 | `CMP-ui-shell` | ✓ | ✓ | `SCN-0001` verified（45/45） | 待验收（R9） |
-| `CMP-workflow-list` | ✓ | ✓ | `SCN-0002` designed（runner 待补） | — |
-| `CMP-workflow-editor` | ✓ | ✓ | `SCN-0003` designed（runner 待补） | — |
-| `CMP-instances` | ✓ | ✓ | `SCN-0004` designed（runner 待补） | — |
-| `CMP-skills` | ✓ | ✓ | `SCN-0005` designed（runner 待补） | — |
-| `CMP-experts` | ✓ | ✓ | `SCN-0006` designed（runner 待补） | — |
-| `CMP-harnesses` | ✓ | ✓ | `SCN-0007` designed（runner 待补） | — |
-| `CMP-tools` | ✓ | ✓ | `SCN-0008` designed（runner 待补） | — |
-| `CMP-analytics` | ✓ | ✓ | `SCN-0009` designed（runner 待补） | — |
-| `CMP-workspaces` | ✓ | ✓ | `SCN-0010` designed（runner 待补） | — |
-| `CMP-keys` | ✓ | ✓ | `SCN-0011` designed（runner 待补） | — |
+| `CMP-workflow-list` | ✓ | ✓ | `SCN-0002` verified（40/40） | — |
+| `CMP-workflow-editor` | ✓ | ✓ | `SCN-0003` verified（40/40） | — |
+| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（40/40） | — |
+| `CMP-skills` | ✓ | ✓ | `SCN-0005` verified（40/40） | — |
+| `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（40/40） | — |
+| `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（40/40） | — |
+| `CMP-tools` | ✓ | ✓ | `SCN-0008` verified（40/40） | — |
+| `CMP-analytics` | ✓ | ✓ | `SCN-0009` verified（40/40） | — |
+| `CMP-workspaces` | ✓ | ✓ | `SCN-0010` verified（40/40） | — |
+| `CMP-keys` | ✓ | ✓ | `SCN-0011` verified（40/40） | — |
 
 - 语法层：`node --check` 全部页面 JS。
 - 结构层：`node tools/smoke-test.js`（需 jsdom，安装见 `dev-environment.md`）。
 - 引擎层：`node tools/verify-user-menu.js`（需 Playwright WebKit 与运行中的 `:3000`）。
+- 业务场景层：`node tools/verify-m1-scenarios.js`（DOM/jsdom，10 场景 × 3 正 1 反，40/40）。
 - 人工层：Safari 走查为发布门禁；未完成不宣称“浏览器全兼容”。
-- **M1 十页场景只到 `designed`**：3 正 1 反测试方案已登记，但无 runner；冒烟不是业务验收，未标 `verified`。
+- **M1 十页场景已 verified**：3 正 1 反全部落地并通过（40/40）；冒烟仍只作结构层，不替代业务验收。
 
 ## 8 已知偏差与基线登记
 
-1. **M1 追溯已补、场景未验证**：10 个页面已补 `REQ-0002..0011` / `SCN-0002..0011`；场景状态为 `designed`，3 正 1 反测试尚未落地，不标 `verified`，10 张 REQ 保持 `accepted` 而非 `delivered`（R7/R10）。冒烟仍不是业务验收。
+1. **M1 追溯与验收闭环**：10 个页面已补 `REQ-0002..0011` / `SCN-0002..0011`；场景 `verified`，3 正 1 反 40/40 通过，10 张 REQ 转 `delivered`（R7/R10 关闭）。冒烟仍不是业务验收。
 2. **MOCK 多写/复位**：`workflows` 有两个页面写入口；其余集合单写但都只改内存；刷新复位，无事务/并发控制（R8）。
 3. **Safari 人工未完成**：engine 层只覆盖 WebKit 2104 的 transform 兜底路径；zoom 路径需真实 Safari 确认（R1/R9）。
 4. **页面组件不是独立部署单元**：11 个组件共享 `DF`/`MOCK`，按页面入口划分；不引入模块打包、事务或分层过度设计（KISS）。

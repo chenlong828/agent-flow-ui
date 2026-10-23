@@ -1,7 +1,7 @@
 ---
 layer: requirements
 module: keys
-status: accepted
+status: delivered
 updated: 2026-10-23
 ---
 
@@ -16,5 +16,5 @@ updated: 2026-10-23
 | 非目标 | 不做真实登录态与鉴权；不做密钥加密存储；不做真实供应商校验；绑定只改内存夹具。 |
 | 约束 | 纯前端静态原型；密钥只显示末 4 位掩码；git/LLM 表单分离；删除需二次确认；不新增依赖。 |
 | 影响场景 | `SCN-0011`（`design/scenarios/workspace/credential/manage-key/scenario.md`） |
-| 澄清记录 | 2026-10-23 回溯登记：列表/添加/掩码/校验/绑定/删除已存在；本次补 REQ/SCN，场景到 `designed`，未 `verified`。 |
-| 状态 | `accepted` |
+| 澄清记录 | 2026-10-23 回溯登记：列表/添加/掩码/校验/绑定/删除已存在；本次补 REQ/SCN；2026-10-23 M1 runner 40/40 通过，场景 `verified`，REQ 转 `delivered`。 |
+| 状态 | `delivered` |

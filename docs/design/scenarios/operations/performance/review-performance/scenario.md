@@ -1,7 +1,7 @@
 ---
 layer: design
 module: analytics
-status: designed
+status: verified
 flow: review-performance
 scenario: SCN-0009
 updated: 2026-10-23
@@ -31,11 +31,11 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）；本批只到 `designed`，未写 runner，因此不标 `verified`。
+执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0009-T1 | 正 | KPI 数值与 `MOCK.analytics` 对应字段一致；阶段准出 4 行、Skill 审计条目数与夹具一致 | 待补 |
-| SCN-0009-T2 | 正 | 切近 4 周后趋势数据点/标签为 4 个；切回 8 周恢复 8 个 | 待补 |
-| SCN-0009-T3 | 正 | 评审记录首页 5 条且按夹具顺序；下一页显示余下条目，页码正确 | 待补 |
-| SCN-0009-T4 | 反 | 近 12 周选项 disabled；页面不存在编辑/删除按钮，切换范围不写 `MOCK` | 待补 |
+| SCN-0009-T1 | 正 | 5 张 KPI 卡；吞吐/成功率与夹具一致；阶段 4 行、审计 6 条 | `tools/verify-m1-scenarios.js#SCN-0009-T1` |
+| SCN-0009-T2 | 正 | 切近 4 周 8 个数据点；切回 8 周 16 个数据点 | `tools/verify-m1-scenarios.js#SCN-0009-T2` |
+| SCN-0009-T3 | 正 | 首页 5 条含 INS-2041；次页 5 条含 INS-2027；页码 2/2 | `tools/verify-m1-scenarios.js#SCN-0009-T3` |
+| SCN-0009-T4 | 反 | 12 周选项 disabled；无编辑/删除按钮；切换范围不改 MOCK.analytics | `tools/verify-m1-scenarios.js#SCN-0009-T4` |

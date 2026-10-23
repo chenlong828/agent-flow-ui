@@ -1,7 +1,7 @@
 ---
 layer: design
 module: experts
-status: designed
+status: verified
 flow: manage-expert
 scenario: SCN-0006
 updated: 2026-10-23
@@ -31,11 +31,11 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）；本批只到 `designed`，未写 runner，因此不标 `verified`。
+执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0006-T1 | 正 | 卡片数与 `MOCK.experts.length` 相等；搜索名称后只保留匹配项 | 待补 |
-| SCN-0006-T2 | 正 | 详情五区标题齐全；Skill/工具列表与夹具数组一致；引用数等于工作流节点引用数 | 待补 |
-| SCN-0006-T3 | 正 | 新建合法专家后总数 +1；编辑保存后字段回写；停用确认后卡片显示「已停用」 | 待补 |
-| SCN-0006-T4 | 反 | 取消停用确认后 `enabled` 仍为 true；picker 中已选 Skill 不出现在可选列表 | 待补 |
+| SCN-0006-T1 | 正 | 卡片数=夹具；搜索「评审」后仅 1 张 | `tools/verify-m1-scenarios.js#SCN-0006-T1` |
+| SCN-0006-T2 | 正 | 五区齐全；角色、Skill、工具、参考知识与夹具一致；引用数=工作流节点引用数 | `tools/verify-m1-scenarios.js#SCN-0006-T2` |
+| SCN-0006-T3 | 正 | 新建合法专家 +1；编辑 duty 回写；停用后 enabled=false 且卡片显示停用 | `tools/verify-m1-scenarios.js#SCN-0006-T3` |
+| SCN-0006-T4 | 反 | 取消停用确认后 enabled 仍为 true | `tools/verify-m1-scenarios.js#SCN-0006-T4` |

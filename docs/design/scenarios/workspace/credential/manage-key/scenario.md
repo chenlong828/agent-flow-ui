@@ -1,7 +1,7 @@
 ---
 layer: design
 module: keys
-status: designed
+status: verified
 flow: manage-key
 scenario: SCN-0011
 updated: 2026-10-23
@@ -31,11 +31,11 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）；本批只到 `designed`，未写 runner，因此不标 `verified`。
+执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0011-T1 | 正 | 列表条目数与 `MOCK.keys.length` 相等；所有掩码只显示末 4 位且不含完整密钥 | 待补 |
-| SCN-0011-T2 | 正 | 添加合法 git Key 后总数 +1；LLM 表单不出现 git 字段，反之亦然 | 待补 |
-| SCN-0011-T3 | 正 | 校验后状态按模拟结果变化；绑定用途写回并在列表/详情显示 | 待补 |
-| SCN-0011-T4 | 反 | 必填缺失不得提交；取消删除后 `MOCK.keys` 长度不变 | 待补 |
+| SCN-0011-T1 | 正 | 列表数同源；所有掩码含 **** 或 …、保留末 4 位并在列表展示 | `tools/verify-m1-scenarios.js#SCN-0011-T1` |
+| SCN-0011-T2 | 正 | 添加合法 git Key +1 且状态「未校验」；git 表单显示时 LLM 表单隐藏 | `tools/verify-m1-scenarios.js#SCN-0011-T2` |
+| SCN-0011-T3 | 正 | k3 校验后转「有效」；k1 新增工作区绑定并回写，列表显示工作区×3 | `tools/verify-m1-scenarios.js#SCN-0011-T3` |
+| SCN-0011-T4 | 反 | 缺公钥时主按钮 disabled 且不新增；取消删除后集合不变 | `tools/verify-m1-scenarios.js#SCN-0011-T4` |

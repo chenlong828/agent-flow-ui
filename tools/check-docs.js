@@ -88,16 +88,23 @@ for (const p of all) {
     if (!f.flow) err(`${r}: 场景缺 flow`);
     if (!/^SCN-\d{4}$/.test(f.scenario || '')) err(`${r}: scenario 字段非法: ${f.scenario}`);
     else scenarios.add(f.scenario);
-    scenarioRefs.push({ r, module: f.module, id: f.scenario });
+    scenarioRefs.push({ r, module: f.module, id: f.scenario, status: f.status, text });
     if (!['draft', 'designed', 'verified', 'deprecated'].includes(f.status)) err(`${r}: 场景 status 越界`);
     if (!text.includes('执行层：')) err(`${r}: 场景缺「执行层：」`);
     const rows = (text.match(/\| SCN-\d{4}-T\d+ \|/g) || []).length;
     if (rows < 4) err(`${r}: 场景测试表少于 3 正 1 反（找到 ${rows} 行）`);
+    if (f.status === 'verified') {
+      const pos = (text.match(/\| SCN-\d{4}-T\d+ \| 正 \|/g) || []).length;
+      const neg = (text.match(/\| SCN-\d{4}-T\d+ \| 反 \|/g) || []).length;
+      if (pos < 3 || neg < 1) err(`${r}: verified 场景须至少 3 正 1 反（正 ${pos} / 反 ${neg}）`);
+      if (text.includes('| 待补 |')) err(`${r}: verified 场景仍含「待补」脚本`);
+      if (!text.includes('最近一次执行：')) err(`${r}: verified 场景缺「最近一次执行：」证据行`);
+    }
   }
 
   if (parts[0] === 'requirements' && /^REQ-\d{4}-/.test(path.basename(r))) {
     reqs.add(`REQ-${path.basename(r).split('-')[1]}`);
-    reqCards.push({ r, text });
+    reqCards.push({ r, text, status: f.status });
   }
 }
 
@@ -111,6 +118,15 @@ for (const s of scenarioRefs) {
 }
 for (const q of reqCards) {
   if (!/SCN-\d{4}/.test(q.text)) err(`${q.r}: 需求卡未引场景`);
+  if (q.status === 'delivered') {
+    const ids = new Set(q.text.match(/SCN-\d{4}/g) || []);
+    if (!ids.size) err(`${q.r}: delivered 需求未引场景`);
+    for (const id of ids) {
+      const scn = scenarioRefs.find((s) => s.id === id);
+      if (!scn) err(`${q.r}: delivered 需求引用的 ${id} 不存在`);
+      else if (scn.status !== 'verified') err(`${q.r}: delivered 需求引用的 ${id} 仍为 ${scn.status}`);
+    }
+  }
 }
 
 /* works：每个工序必须有 brief；closed 必须有 result；brief 必须引 REQ 或注明旁路 */

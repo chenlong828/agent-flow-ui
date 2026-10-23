@@ -11,12 +11,12 @@ updated: 2026-10-23
 
 | 里程碑 | 内容 | 状态 | 关联 |
 |---|---|---|---|
-| M1 | 12 页高保真原型（列表/编辑器/四类资产/实例/看板/工作区/Key） | 已完成（追溯已补） | `requirements/REQ-0002..0011`、`design/scenarios/`、`design/components/` 各规格 |
+| M1 | 12 页高保真原型（列表/编辑器/四类资产/实例/看板/工作区/Key） | 已完成（追溯 + 场景验证） | `requirements/REQ-0002..0011`、`design/scenarios/`、`design/components/` 各规格 |
 | M2 | 全局外壳交互（用户区显示与下拉菜单） | 已完成 | `REQ-0001` / `SCN-0001` |
 | M3 | 开放问题裁定：OQ-1~OQ-6 逐条转需求或决策 | 待排 | `plan/open-questions.md` |
 | M4 | 组件基线与门禁（方案 A）：11 个模块卡、architecture 现行真相、check-docs 增强 | 已完成 | `history/works/2026-10-23-component-baseline/` |
 
-> **M1 追溯（2026-10-23 用户要求）**：10 个页面组件已补 `REQ-0002..0011` + `SCN-0002..0011`，组件 frontmatter 反查、`check-docs` 强制。场景当前为 `designed`，3 正 1 反测试未落地，因此**不标 verified、REQ 不标 delivered**；冒烟仍不是业务验收。详见 `plan/risks.md` R7/R10。
+> **M1 追溯与验收（2026-10-23 用户要求）**：10 个页面组件已补 `REQ-0002..0011` + `SCN-0002..0011`，组件 frontmatter 反查、`check-docs` 强制。`tools/verify-m1-scenarios.js` 覆盖 10 场景 × 3 正 1 反，40/40 通过；SCN 转 `verified`、REQ 转 `delivered`，R7/R10 关闭。详见 `history/works/2026-10-23-m1-scenario-verification/result.md`。
 
 ## 工序与依赖
 

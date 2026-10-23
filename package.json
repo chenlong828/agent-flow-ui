@@ -11,6 +11,7 @@
     "docs:index:check": "node tools/gen-scenario-index.js --check docs",
     "test": "npm run check:syntax && npm run check:docs && npm run docs:index:check",
     "test:smoke": "node tools/smoke-test.js",
-    "test:engine": "BASE_URL=http://127.0.0.1:3000/pages/ node tools/verify-user-menu.js"
+    "test:engine": "BASE_URL=http://127.0.0.1:3000/pages/ node tools/verify-user-menu.js",
+    "test:scenarios": "node tools/verify-m1-scenarios.js"
   }
 }

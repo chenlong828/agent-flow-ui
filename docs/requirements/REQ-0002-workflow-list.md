@@ -1,7 +1,7 @@
 ---
 layer: requirements
 module: workflow-list
-status: accepted
+status: delivered
 updated: 2026-10-23
 ---
 
@@ -16,5 +16,5 @@ updated: 2026-10-23
 | 非目标 | 不做画布节点编辑（`REQ-0003`）；不做实例生命周期（`REQ-0004`）；原型中的“发起运行”只提示并跳转实例页，不创建真实实例；不做权限与真实执行。 |
 | 约束 | 纯前端静态原型；数据来自内存夹具、刷新复位；桌面视口；不新增依赖。 |
 | 影响场景 | `SCN-0002`（`design/scenarios/flow/workflow-list/browse-workflows/scenario.md`） |
-| 澄清记录 | 2026-10-23 回溯登记：页面与组件已存在；本次补 REQ/SCN，场景到 `designed`，未 `verified`。已知实现“发起运行”不写 `MOCK.instances`，已写入非目标。 |
-| 状态 | `accepted` |
+| 澄清记录 | 2026-10-23 回溯登记：页面与组件已存在；本次补 REQ/SCN；2026-10-23 M1 runner 40/40 通过，场景 `verified`，REQ 转 `delivered`。已知实现“发起运行”不写 `MOCK.instances`，已写入非目标。 |
+| 状态 | `delivered` |

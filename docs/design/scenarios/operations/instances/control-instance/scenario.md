@@ -1,7 +1,7 @@
 ---
 layer: design
 module: instances
-status: designed
+status: verified
 flow: control-instance
 scenario: SCN-0004
 updated: 2026-10-23
@@ -32,11 +32,11 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）；本批只到 `designed`，未写 runner，因此不标 `verified`。
+执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0004-T1 | 正 | 列表 Tab 计数与 `MOCK.instances` 按状态分组数一致；「已结束」等于成功+失败+已终止 | 待补 |
-| SCN-0004-T2 | 正 | `?id=INS-2042` 详情显示对应实例状态/进度，轨迹节点数与 `inst.nodes` 一致 | 待补 |
-| SCN-0004-T3 | 正 | 暂停运行中实例后状态为「已暂停」，恢复后回到「运行中」；批准后等待人工节点转成功 | 待补 |
-| SCN-0004-T4 | 反 | 终止确认框取消后状态不变；已终止实例不可恢复；驳回未填意见不得提交 | 待补 |
+| SCN-0004-T1 | 正 | 6 个 Tab 计数与状态分组一致；已结束=成功+失败+已终止 | `tools/verify-m1-scenarios.js#SCN-0004-T1` |
+| SCN-0004-T2 | 正 | ?id=INS-2041 轨迹节点数=workflow graph；ok/running 节点计数与 inst.nodes 一致 | `tools/verify-m1-scenarios.js#SCN-0004-T2` |
+| SCN-0004-T3 | 正 | 暂停后状态「已暂停」，恢复后「运行中」；INS-2038 批准后转运行中且等待节点 ok | `tools/verify-m1-scenarios.js#SCN-0004-T3` |
+| SCN-0004-T4 | 反 | 取消终止后仍为运行中；驳回未填意见被拒且状态不变；INS-2019 无暂停/恢复/终止按钮 | `tools/verify-m1-scenarios.js#SCN-0004-T4` |

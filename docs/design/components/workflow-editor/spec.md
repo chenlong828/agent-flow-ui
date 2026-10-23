@@ -14,7 +14,7 @@ updated: 2026-10-23
 
 ## 0 模块卡
 
-> 追溯：`REQ-0003` / `SCN-0003`（designed，未 verified）。
+> 追溯：`REQ-0003` / `SCN-0003`（verified；DOM/jsdom 3 正 1 反）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
@@ -24,11 +24,11 @@ updated: 2026-10-23
 - 公开契约：页面入口 `pages/workflow-editor.html?id=<workflowId>`（缺 id 回落 `MOCK.workflows[0]`）；操作 `CMP-workflow-editor#open` / `#drag-node` / `#connect-edge` / `#inspector` / `#validate` / `#exportDsl`；不变量：同一评审节点至多一条回退边且目标必须是它的前序节点（重复连线需确认替换），开始/专家/评审/人工确认/fan-in/结束节点至多一条向前出边；孤立节点、评审缺回退目标、专家节点缺专家绑定、fan-out 缺清单来源由 `#validate` 拦截（孤立节点记 warn，其余为 err，err 未清零不得发布）；所有视口↔图形坐标换算统一走 `toGraph` / `clientDelta`，缩放只在 `paint` 中以 `transform: scale` 施加。
 - 依赖：`DF`（`window.DF`：外壳、弹窗、表格、`zoomK` / `zoomOnFixed`）、`MOCK`（`window.MOCK`）；不依赖其他页面组件（不复用 `CMP-workflow-list` 的 JS 逻辑）。
 - 变化轴：节点类型集合与其校验规则——新增一种节点类型须同步改左侧面板、`addNode`、属性抽屉分派、`validateGraph` 与 DSL `payload` 五处。
-- 验证入口：`npm start` + `/pages/workflow-editor.html?id=w1`；`node tools/smoke-test.js`；SCN-0003（designed，3 正 1 反测试方案已登记；runner 待补）。
+- 验证入口：`npm start` + `/pages/workflow-editor.html?id=w1`；`node tools/smoke-test.js`；SCN-0003（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0003`）。
 - 预算：源码 + 规格 + 测试约 70 KB（上限 120k token，本组件远低于上限）。
 - 单独运行：`npm start` → `http://localhost:3000/pages/workflow-editor.html?id=w1`。
 - 删除测试：删除后「工作流可视化编排」能力整体消失（列表只能新建/复制，不能改结构、校验或导出 DSL），复杂度从本组件集中移到未来的编排服务，不留在其他页面。
-- 已知偏差：M1 追溯已补（REQ-0003/SCN-0003），场景 designed、未 verified；素材为 `MOCK` 夹具，刷新即复位；仅结构冒烟，拖拽与坐标类断言在 jsdom 不可证，后续如需行为变更应补引擎层场景（如坐标换算与回退边唯一性断言）。
+- 已知偏差：M1 追溯已补（REQ-0003/SCN-0003），场景 verified（DOM/jsdom 3 正 1 反 40/40）；素材为 `MOCK` 夹具，刷新即复位；结构/行为已由 M1 runner 覆盖，拖拽与坐标类断言在 jsdom 不可证，后续如需行为变更应补引擎层场景（如坐标换算与回退边唯一性断言）。
 
 ## 1 页面定位
 

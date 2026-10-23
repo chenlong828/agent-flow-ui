@@ -1,7 +1,7 @@
 ---
 layer: requirements
 module: tools
-status: accepted
+status: delivered
 updated: 2026-10-23
 ---
 
@@ -16,5 +16,5 @@ updated: 2026-10-23
 | 非目标 | 不做真实 MCP/CLI/脚本执行；不做 CI/CD 环境绑定（本版占位）；调试为模拟 trace，不发起真实调用。 |
 | 约束 | 纯前端静态原型；被引用工具不可删除；调试成功才从“未验证”转“可用”；引用方统计来自夹具扫描；不新增依赖。 |
 | 影响场景 | `SCN-0008`（`design/scenarios/assets/tool-registry/manage-tool/scenario.md`） |
-| 澄清记录 | 2026-10-23 回溯登记：注册/调试/引用方/删除保护已存在；本次补 REQ/SCN，场景到 `designed`，未 `verified`。 |
-| 状态 | `accepted` |
+| 澄清记录 | 2026-10-23 回溯登记：注册/调试/引用方/删除保护已存在；本次补 REQ/SCN；2026-10-23 M1 runner 40/40 通过，场景 `verified`，REQ 转 `delivered`。 |
+| 状态 | `delivered` |
