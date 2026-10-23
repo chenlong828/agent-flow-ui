@@ -2,13 +2,13 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # 研发智能体工作流编排服务 — UE 原型需求归纳总结
 
-> 版本：v1.0（评审稿）　|　来源：用户需求描述 + `reference/workflow_concept.pptx`（8 页）+ 三轮问答确认 + Google 分析建议裁定
-> 下一步：模块拆分 → 页面细化 → 原型页面输出（每步停下评审）
+> 版本：v1.0（现行原型）　|　来源：用户需求描述 + `reference/workflow_concept.pptx`（8 页）+ 三轮问答确认 + Google 分析建议裁定
+> 现行形态：12 页高保真原型已交付；后续变更走 `requirements/` → `works/`，不再按「模块拆分 → 页面细化 → 原型输出」阶段推进。
 
 ---
 

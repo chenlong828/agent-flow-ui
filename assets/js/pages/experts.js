@@ -1,6 +1,6 @@
 /**
  * AgentFlow 原型 · 专家管理 · 列表页 + 详情抽屉
- * 规格: docs/06-专家管理.md（卡片列表 / 五区详情抽屉 / 新建弹窗 / 空态）
+ * 规格: docs/design/components/experts/spec.md（卡片列表 / 五区详情抽屉 / 新建弹窗 / 空态）
  */
 (function () {
   'use strict';

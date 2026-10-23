@@ -1,7 +1,7 @@
 /**
  * AgentFlow 原型 · 工具与集成页（pages/tools.html）
  * 依赖: window.MOCK (assets/js/mock-data.js) + window.DF (assets/js/ui.js)
- * 规格: docs/08-工具与集成.md —— Tab 列表 + 调试抽屉(680px) + 注册/编辑弹窗
+ * 规格: docs/design/components/tools/spec.md —— Tab 列表 + 调试抽屉(680px) + 注册/编辑弹窗
  */
 (function () {
   'use strict';
