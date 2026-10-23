@@ -2,6 +2,8 @@
 layer: design
 module: ui-shell
 component: CMP-ui-shell
+requirement: REQ-0001
+scenario: SCN-0001
 status: active
 updated: 2026-10-23
 ---
@@ -12,6 +14,8 @@ updated: 2026-10-23
 > 产品占位名：**AgentFlow · 研发智能体工作流编排**（可在评审时更名）
 
 ## 0 模块卡
+
+> 追溯：`REQ-0001` / `SCN-0001`（verified）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件（跨页共享外壳）
@@ -25,7 +29,7 @@ updated: 2026-10-23
 - 预算：`assets/js/ui.js` 约 18 KB + 本规格约 8 KB，无专属测试文件；上限 120k token，远低于上限。
 - 单独运行：`npm start` → 任一 `/pages/*.html`（外壳随页面加载）。
 - 删除测试：删除后 12 页同时失去导航、顶栏、用户区与字号能力，复杂度会复制到每个页面，故保留为唯一共享组件。
-- 已知偏差：M1 中的外壳能力无 REQ 追溯（仅用户区有 `REQ-0001` / `SCN-0001`）；Safari 人工走查未完成；WebKit 2104 的 html 级 zoom 探测失效，引擎证据只覆盖 transform 兜底路径（R1/R9）。
+- 已知偏差：M1 十页已有各自 `REQ`/`SCN`；外壳能力仍只有用户区有 `REQ-0001` / `SCN-0001`，导航/字号/待确认角标无独立需求卡；Safari 人工走查未完成；WebKit 2104 的 html 级 zoom 探测失效，引擎证据只覆盖 transform 兜底路径（R1/R9）。
 
 ## 1 布局结构
 

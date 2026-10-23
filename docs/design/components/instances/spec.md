@@ -2,6 +2,8 @@
 layer: design
 module: instances
 component: CMP-instances
+requirement: REQ-0004
+scenario: SCN-0004
 status: active
 updated: 2026-10-23
 ---
@@ -12,6 +14,8 @@ updated: 2026-10-23
 
 ## 0 模块卡
 
+> 追溯：`REQ-0004` / `SCN-0004`（designed，未 verified）。
+
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件（列表 + 详情两个页面入口）
 - 业务价值：为运行观察者与操作者提供实例进度、节点轨迹、等待人工确认与异常控制；没有它，工作流只能被定义，无法被观察、干预或留痕。
@@ -20,11 +24,11 @@ updated: 2026-10-23
 - 公开契约：页面入口 `pages/instances.html` 与 `pages/instance-detail.html?id=<instanceId>`；操作 `CMP-instances#list`、`#start-run`、`#pause-resume`、`#terminate`、`#retry-node`、`#approve-reject`；不变量 实例状态只取「运行中/等待人工确认/回退重跑中/已暂停/成功/失败/已终止」；列表的「已结束」是成功/失败/已终止的聚合 Tab，不是独立状态；终止为不可逆终态，暂停可恢复；等待人工时批准与驳回互斥，驳回必须携带意见；fan-out 聚合统计（成功/失败/运行中/重试中）与子任务明细同源；节点停止后不得继续推进。
 - 依赖：`DF`（外壳、弹窗、表格、Tabs、Toast、时间格式化）/ `MOCK`；不依赖其他页面组件（跨页只走 URL 与 `df-new-instance`）。
 - 变化轴：实例/节点状态机与控制语义（暂停、终止、重试、重跑、人工驳回）最易变，新增状态须同步列表、详情、控制按钮与留痕。
-- 验证入口：`npm start` + `/pages/instances.html`、`/pages/instance-detail.html?id=INS-2042`；`node tools/smoke-test.js`（12 页冒烟，含两页）；legacy-smoke（M1 基线无 SCN，仅页面加载期断言）。
+- 验证入口：`npm start` + `/pages/instances.html`、`/pages/instance-detail.html?id=INS-2042`；`node tools/smoke-test.js`（12 页冒烟，含两页）；SCN-0004（designed，3 正 1 反测试方案已登记；runner 待补）。
 - 预算：`instances.js` 约 7 KB + `instance-detail.js` 约 18 KB + 本规格约 9 KB，无专属测试；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/instances.html`（详情页用 `?id=` 定位，缺省回落到夹具实例）。
 - 删除测试：删除后实例不可观察、不可控制、不可审批，工作流只剩定义；复杂度会集中到工作流列表/编辑器，故保留为独立组件。
-- 已知偏差：M1 原型基线、无 REQ 追溯（无对应 SCN）；仅冒烟，状态迁移与控制行为无引擎层断言；`df-new-instance` 的新建实例注入是演示路径，刷新复位；fan-out 数千规模为聚合视图 + 抽样，非逐条真实调度（OQ-6）。
+- 已知偏差：M1 追溯已补（REQ-0004/SCN-0004），场景 designed、未 verified；仅冒烟，状态迁移与控制行为无引擎层断言；`df-new-instance` 的新建实例注入是演示路径，刷新复位；fan-out 数千规模为聚合视图 + 抽样，非逐条真实调度（OQ-6）。
 
 ## 1 页面定位
 

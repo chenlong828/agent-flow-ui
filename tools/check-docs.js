@@ -52,6 +52,9 @@ const all = walk(ROOT).sort();
 const components = new Set();
 const scenarios = new Set();
 const reqs = new Set();
+const componentRefs = [];
+const scenarioRefs = [];
+const reqCards = [];
 
 for (const p of all) {
   const r = rel(p);
@@ -73,6 +76,9 @@ for (const p of all) {
     if (f.module !== slug) err(`${r}: module 应为 ${slug}`);
     if (f.component !== `CMP-${slug}`) err(`${r}: component 应为 CMP-${slug}`);
     if (!['planned', 'active', 'retired'].includes(f.status)) err(`${r}: 组件 status 越界`);
+    if (!/^REQ-\d{4}$/.test(f.requirement || '')) err(`${r}: requirement 字段非法: ${f.requirement}`);
+    if (!/^SCN-\d{4}$/.test(f.scenario || '')) err(`${r}: scenario 字段非法: ${f.scenario}`);
+    componentRefs.push({ r, req: f.requirement, scn: f.scenario });
     const card = section(text, '## 0 模块卡');
     if (!card) err(`${r}: 缺 ## 0 模块卡`);
     else for (const field of CARD_FIELDS) if (!card.includes(`- ${field}`)) err(`${r}: 模块卡缺「${field}」`);
@@ -82,6 +88,7 @@ for (const p of all) {
     if (!f.flow) err(`${r}: 场景缺 flow`);
     if (!/^SCN-\d{4}$/.test(f.scenario || '')) err(`${r}: scenario 字段非法: ${f.scenario}`);
     else scenarios.add(f.scenario);
+    scenarioRefs.push({ r, module: f.module, id: f.scenario });
     if (!['draft', 'designed', 'verified', 'deprecated'].includes(f.status)) err(`${r}: 场景 status 越界`);
     if (!text.includes('执行层：')) err(`${r}: 场景缺「执行层：」`);
     const rows = (text.match(/\| SCN-\d{4}-T\d+ \|/g) || []).length;
@@ -90,7 +97,20 @@ for (const p of all) {
 
   if (parts[0] === 'requirements' && /^REQ-\d{4}-/.test(path.basename(r))) {
     reqs.add(`REQ-${path.basename(r).split('-')[1]}`);
+    reqCards.push({ r, text });
   }
+}
+
+/* 组件 ↔ 需求/场景、场景 ↔ 组件、需求 → 场景 必须可解析 */
+for (const c of componentRefs) {
+  if (!reqs.has(c.req)) err(`${c.r}: requirement=${c.req} 不存在`);
+  if (!scenarios.has(c.scn)) err(`${c.r}: scenario=${c.scn} 不存在`);
+}
+for (const s of scenarioRefs) {
+  if (!components.has(s.module)) err(`${s.r}: module=${s.module} 无对应组件`);
+}
+for (const q of reqCards) {
+  if (!/SCN-\d{4}/.test(q.text)) err(`${q.r}: 需求卡未引场景`);
 }
 
 /* works：每个工序必须有 brief；closed 必须有 result；brief 必须引 REQ 或注明旁路 */

@@ -2,6 +2,8 @@
 layer: design
 module: experts
 component: CMP-experts
+requirement: REQ-0006
+scenario: SCN-0006
 status: active
 updated: 2026-10-23
 ---
@@ -12,6 +14,8 @@ updated: 2026-10-23
 
 ## 0 模块卡
 
+> 追溯：`REQ-0006` / `SCN-0006`（designed，未 verified）。
+
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为工作流设计者提供可复用的智能体角色（人格与职责 + Skill 组合 + 工具清单 + 参考知识）；没有它，工作流节点无法指定执行者，「评审/审视视角」也没有承载实体。
@@ -20,11 +24,11 @@ updated: 2026-10-23
 - 公开契约：页面入口 `pages/experts.html`；操作 `CMP-experts#list`（卡片网格渲染 + 搜索/状态筛选 + 空态新建）、`#create`（新建弹窗，校验名称与角色定位后 push 并直接进入编辑态抽屉）、`#edit`（详情抽屉编辑态：快照草稿 → 保存回写专家记录）、`#toggle`（启停；停用需 `DF.modal.confirm` 确认并提示引用节点数）、`#detail`（五区详情抽屉只读）、`#picker`（`DF.modal.picker` 从 Skill 库/工具库多选，已加入项不再列出）；不变量 详情恒为五区结构（① 角色描述 ② Skill 组合 ③ 工具清单 ④ 主要工作内容 ⑤ 参考知识）；Skill 与工具只能取自本页可见资产 `MOCK.skills` / `MOCK.tools`，本页不定义新资产；启停结果与卡片标签、开关勾选、状态筛选一致（`MOCK.experts[i].enabled` 为唯一真相，切换后立即重绘本页）；取消编辑丢弃草稿、不改记录。
 - 依赖：`DF`（`renderShell`、`modal.open/form/confirm/picker`、`toast`、`tag/chip/empty/field/icon/esc`）/ `MOCK`（含 `byId` 查表）；不依赖 `WSC`，不依赖其他页面组件（跨页只走 URL 与共享 `MOCK`）。
 - 变化轴：Skill/工具的组合与排序方式（当前有序列表 + 勾选弹窗）最可能演化为带权重/条件的能力编排。
-- 验证入口：`npm start` + `/pages/experts.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；legacy-smoke（M1 基线无 SCN，仅页面加载期断言）。
+- 验证入口：`npm start` + `/pages/experts.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0006（designed，3 正 1 反测试方案已登记；runner 待补）。
 - 预算：源码 + 规格 + 测试约 31 KB（`experts.js` 22.6 KB + 本规格约 8.3 KB，无专属测试；上限 120k token，本组件远低于上限）。
 - 单独运行：`npm start` → `/pages/experts.html`（卡片/抽屉/弹窗均为本页内交互，无需其他页面配合）。
 - 删除测试：删除后无法注册与编辑智能体角色，工作流节点失去执行者来源，复杂度会集中到编辑器与实例页而非消失，故保留为独立组件。
-- 已知偏差：M1 原型基线、无 REQ 追溯（无对应 SCN）；仅冒烟，无行为级测试，挑选弹窗（`#picker`）的交互无断言；brief 底稿读集合未列 `MOCK.workflows`（代码只读用于引用计数）；`MOCK.experts` 刷新即复位，不持久化。
+- 已知偏差：M1 追溯已补（REQ-0006/SCN-0006），场景 designed、未 verified；仅冒烟，无行为级测试，挑选弹窗（`#picker`）的交互无断言；brief 底稿读集合未列 `MOCK.workflows`（代码只读用于引用计数）；`MOCK.experts` 刷新即复位，不持久化。
 
 ## 1 页面定位
 

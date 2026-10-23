@@ -2,6 +2,8 @@
 layer: design
 module: skills
 component: CMP-skills
+requirement: REQ-0005
+scenario: SCN-0005
 status: active
 updated: 2026-10-23
 ---
@@ -12,6 +14,8 @@ updated: 2026-10-23
 
 ## 0 模块卡
 
+> 追溯：`REQ-0005` / `SCN-0005`（designed，未 verified）。
+
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为专家与流程设计者提供可复用能力单元的沉淀、检索与组合入口；没有它，专家只能把能力内联写进指令，无法复用、版本化与审计。
@@ -20,11 +24,11 @@ updated: 2026-10-23
 - 公开契约：页面入口 `pages/skills.html`；操作 `CMP-skills#list`（分类/标签/关键词筛选与「共 n / 总数」计数）、`#create`（新建弹窗 → push 一条 v1.0 → 直接进编辑抽屉）、`#edit`（抽屉查看/编辑双模，保存写回）、`#toggle`（启停）、`#delete`（⋮ 菜单删除）、`#detail`（查看抽屉 + 引用方弹窗）；不变量 工作内容渐进披露（常驻摘要常驻 Context，`SECTIONS` 五章折叠按需加载、每章标「按需加载」、仅首章 `overview` 默认展开）；保存必递增版本号（`bumpVersion` 次位 +1，满 10 进位，如 v1.4 → v1.5、v1.9 → v2.0）；被专家引用（`usedBy > 0`）时删除被拒绝并提示引用数、⋮ 菜单删除项置灰，停用经状态开关时二次确认并提示引用影响；启用状态与列表一致（`s.enabled` 单字段驱动开关 `checked` 与 ⋮ 菜单「启用/停用」，两条路径都只改该字段后 `renderList()` 重绘）。
 - 依赖：`DF`（`renderShell`、`searchBox`、`table`、`empty`、`modal.form/confirm/open`、`menu`、`drawer`、`toast`、`tag`、`relTime`、`esc`、`icon`）/ `MOCK`；不依赖其他页面组件（跨页只走 URL 与 `MOCK` 共享，不共享 JS 状态）。
 - 变化轴：工作内容五章节（`SECTIONS`）与渐进披露的注入策略最易变（章节增删、Markdown 纯文本升级为富文本或文件挂载）。
-- 验证入口：`npm start` + `/pages/skills.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；legacy-smoke（M1 基线无 SCN，仅页面加载期断言）。
+- 验证入口：`npm start` + `/pages/skills.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0005（designed，3 正 1 反测试方案已登记；runner 待补）。
 - 预算：源码 + 规格 + 测试约 29 KB（`skills.js` 22.8 KB + 本规格约 6.5 KB，无专属测试；上限 120k token，本组件远低于上限）。
 - 单独运行：`npm start` → `/pages/skills.html`（其余页面仅作跳转目标与引用数据来源，不参与本页渲染）。
 - 删除测试：删除后 Skill 库入口消失，专家与工作流节点失去可引用的能力单元，复杂度会集中到 `CMP-experts` 的指令内联与工作流节点的内嵌提示，故保留为独立组件。
-- 已知偏差：M1 原型基线、无 REQ 追溯（无对应 SCN）；仅冒烟，无行为级测试；`usedBy` 是夹具静态数字，删除/停用的引用校验只读该字段，`MOCK.experts` 反查仅用于弹窗展示，两者可能不一致；抽屉编辑的 Markdown 行为无断言（五章只存纯文本、`<details>` 折叠态、`harvest` 即时收敛均未覆盖）；保存即递增版本号且无变更说明输入，版本历史第二行是 `prevVersion` 推导的占位「例行修订」；⋮ 菜单的启用/停用不弹确认（仅状态开关弹）；下文 §7 记的时间字段名为 `updatedAt`，实现与 `MOCK.skills` 夹具均为 `updatedM`（本批只插模块卡，未改 §1 之后正文，留待后续修订）。
+- 已知偏差：M1 追溯已补（REQ-0005/SCN-0005），场景 designed、未 verified；仅冒烟，无行为级测试；`usedBy` 是夹具静态数字，删除/停用的引用校验只读该字段，`MOCK.experts` 反查仅用于弹窗展示，两者可能不一致；抽屉编辑的 Markdown 行为无断言（五章只存纯文本、`<details>` 折叠态、`harvest` 即时收敛均未覆盖）；保存即递增版本号且无变更说明输入，版本历史第二行是 `prevVersion` 推导的占位「例行修订」；⋮ 菜单的启用/停用不弹确认（仅状态开关弹）；下文 §7 记的时间字段名为 `updatedAt`，实现与 `MOCK.skills` 夹具均为 `updatedM`（本批只插模块卡，未改 §1 之后正文，留待后续修订）。
 
 ## 1 页面定位
 

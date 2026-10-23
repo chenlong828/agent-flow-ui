@@ -6,7 +6,8 @@
 docs/
 ├── README.md
 ├── requirements/                  ← 需求：为什么做（一卡一文件）
-│   └── REQ-0001-user-menu.md
+│   ├── REQ-0001-user-menu.md
+│   └── REQ-0002..0011-<slug>.md   ← M1 十页
 ├── plan/                          ← 调度：接下来做什么（三份固定文档）
 │   ├── roadmap.md
 │   ├── risks.md
@@ -15,7 +16,7 @@ docs/
 │   ├── product.md / architecture.md
 │   ├── dev-environment.md / debugging-and-testing.md / code-refactoring.md
 │   ├── components/<id>/spec.md    ← 组件规格（11 个）
-│   └── scenarios/<领域>/<价值流>/<场景>/scenario.md
+│   └── scenarios/<领域>/<价值流>/<场景>/scenario.md  ← 11 个，索引 _index.md 自动生成
 ├── works/                         ← 执行：正在做什么（一级只有工序目录）
 └── history/                       ← 记忆：怎么走到这里（冻结只读）
     ├── decisions/                 ← 决策与裁定
@@ -42,9 +43,9 @@ docs/
 ## 维护纪律（速记）
 
 - 新文档先问「属于哪一态」，按路径放置并写 frontmatter；layer 与目录矛盾、status 越出本层值域、module 与组件目录不符，发现即修；改完跑 `npm run check:docs`（零依赖，校验路径、值域、模块卡必备字段、works brief/result、`CMP-`/`SCN-`/`REQ-` 引用、旧路径残留）；
-- 组件规格必须在 `## 1` 前有 `## 0 模块卡`，13 个字段齐全（见 `history/works/2026-10-23-component-baseline/brief.md` 模板）；
+- 组件规格必须在 `## 1` 前有 `## 0 模块卡`，13 个字段齐全（见 `history/works/2026-10-23-component-baseline/brief.md` 模板）；frontmatter 的 `requirement` / `scenario` 必须分别解析到存在的 REQ/SCN；
 - 场景索引 `design/scenarios/_index.md` 是生成物，用 `npm run docs:index` 重生成，`npm run docs:index:check` 校验无 diff，不手改；
 - 一处一事：同一事实只有一个权威文档，其他地方引用不复制；
-- 需求进 `requirements/`；工序 brief 必须引 `REQ-xxxx`，一个 REQ 同时只挂一个在飞工序；
+- 需求进 `requirements/`，每张卡必须引 `SCN-xxxx`；工序 brief 必须引 `REQ-xxxx`，一个 REQ 同时只挂一个在飞工序；
 - 收口写 `result.md` 后才可归档到 `history/works/`；归档件不得作为设计依据；
 - 新坑必须带存续条件进 `history/pitfalls.md`；坑消失时回填实证日期。
