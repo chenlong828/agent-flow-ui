@@ -41,13 +41,15 @@ const PAGES = fs.readdirSync(path.join(ROOT, 'pages')).filter(f => f.endsWith('.
       errors.push('load failed: ' + e.message);
     }
 
+    let app = null;
     if (dom) {
       // 留 400ms 让 setTimeout(0/120) 的初始化回调执行完
       await new Promise(r => setTimeout(r, 400));
+      // 必须在 close() 前取到 DOM；jsdom 24 关闭后 window 不再可用
+      app = dom.window.document.getElementById('app');
       dom.window.close();
     }
 
-    const app = dom && dom.window.document.getElementById('app');
     const painted = !!(app && app.innerHTML.trim());
     if (errors.length || !painted) failed++;
     console.log((errors.length || !painted ? '✕ ' : '✓ ') + page +
