@@ -7,7 +7,7 @@ updated: 2026-10-23
 
 # 系统架构（现行真相）
 
-> 本文只写系统现在是什么。历史重构清单与效果数据见 git `f7e3efb`；本批审视与收口见 `history/works/2026-10-23-component-baseline/result.md`。组件边界、数据权属与验证入口以各 `design/components/<id>/spec.md` 的 `## 0 模块卡` 为准；本文只给系统级地图与约束。
+> 本文只写系统现在是什么。历史重构清单见 git `f7e3efb`；本批审视与收口见 `history/works/2026-10-23-component-baseline/result.md`。组件边界、数据权属与验证入口以各 `design/components/<id>/spec.md` 的 `## 0 模块卡` 为准；本文只给系统级地图与约束。
 
 ## 1 技术基线与边界
 
