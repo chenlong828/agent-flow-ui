@@ -1,21 +1,21 @@
 # AgentFlow · 研发智能体工作流编排服务 UE 原型
 
-高保真可交互纯前端原型：无构建、零外部依赖，Node 仅用于静态托管。
+高保真可交互纯前端原型：无构建、零运行时依赖，Node 仅用于静态托管。
 
 ## 运行
 
 ```bash
 node server.js
-# ➜ http://localhost:3000   （自动打开工作流列表页）
+# ➜ http://127.0.0.1:3000   （/ 重定向到工作流列表）
 ```
 
-也可指定端口：`PORT=8080 node server.js`
+也可指定端口：`PORT=8080 node server.js`。静态服务只监听 `127.0.0.1`，只服务 `pages/` 与 `assets/`。
 
 ## 目录结构
 
 ```
-├─ server.js              零依赖静态服务器（/ 重定向到首页）
-├─ package.json           npm start = node server.js
+├─ server.js              零依赖静态服务器（/ 重定向到首页；拒绝越界与点文件）
+├─ package.json           npm start / test / check:docs / docs:index
 ├─ assets/
 │  ├─ css/main.css        设计系统：布局/组件/语义色/画布样式（全局唯一）
 │  └─ js/
@@ -25,30 +25,29 @@ node server.js
 │     └─ pages/           每个页面的逻辑 JS（node --check 可校验）
 │                         └─ workspace-common.js  工作区列表/详情共用模块（window.WSC）
 ├─ pages/                 页面 HTML（每页一个文件，私有样式内联 <style>）
-├─ tools/smoke-test.js    页面冒烟测试（jsdom 逐页加载，见 docs/13 §5）
-├─ docs/                  需求归纳与页面细化规格（实现依据）
+├─ tools/                 check-docs / gen-scenario-index / smoke-test / verify-user-menu
+├─ docs/                  五态文档：需求 / 计划 / 现行设计 / 工序 / 历史（入口 docs/README.md）
 └─ reference/             原始参考资料 workflow_concept.pptx
 ```
 
 ## 页面清单
 
-| 页面 | 文件 | 规格 |
+| 页面 | 文件 | 组件规格 |
 |---|---|---|
-| 工作流列表 | pages/workflow-list.html | docs/03 |
-| 工作流编辑器 | pages/workflow-editor.html | docs/04 |
-| Skill 库 | pages/skills.html | docs/05 |
-| 专家管理 | pages/experts.html | docs/06 |
-| Harness 管理 | pages/harnesses.html | docs/07 |
-| 工具与集成 | pages/tools.html | docs/08 |
-| 运行实例 / 详情 | pages/instances.html · pages/instance-detail.html | docs/09 |
-| 效能看板 | pages/analytics.html | docs/10 |
-| 工作区 / 详情 | pages/workspaces.html · pages/workspace-detail.html | docs/11 |
-| 个人 Key 管理 | pages/keys.html | docs/12 |
+| 工作流列表 | pages/workflow-list.html | docs/design/components/workflow-list/spec.md |
+| 工作流编辑器 | pages/workflow-editor.html | docs/design/components/workflow-editor/spec.md |
+| Skill 库 | pages/skills.html | docs/design/components/skills/spec.md |
+| 专家管理 | pages/experts.html | docs/design/components/experts/spec.md |
+| Harness 管理 | pages/harnesses.html | docs/design/components/harnesses/spec.md |
+| 工具与集成 | pages/tools.html | docs/design/components/tools/spec.md |
+| 运行实例 / 详情 | pages/instances.html · pages/instance-detail.html | docs/design/components/instances/spec.md |
+| 效能看板 | pages/analytics.html | docs/design/components/analytics/spec.md |
+| 工作区 / 详情 | pages/workspaces.html · pages/workspace-detail.html | docs/design/components/workspaces/spec.md |
+| 个人 Key 管理 | pages/keys.html | docs/design/components/keys/spec.md |
 
 ## 原型说明
 
 - 所有数据来自 `assets/js/mock-data.js`（内存态），刷新即复位；不持久化、无后端。
-- 页面 JS 一律调用 `DF.*` 公共组件拼装 UI（空态/表格/表单弹窗等），新增页面请优先复用，
-  组件清单与 API 见 `docs/13-代码梳理与公共组件.md`。
-- 页面质量自检：`node --check` 全部 JS；`npm i --no-save jsdom && node tools/smoke-test.js` 冒烟。
-- 推荐走查路径见 `docs/01-需求归纳总结.md` §6（旅程 A/B/C/D）。
+- 页面 JS 一律调用 `DF.*` 公共组件拼装 UI；组件地图、依赖方向与数据所有权见 `docs/design/architecture.md`，每个组件的契约见对应规格的 `## 0 模块卡`。
+- 门禁：`npm test`（语法 + 五态文档 + 场景索引）；冒烟：`npm run test:smoke`（需 jsdom）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
+- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件按「原型基线、无 REQ 追溯」登记，详见 `docs/plan/roadmap.md` / `docs/plan/risks.md`。

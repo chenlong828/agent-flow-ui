@@ -1,6 +1,6 @@
 /**
  * AgentFlow 原型 · 工作区配置 · 列表页
- * 规格: docs/11-工作区配置.md §2 列表页 / §3 新建向导弹窗 / §5 状态与空态
+ * 规格: docs/design/components/workspaces/spec.md §2 列表页 / §3 新建向导弹窗 / §5 状态与空态
  */
 (function () {
   'use strict';

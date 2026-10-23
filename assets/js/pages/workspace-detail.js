@@ -1,6 +1,6 @@
 /**
  * AgentFlow 原型 · 工作区配置 · 详情页（独立二级页）
- * 规格: docs/11-工作区配置.md §4 详情页 / §5 状态与空态
+ * 规格: docs/design/components/workspaces/spec.md §4 详情页 / §5 状态与空态
  */
 (function () {
   'use strict';
