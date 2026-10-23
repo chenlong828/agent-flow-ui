@@ -5,6 +5,12 @@
   "description": "研发智能体工作流编排服务 — 高保真交互原型（纯前端，Node 零依赖静态服务）",
   "scripts": {
     "start": "node server.js",
-    "check:docs": "node tools/check-docs.js docs"
+    "check:syntax": "for f in server.js assets/js/ui.js assets/js/mock-data.js assets/js/pages/*.js tools/*.js; do node --check \"$f\" || exit 1; done",
+    "check:docs": "node tools/check-docs.js docs",
+    "docs:index": "node tools/gen-scenario-index.js docs",
+    "docs:index:check": "node tools/gen-scenario-index.js --check docs",
+    "test": "npm run check:syntax && npm run check:docs && npm run docs:index:check",
+    "test:smoke": "node tools/smoke-test.js",
+    "test:engine": "BASE_URL=http://127.0.0.1:3000/pages/ node tools/verify-user-menu.js"
   }
 }
