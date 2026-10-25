@@ -1,7 +1,7 @@
 /**
- * AgentFlow 原型静态服务器（Node 零依赖）
+ * AgentFlow 原型静态服务器 + 同源 BFF（Node 零依赖）
  * 启动: node server.js  →  http://127.0.0.1:3000
- * 只服务 pages/ 与 assets/；拒绝点文件、越界路径与符号链接逃逸。
+ * 静态只服务 pages/ 与 assets/；/api/v1/* 与 /healthz 交给 CMP-bff 透明转发。
  */
 const http = require('http');
 const fs = require('fs');

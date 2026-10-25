@@ -39,5 +39,5 @@ B1 后端已提供 Harness / Tool / Skill / Expert 四类资产的完整 HTTP �
 
 ## 领取的开放问题
 
-- 后端工作区在本地仍显示未提交（`HEAD 3171154`）；联调验收需补 commit hash 或确认外部 worktree 的基线。
+- B1 后端代码基线已确认：`b38fffc`（专家聚合写）、`ef376de`（列表读模型）；199 tests / 0 fail，typecheck 通过；仅 `docs/playbook` 未提交，不影响 API。
 - 四页 live 接入与 M1 场景改用 FakeAPI 在 P2/P3 处理，不在本工序展开。
