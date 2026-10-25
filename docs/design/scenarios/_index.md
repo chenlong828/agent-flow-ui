@@ -19,8 +19,8 @@ updated: 2026-10-25
 | SCN-0005 | SCN-0005 Skill 维护与渐进披露 | assets / skill-library | verified | `design/scenarios/assets/skill-library/manage-skill/scenario.md` |
 | SCN-0006 | SCN-0006 专家注册与组合配置 | assets / expert-registry | verified | `design/scenarios/assets/expert-registry/manage-expert/scenario.md` |
 | SCN-0007 | SCN-0007 Harness 注册与健康治理 | assets / harness-pool | verified | `design/scenarios/assets/harness-pool/manage-harness/scenario.md` |
-| SCN-0008 | SCN-0008 工具注册、调试与引用治理 | assets / tool-registry | verified | `design/scenarios/assets/tool-registry/manage-tool/scenario.md` |
+| SCN-0008 | SCN-0008 工具注册、引用与治理 | assets / tool-registry | verified | `design/scenarios/assets/tool-registry/manage-tool/scenario.md` |
 | SCN-0009 | SCN-0009 效能看板只读回看 | operations / performance | verified | `design/scenarios/operations/performance/review-performance/scenario.md` |
 | SCN-0010 | SCN-0010 工作区创建、配置与归档 | workspace / workspace-config | verified | `design/scenarios/workspace/workspace-config/configure-workspace/scenario.md` |
 | SCN-0011 | SCN-0011 个人 Key 登记、校验与绑定 | workspace / credential | verified | `design/scenarios/workspace/credential/manage-key/scenario.md` |
-| SCN-0012 | SCN-0012 B1 资产同源接入与四类资产读写 | integration / b1-integration | designed | `design/scenarios/integration/b1-integration/scenario.md` |
+| SCN-0012 | SCN-0012 B1 资产同源接入与四类资产读写 | integration / b1-integration | verified | `design/scenarios/integration/b1-integration/scenario.md` |

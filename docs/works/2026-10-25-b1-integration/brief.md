@@ -1,7 +1,7 @@
 ---
 layer: works
 module: bff
-status: active
+status: closed
 updated: 2026-10-25
 ---
 
@@ -32,12 +32,12 @@ B1 后端已提供 Harness / Tool / Skill / Expert 四类资产的完整 HTTP �
 | T-B1-UI-03 | 测试 | `CMP-bff` | done | `tests/bff/`、`package.json` |
 | T-B1-UI-04 | 文档 | `CMP-bff` | done | `architecture.md`、`README.md`、`dev-environment.md` |
 | T-B1-UI-05 | 验证 | `CMP-bff` | done | `npm test`、`curl` 同源冒烟 |
-| T-B1-UI-06 | 实现 | `API` 共享模块（P2） | pending | `assets/js/api.js` |
-| T-B1-UI-07 | 实现 | 四资产页 | pending | `harnesses.js`、`tools.js`、`skills.js`、`experts.js` 只读接入 |
-| T-B1-UI-08 | 实现 | 四资产页 | pending | 写操作、专家聚合、revision/409、错误态 |
-| T-B1-UI-09 | 文档/验证 | 全局 | pending | M1 场景 FakeAPI、未接入能力标注、SCN-0012 verified |
+| T-B1-UI-06 | 实现 | `API` 共享模块 | done | `assets/js/api.js`（DTO 直连，无视图模型） |
+| T-B1-UI-07 | 实现 | 四资产页 | done | `harnesses.js`、`tools.js`、`skills.js`、`experts.js` 读接入 B1 DTO |
+| T-B1-UI-08 | 实现 | 四资产页 | done | 创建/编辑/启停/删除、专家聚合 PATCH、revision/409、错误态 |
+| T-B1-UI-09 | 文档/验证 | 全局 | done | `tools/fake-b1.js`、四页 M1 40/40、`verify-b1-pages`/`verify-b1-writes`、SCN-0012 verified |
 
 ## 领取的开放问题
 
 - B1 后端代码基线已确认：`b38fffc`（专家聚合写）、`ef376de`（列表读模型）；199 tests / 0 fail，typecheck 通过；仅 `docs/playbook` 未提交，不影响 API。
-- 四页 live 接入与 M1 场景改用 FakeAPI 在 P2/P3 处理，不在本工序展开。
+- 四页已改为 B1 DTO 直连；M1 场景通过 `tools/fake-b1.js` 内存传输，真实读写由 `verify-b1-pages.js` / `verify-b1-writes.js` 覆盖。

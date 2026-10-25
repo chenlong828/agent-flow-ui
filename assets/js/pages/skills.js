@@ -1,13 +1,19 @@
 /**
- * AgentFlow 原型 · Skill 库页面
- * 依赖: window.MOCK（mock-data.js）、window.DF（ui.js）
+ * AgentFlow 原型 · Skill 库页面（B1 实时接口）
+ * 依赖: window.API（B1 DTO 客户端）、window.DF（ui.js）
+ *
+ * 约定：
+ * - 页面状态直接保存 B1 DTO（SkillListItem / SkillDetail / SkillCategory），渲染直接读 DTO 字段；
+ *   不读演示夹具、不建客户端视图模型、不做 demo 回退。
+ * - 版本由服务端维护：保存后取返回 DTO 的 version，不在本地 bump；日期统一用 updatedAt。
+ * - 分类仅使用 API.categories() 的 code / label，中文名只在渲染时映射。
+ * - refs 使用 refType；usedByCount 只作计数展示（B1 无引用方明细）。
+ * - If-Match 由 API 层负责，页面只把 API.revision() 交给 API 写方法。
  */
 (function () {
   'use strict';
 
-  /* ---------------- 常量与状态 ---------------- */
-  var CATS = ['编码', '检索', '审视', '测试'];
-  var CAT_COLOR = { '编码': 'blue', '检索': 'teal', '审视': 'purple', '测试': 'orange' };
+  /* ---------------- 展示映射（仅渲染，不承载数据） ---------------- */
   var SECTIONS = [
     ['overview', '流程总述'],
     ['steps', '详细步骤与约束'],
@@ -15,47 +21,115 @@
     ['scripts', '外部脚本使用指南'],
     ['verification', '完成验证方案']
   ];
-  var REF_COLOR = { 'skill': 'blue', '模板': 'teal', '外部规范': 'purple' };
+  var CAT_COLORS = ['blue', 'teal', 'purple', 'orange', 'green', 'red'];
+  var REF_COLORS = { skill: 'blue', template: 'teal', spec: 'purple', doc: 'gray', url: 'orange' };
 
-  var state = { cat: '全部', tags: [], kw: '' };
-  var cur = null; // 当前抽屉: { id, edit, snap }
+  /* ---------------- 状态（全部为 B1 DTO） ---------------- */
+  var state = {
+    cat: 'all',
+    tags: [],
+    kw: '',
+    items: [],      // SkillListItem[]
+    total: 0,
+    cats: [],       // SkillCategory[]
+    loading: true,
+    listErr: '',
+    catErr: ''
+  };
+  // 当前抽屉: { id, dto: SkillDetail, edit: Boolean, draft: SkillDetail, err, saving }
+  var cur = null;
 
-  var byId = function (id) { return MOCK.byId(MOCK.skills, id); };
-  function bumpVersion(v) {
-    var m = /^v(\d+)\.(\d+)$/.exec(v || 'v1.0') || [null, '1', '0'];
-    var a = +m[1], b = +m[2] + 1;
-    if (b > 9) { a++; b = 0; }
-    return 'v' + a + '.' + b;
+  /* ---------------- 通用小工具 ---------------- */
+  function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+  function fmtDateTime(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+      ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
-  function prevVersion(v) {
-    var m = /^v(\d+)\.(\d+)$/.exec(v || 'v1.0') || [null, '1', '0'];
-    var a = +m[1], b = +m[2] - 1;
-    if (b < 0) { a--; b = 9; }
-    return 'v' + a + '.' + b;
+
+  function relTime(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    var min = (Date.now() - d.getTime()) / 60000;
+    if (min < 0) min = 0;
+    return DF.relTime(min);
   }
+
+  function sortCats(cats) {
+    return (cats || []).slice().sort(function (a, b) {
+      var pa = a && a.position != null ? a.position : 0;
+      var pb = b && b.position != null ? b.position : 0;
+      return pa - pb;
+    });
+  }
+
+  function catLabelOf(code) {
+    for (var i = 0; i < state.cats.length; i++) {
+      if (state.cats[i].code === code) return state.cats[i].label;
+    }
+    return code || '—';
+  }
+
+  function catColor(code) {
+    for (var i = 0; i < state.cats.length; i++) {
+      if (state.cats[i].code === code) return CAT_COLORS[i % CAT_COLORS.length];
+    }
+    return 'gray';
+  }
+
+  function itemById(id) {
+    for (var i = 0; i < state.items.length; i++) {
+      if (state.items[i].id === id) return state.items[i];
+    }
+    return null;
+  }
+
+  function replaceItem(dto) {
+    if (!dto || !dto.id) return;
+    for (var i = 0; i < state.items.length; i++) {
+      if (state.items[i].id === dto.id) { state.items[i] = dto; return; }
+    }
+    state.items.unshift(dto);
+    state.total += 1;
+  }
+
   function tagCloud() {
     var seen = [];
-    MOCK.skills.forEach(function (s) { (s.tags || []).forEach(function (t) { if (seen.indexOf(t) < 0) seen.push(t); }); });
+    state.items.forEach(function (s) {
+      (s.tags || []).forEach(function (t) {
+        if (seen.indexOf(t) < 0) seen.push(t);
+      });
+    });
     return seen.slice(0, 10);
   }
+
   function capLine(s) {
     var t = String(s.summary || '').replace(/\s+/g, '');
     var cut = (t.split(/[。；;]/)[0] || t);
     if (cut.length > 46) cut = cut.slice(0, 46) + '…';
     return '可复用能力：' + (cut || (s.name + ' 标准执行流程'));
   }
+
   function sceneLine(s) {
     var t = s.triggers || [];
     return t.length
       ? '专家任务上下文出现「' + t.join(' / ') + '」等意图时，路由加载本 Skill'
       : '由专家按任务语义自动路由（暂未配置触发关键词）';
   }
+
   function filtered() {
     var kw = state.kw.trim().toLowerCase();
-    return MOCK.skills.filter(function (s) {
-      if (state.cat !== '全部' && s.category !== state.cat) return false;
+    return state.items.filter(function (s) {
+      if (state.cat !== 'all' && s.categoryCode !== state.cat) return false;
       if (state.tags.length && !(s.tags || []).some(function (t) { return state.tags.indexOf(t) >= 0; })) return false;
-      if (kw && (s.name + ' ' + s.summary + ' ' + (s.triggers || []).join(' ')).toLowerCase().indexOf(kw) < 0) return false;
+      if (kw) {
+        var hay = [s.name, s.summary, (s.triggers || []).join(' '), (s.tags || []).join(' ')].join(' ').toLowerCase();
+        if (hay.indexOf(kw) < 0) return false;
+      }
       return true;
     });
   }
@@ -85,21 +159,65 @@
     q.oninput = function () { state.kw = q.value; renderList(); };
     renderSide();
     renderList();
+    loadCats();
+    loadList();
+  }
+
+  /* ---------------- 数据加载 ---------------- */
+  function loadCats() {
+    state.catErr = '';
+    renderSide();
+    API.categories().then(function (cats) {
+      state.cats = sortCats(cats);
+      state.catErr = '';
+      renderSide();
+      renderList();
+    }).catch(function (err) {
+      state.catErr = API.errorText(err);
+      renderSide();
+      renderList();
+    });
+  }
+
+  function loadList() {
+    state.loading = true;
+    state.listErr = '';
+    renderList();
+    API.list('skill', { limit: 200, sort: 'updatedAt:desc' }).then(function (page) {
+      state.items = (page && page.items) || [];
+      state.total = page && typeof page.total === 'number' ? page.total : state.items.length;
+      state.loading = false;
+      state.listErr = '';
+      renderSide();
+      renderList();
+    }).catch(function (err) {
+      state.loading = false;
+      state.listErr = API.errorText(err);
+      renderList();
+    });
   }
 
   /* ---------------- 左侧筛选栏 ---------------- */
   function sideHtml() {
-    var all = MOCK.skills;
-    var cats = [['全部', all.length]].concat(CATS.map(function (c) {
-      return [c, all.filter(function (s) { return s.category === c; }).length];
+    var all = state.items;
+    var cats = [{ code: 'all', label: '全部', count: all.length }].concat(state.cats.map(function (c) {
+      return {
+        code: c.code,
+        label: c.label,
+        count: all.filter(function (s) { return s.categoryCode === c.code; }).length
+      };
     }));
     var tags = tagCloud();
     return '<div class="sk-side-h">分类</div><div class="sk-cats">' +
-      cats.map(function (p) {
-        return '<div class="sk-cat' + (state.cat === p[0] ? ' on' : '') + '" data-cat="' + DF.esc(p[0]) + '">' +
-          '<span>' + DF.esc(p[0]) + '</span><span class="sk-n">' + p[1] + '</span></div>';
+      cats.map(function (c) {
+        return '<div class="sk-cat' + (state.cat === c.code ? ' on' : '') + '" data-cat="' + DF.esc(c.code) + '">' +
+          '<span>' + DF.esc(c.label) + '</span><span class="sk-n">' + c.count + '</span></div>';
       }).join('') +
       '</div>' +
+      (state.catErr
+        ? '<div class="notice" style="margin:0 2px 12px">' + DF.icon('warn', 14) +
+          '<span>分类加载失败：' + DF.esc(state.catErr) + ' <a href="javascript:;" id="sk-cat-retry">重试</a></span></div>'
+        : '') +
       '<div class="sk-side-h">标签</div><div class="chips sk-tagcloud">' +
       (tags.length ? tags.map(function (t) {
         return state.tags.indexOf(t) >= 0
@@ -110,6 +228,7 @@
       '<div class="notice" style="margin:14px 2px 0">' + DF.icon('book', 14) +
         '<span>技能以渐进式披露方式注入专家上下文</span></div>';
   }
+
   function renderSide() {
     var el = document.getElementById('sk-side');
     if (!el) return;
@@ -122,9 +241,12 @@
         var t = x.getAttribute('data-tag');
         var i = state.tags.indexOf(t);
         if (i >= 0) state.tags.splice(i, 1); else state.tags.push(t);
-        renderSide(); renderList();
+        renderSide();
+        renderList();
       };
     });
+    var retry = el.querySelector('#sk-cat-retry');
+    if (retry) retry.onclick = loadCats;
   }
 
   /* ---------------- 主列表 ---------------- */
@@ -132,24 +254,36 @@
     var trig = s.triggers || [];
     var shown = trig.slice(0, 3);
     return '<tr>' +
-      '<td><span class="rowlink" data-view="' + s.id + '">' + DF.esc(s.name) + '</span></td>' +
-      '<td>' + DF.tag(s.category, CAT_COLOR[s.category] || 'gray') + '</td>' +
+      '<td><span class="rowlink" data-view="' + DF.esc(s.id) + '">' + DF.esc(s.name) + '</span></td>' +
+      '<td>' + DF.tag(s.categoryLabel || catLabelOf(s.categoryCode), catColor(s.categoryCode)) + '</td>' +
       '<td><div class="ellipsis" style="max-width:280px" title="' + DF.esc(s.summary) + '">' + DF.esc(s.summary) + '</div></td>' +
       '<td><div class="chips" style="max-width:210px">' +
         shown.map(function (t) { return '<span class="chip">' + DF.esc(t) + '</span>'; }).join('') +
         (trig.length > 3 ? '<span class="chip" title="' + DF.esc(trig.slice(3).join('、')) + '">+' + (trig.length - 3) + '</span>' : '') +
         (!trig.length ? '<span class="sk-n">—</span>' : '') +
       '</div></td>' +
-      '<td style="text-align:right"><a href="javascript:;" class="sk-uref" data-used="' + s.id + '" title="查看引用方">' + s.usedBy + '</a></td>' +
-      '<td><span class="mono">' + DF.esc(s.version) + '</span></td>' +
-      '<td class="sub">' + DF.relTime(s.updatedM) + '</td>' +
+      '<td style="text-align:right"><a href="javascript:;" class="sk-uref" data-used="' + DF.esc(s.id) +
+        '" title="查看引用计数">' + (s.usedByCount || 0) + '</a></td>' +
+      '<td><span class="mono">' + DF.esc(s.version || '—') + '</span></td>' +
+      '<td class="sub" title="' + DF.esc(fmtDateTime(s.updatedAt)) + '">' + DF.esc(relTime(s.updatedAt)) + '</td>' +
       '<td><label class="switch" title="' + (s.enabled ? '启用中，点击停用' : '已停用，点击启用') + '">' +
-        '<input type="checkbox" data-sw="' + s.id + '"' + (s.enabled ? ' checked' : '') + '><i></i></label></td>' +
-      '<td><button class="icon-btn" data-more="' + s.id + '" title="更多操作">' + DF.icon('more') + '</button></td>' +
+        '<input type="checkbox" data-sw="' + DF.esc(s.id) + '"' + (s.enabled ? ' checked' : '') + '><i></i></label></td>' +
+      '<td><button class="icon-btn" data-more="' + DF.esc(s.id) + '" title="更多操作">' + DF.icon('more') + '</button></td>' +
       '</tr>';
   }
+
   function listHtml() {
-    if (!MOCK.skills.length) {
+    if (state.loading) {
+      return '<div class="sub" id="sk-list-loading" style="padding:24px 4px">正在加载 Skill 列表…</div>';
+    }
+    if (state.listErr) {
+      return DF.empty({
+        icon: 'warn',
+        html: '<div>Skill 列表加载失败</div><div class="sk-n" style="margin-top:6px">' + DF.esc(state.listErr) + '</div>',
+        action: { id: 'sk-retry', label: '重试', icon: 'refresh', primary: true }
+      });
+    }
+    if (!state.items.length) {
       return DF.empty({
         icon: '📦',
         html: 'Skill 库还是空的',
@@ -168,95 +302,135 @@
       rows.map(rowHtml)
     );
   }
+
   function renderList() {
     var box = document.getElementById('sk-tblbox');
     if (!box) return;
     box.innerHTML = listHtml();
     var n = filtered().length;
     var cnt = document.getElementById('sk-count');
-    if (cnt) cnt.textContent = MOCK.skills.length ? '共 ' + n + ' / ' + MOCK.skills.length + ' 个' : '';
-    box.querySelectorAll('[data-view]').forEach(function (el) { el.onclick = function () { openDrawer(el.getAttribute('data-view'), false); }; });
-    box.querySelectorAll('[data-used]').forEach(function (el) { el.onclick = function () { openUsedBy(el.getAttribute('data-used')); }; });
-    box.querySelectorAll('[data-more]').forEach(function (el) { el.onclick = function (e) { rowMenu(e, el.getAttribute('data-more')); }; });
-    box.querySelectorAll('[data-sw]').forEach(function (el) { el.onchange = function () { toggleSkill(el.getAttribute('data-sw')); }; });
+    if (cnt) {
+      if (state.loading) cnt.textContent = '加载中…';
+      else if (state.listErr) cnt.textContent = '';
+      else cnt.textContent = state.items.length ? '共 ' + n + ' / ' + (state.total || state.items.length) + ' 个' : '';
+    }
+    box.querySelectorAll('[data-view]').forEach(function (el) {
+      el.onclick = function () { openDrawer(el.getAttribute('data-view'), false); };
+    });
+    box.querySelectorAll('[data-used]').forEach(function (el) {
+      el.onclick = function () { openUsedBy(el.getAttribute('data-used')); };
+    });
+    box.querySelectorAll('[data-more]').forEach(function (el) {
+      el.onclick = function (e) { rowMenu(e, el.getAttribute('data-more')); };
+    });
+    box.querySelectorAll('[data-sw]').forEach(function (el) {
+      el.onchange = function () { setEnabled(el.getAttribute('data-sw'), el.checked); };
+    });
     var en = box.querySelector('#sk-empty-new');
     if (en) en.onclick = openNew;
+    var retry = box.querySelector('#sk-retry');
+    if (retry) retry.onclick = loadList;
     var cl = box.querySelector('#sk-clear');
     if (cl) cl.onclick = function () {
-      state.cat = '全部'; state.tags = []; state.kw = '';
-      document.getElementById('sk-q').value = '';
-      renderSide(); renderList();
+      state.cat = 'all';
+      state.tags = [];
+      state.kw = '';
+      var q = document.getElementById('sk-q');
+      if (q) q.value = '';
+      renderSide();
+      renderList();
     };
   }
 
-  /* ---------------- 状态开关 ---------------- */
-  async function toggleSkill(id) {
-    var s = byId(id);
+  /* ---------------- 启停 / 删除 ---------------- */
+  function setEnabled(id, next) {
+    var s = itemById(id);
     if (!s) return;
-    if (s.enabled) {
-      var ok = await DF.modal.confirm({
-        title: '停用 Skill', danger: true, okText: '确认停用',
-        message: '「' + s.name + '」当前被 ' + s.usedBy + ' 位专家引用，停用后这些专家将无法路由到该能力，确定停用？'
+    var apply = function () {
+      API.setEnabled('skill', id, next, API.revision('skill', id)).then(function (dto) {
+        replaceItem(dto);
+        if (cur && cur.id === id && !cur.edit) {
+          cur.dto = dto;
+          paintDrawer();
+        }
+        renderSide();
+        renderList();
+        DF.toast((next ? '已启用「' : '已停用「') + dto.name + '」', 'ok');
+      }).catch(function (err) {
+        renderList(); // 失败回滚为服务端 DTO 的 enabled 状态
+        DF.toast(API.errorText(err), 'err');
       });
-      if (!ok) { renderList(); return; }
-      s.enabled = false;
-      DF.toast('已停用「' + s.name + '」', 'ok');
-    } else {
-      s.enabled = true;
-      DF.toast('已启用「' + s.name + '」', 'ok');
+    };
+    if (!next) {
+      DF.modal.confirm({
+        title: '停用 Skill', danger: true, okText: '确认停用',
+        message: '「' + s.name + '」当前被 ' + (s.usedByCount || 0) + ' 位专家引用，停用后这些专家将无法路由到该能力，确定停用？'
+      }).then(function (ok) {
+        if (!ok) { renderList(); return; }
+        apply();
+      });
+      return;
     }
-    renderList();
+    apply();
   }
 
-  /* ---------------- 行操作菜单 ---------------- */
+  function deleteSkill(id) {
+    var s = itemById(id);
+    if (!s) return;
+    DF.modal.confirm({
+      title: '删除 Skill', danger: true, okText: '删除',
+      html: '<div>确定删除「' + DF.esc(s.name) + '」？该操作不可恢复。</div>' +
+        ((s.usedByCount || 0) > 0
+          ? '<div class="sub" style="margin-top:8px">当前被 ' + (s.usedByCount || 0) + ' 位专家引用，服务端可能拒绝删除。</div>'
+          : '')
+    }).then(function (ok) {
+      if (!ok) return;
+      API.remove('skill', id, API.revision('skill', id)).then(function () {
+        state.items = state.items.filter(function (x) { return x.id !== id; });
+        state.total = Math.max(0, state.total - 1);
+        if (cur && cur.id === id) { cur = null; DF.drawer.close(); }
+        renderSide();
+        renderList();
+        DF.toast('已删除「' + s.name + '」', 'ok');
+      }).catch(function (err) {
+        DF.toast('删除失败：' + deleteErrorText(err, s), 'err');
+      });
+    });
+  }
+
+  // B1 对被引用资产返回 409 referenced；引用方明细不提供，提示里只带计数
+  function deleteErrorText(err, s) {
+    if (err && err.status === 409 && err.code === 'referenced') {
+      return '该 Skill 被 ' + (s.usedByCount || 0) + ' 位专家引用，禁止删除';
+    }
+    return API.errorText(err);
+  }
+
+  /* ---------------- 行操作菜单 / 引用计数 ---------------- */
   function rowMenu(e, id) {
-    var s = byId(id);
+    var s = itemById(id);
     if (!s) return;
     var items = [
       { label: '查看', icon: 'file', onClick: function () { openDrawer(id, false); } },
       { label: '编辑', icon: 'edit', onClick: function () { openDrawer(id, true); } },
       s.enabled
-        ? { label: '停用', icon: 'pause', onClick: function () { s.enabled = false; renderList(); DF.toast('已停用「' + s.name + '」', 'ok'); } }
-        : { label: '启用', icon: 'play', onClick: function () { s.enabled = true; renderList(); DF.toast('已启用「' + s.name + '」', 'ok'); } },
-      { label: '删除', icon: 'trash', danger: true, onClick: async function () {
-          if (s.usedBy > 0) { DF.toast('该 Skill 被 ' + s.usedBy + ' 位专家引用，禁止删除', 'err'); return; }
-          var ok = await DF.modal.confirm({
-            title: '删除 Skill', danger: true, okText: '删除',
-            message: '确定删除「' + s.name + '」？该操作不可恢复。'
-          });
-          if (!ok) return;
-          MOCK.skills.splice(MOCK.skills.indexOf(s), 1);
-          if (cur && cur.id === id) DF.drawer.close();
-          renderList(); renderSide();
-          DF.toast('已删除「' + s.name + '」', 'ok');
-        } }
+        ? { label: '停用', icon: 'pause', onClick: function () { setEnabled(id, false); } }
+        : { label: '启用', icon: 'play', onClick: function () { setEnabled(id, true); } },
+      { label: '删除', icon: 'trash', danger: true, onClick: function () { deleteSkill(id); } }
     ];
     var r = e.currentTarget.getBoundingClientRect();
     DF.menu(items, r.left, r.bottom + 4);
-    if (s.usedBy > 0) {
-      var mis = document.querySelectorAll('.menu .mi');
-      var del = mis[mis.length - 1];
-      if (del) { del.style.opacity = '.45'; del.style.cursor = 'not-allowed'; }
-    }
   }
 
-  /* ---------------- 引用方弹窗 ---------------- */
   function openUsedBy(id) {
-    var s = byId(id);
+    var s = itemById(id);
     if (!s) return;
-    var experts = (MOCK.experts || []).filter(function (x) { return (x.skills || []).indexOf(id) >= 0; });
-    var rows = experts.map(function (x) {
-      return '<div class="sk-ref">' +
-        '<span class="sk-av" style="background:' + (x.color || '#64748b') + '">' + DF.esc(String(x.name || '?').charAt(0)) + '</span>' +
-        '<div><div style="font-weight:600">' + DF.esc(x.name) + '</div><div class="sub">' + DF.esc(x.duty || '') + '</div></div>' +
-        '</div>';
-    }).join('');
     DF.modal.open({
       title: '引用方 · ' + s.name,
       width: 460,
-      body: '<div class="notice">' + DF.icon('user', 14) + '<span>被 <b>' + s.usedBy + '</b> 位专家引用</span></div>' +
-        (rows || '<div class="sub">引用关系由工作流节点编排配置产生，暂无专家直接挂载。</div>') +
-        (rows && experts.length < s.usedBy ? '<div class="sub" style="margin-top:8px">其余 ' + (s.usedBy - experts.length) + ' 处引用来自工作流节点编排配置。</div>' : ''),
+      body: '<div class="notice">' + DF.icon('user', 14) +
+        '<span>被 <b>' + (s.usedByCount || 0) + '</b> 位专家引用</span></div>' +
+        '<div class="sub" style="margin-top:8px">当前 B1 接口只提供引用计数，不提供引用方明细。</div>',
       footer: '<button class="btn primary" id="sk-u-close">关闭</button>',
       onMount: function (b, close) { b.closest('.modal').querySelector('#sk-u-close').onclick = close; }
     });
@@ -264,152 +438,207 @@
 
   /* ---------------- 新建 Skill 弹窗 ---------------- */
   function openNew() {
+    if (!state.cats.length) {
+      API.categories().then(function (cats) {
+        state.cats = sortCats(cats);
+        if (!state.cats.length) { DF.toast('暂无可用分类，无法新建 Skill', 'err'); return; }
+        renderSide();
+        renderList();
+        showNewModal();
+      }).catch(function (err) {
+        DF.toast(API.errorText(err), 'err');
+      });
+      return;
+    }
+    showNewModal();
+  }
+
+  function showNewModal() {
+    var okBtn = null;
     DF.modal.form({
       title: '新建 Skill',
       width: 520,
       body:
-        DF.field('名称', '<input class="inp" id="sk-nk-name" placeholder="如：CRES 技能">', { required: true }) +
+        DF.field('名称', '<input class="inp" id="sk-nk-name" maxlength="80" placeholder="如：CRES 技能">', { required: true }) +
         DF.field('类别', '<select class="inp" id="sk-nk-cat">' +
-          CATS.map(function (c) { return '<option>' + DF.esc(c) + '</option>'; }).join('') + '</select>') +
+          state.cats.map(function (c) {
+            return '<option value="' + DF.esc(c.code) + '">' + DF.esc(c.label) + '</option>';
+          }).join('') + '</select>') +
         DF.field('常驻摘要', '<textarea class="inp" id="sk-nk-sum" rows="3" maxlength="200" placeholder="一句话描述该 Skill 的能力"></textarea>',
-          { hint: '≤200 字，常驻 Context；创建后可在详情抽屉补全触发关键词与各章节' }),
+          { required: true, hint: '≤200 字，常驻 Context；创建后可在详情抽屉补全触发词、标签与五章' }),
       okText: '确定',
-      onMount: function (b, close, okBtn) {
+      onMount: function (b, close, btn) {
+        okBtn = btn;
         var nameEl = b.querySelector('#sk-nk-name');
         nameEl.focus();
         nameEl.onkeydown = function (e) { if (e.key === 'Enter') okBtn.click(); };
       },
       onOk: function (b, close) {
         var nameEl = b.querySelector('#sk-nk-name');
+        var sumEl = b.querySelector('#sk-nk-sum');
         var name = nameEl.value.trim();
+        var summary = sumEl.value.trim();
         if (!name) { DF.toast('请填写 Skill 名称', 'err'); nameEl.focus(); return; }
-        var s = {
-          id: 'sk-x-' + Date.now(),
+        if (name.length > 80) { DF.toast('Skill 名称不能超过 80 字', 'err'); nameEl.focus(); return; }
+        if (!summary) { DF.toast('请填写常驻摘要', 'err'); sumEl.focus(); return; }
+        if (summary.length > 200) { DF.toast('常驻摘要不能超过 200 字', 'err'); sumEl.focus(); return; }
+        var sections = {};
+        SECTIONS.forEach(function (x) { sections[x[0]] = ''; });
+        var body = {
           name: name,
-          category: b.querySelector('#sk-nk-cat').value,
+          categoryCode: b.querySelector('#sk-nk-cat').value,
+          summary: summary,
           tags: [],
-          summary: b.querySelector('#sk-nk-sum').value.trim(),
           triggers: [],
-          sections: {
-            overview: '（待补充）适用场景、执行步骤总览、输入输出约定、与其他 Skill 的配合关系。',
-            steps: '（待补充）详细执行步骤与约束条件。',
-            examples: '（待补充）参考案例与产物模板路径。',
-            scripts: '（待补充）外部脚本的位置、参数与调用方式。',
-            verification: '（待补充）完成验证方案与检查单。'
-          },
-          pitfalls: [], refs: [],
-          version: 'v1.0', enabled: true, updatedM: 0, usedBy: 0
+          sections: sections,
+          pitfalls: [],
+          refs: []
         };
-        MOCK.skills.push(s);
-        close();
-        render();
-        openDrawer(s.id, true);
-        DF.toast('Skill「' + name + '」已创建，请补全详情', 'ok');
+        if (okBtn) okBtn.disabled = true;
+        API.create('skill', body).then(function (dto) {
+          close();
+          replaceItem(dto);
+          renderSide();
+          renderList();
+          DF.toast('Skill「' + dto.name + '」已创建 · 版本 ' + dto.version, 'ok');
+          openDrawer(dto.id, true);
+        }).catch(function (err) {
+          if (okBtn) okBtn.disabled = false;
+          DF.toast(API.errorText(err), 'err');
+        });
       }
     });
   }
 
   /* ---------------- 详情抽屉 ---------------- */
   function openDrawer(id, edit) {
-    var s = byId(id);
-    if (!s) return;
-    var st = { id: id, edit: !!edit, snap: JSON.stringify(s) };
+    var item = itemById(id);
     DF.drawer.open({
-      title: s.name,
+      title: item ? item.name : 'Skill 详情',
       width: '720',
       body: '<div id="sk-dbody"></div>',
-      footer: st.edit ? '<button class="btn" id="sk-d-cancel">取消</button><button class="btn primary" id="sk-d-save">' + DF.icon('check', 14) + '保存</button>' : '',
+      footer: edit ? '<button class="btn" id="sk-d-cancel">取消</button><button class="btn primary" id="sk-d-save">' +
+        DF.icon('check', 14) + '保存</button>' : '',
       onClose: function () { cur = null; },
       onMount: function (body, close) {
-        cur = st;
+        cur = { id: id, dto: null, edit: !!edit, draft: null, err: '', saving: false };
         var head = body.parentElement.querySelector('.d-head');
         var btn = document.createElement('button');
         btn.className = 'btn sm sk-mode';
+        btn.disabled = true;
         btn.onclick = function () {
-          if (cur && cur.edit) { // 未保存即切走：还原快照
-            var s0 = byId(cur.id);
-            if (s0) restoreSnap(s0);
-          }
+          if (!cur || !cur.dto) return;
           openDrawer(cur.id, !cur.edit);
         };
         head.insertBefore(btn, head.querySelector('.x'));
-        if (st.edit) {
+        if (edit) {
           var foot = body.parentElement.querySelector('.d-foot');
-          foot.querySelector('#sk-d-cancel').onclick = function () {
-            var s1 = byId(cur.id);
-            if (s1) restoreSnap(s1);
-            close();
-          };
+          foot.querySelector('#sk-d-cancel').onclick = function () { close(); };
           foot.querySelector('#sk-d-save').onclick = saveSkill;
         }
         paintDrawer();
+        loadDetail(id);
       }
     });
   }
-  function restoreSnap(s) {
-    if (!cur || !cur.snap) return;
-    var o = JSON.parse(cur.snap);
-    Object.keys(o).forEach(function (k) { s[k] = o[k]; });
-    renderList();
+
+  function loadDetail(id) {
+    API.get('skill', id).then(function (dto) {
+      if (!cur || cur.id !== id) return;
+      cur.dto = dto;
+      cur.err = '';
+      if (cur.edit) cur.draft = DF.deep(dto);
+      var head = document.querySelector('.drawer .d-head');
+      if (head && head.firstChild && head.firstChild.nodeType === 3) head.firstChild.nodeValue = dto.name;
+      paintDrawer();
+    }).catch(function (err) {
+      if (!cur || cur.id !== id) return;
+      cur.err = API.errorText(err);
+      paintDrawer();
+      DF.toast('详情加载失败：' + API.errorText(err), 'err');
+    });
   }
+
   function syncHeadFoot() {
     var d = document.querySelector('.drawer');
     if (!d || !cur) return;
     var btn = d.querySelector('.d-head .sk-mode');
-    if (btn) btn.innerHTML = cur.edit ? '查看' : DF.icon('edit', 14) + ' 编辑';
+    if (btn) {
+      btn.disabled = !cur.dto;
+      btn.innerHTML = cur.edit ? '查看' : DF.icon('edit', 14) + ' 编辑';
+    }
     var foot = d.querySelector('.d-foot');
     if (foot) foot.style.display = cur.edit ? '' : 'none';
   }
+
   function paintDrawer() {
     if (!cur) return;
-    var s = byId(cur.id);
-    if (!s) { DF.drawer.close(); return; }
     var box = document.getElementById('sk-dbody');
     if (!box) return;
-    box.innerHTML = drawerHtml(s, cur.edit);
-    bindDrawer(s);
+    if (!cur.dto) {
+      if (cur.err) {
+        box.innerHTML = '<div class="notice">' + DF.icon('warn', 14) + '<span>' + DF.esc(cur.err) + '</span></div>' +
+          '<div style="margin-top:12px"><button class="btn sm" id="sk-d-retry">重试</button></div>';
+        var retry = box.querySelector('#sk-d-retry');
+        if (retry) retry.onclick = function () {
+          if (!cur) return;
+          cur.err = '';
+          paintDrawer();
+          loadDetail(cur.id);
+        };
+      } else {
+        box.innerHTML = '<div class="sub" style="padding:20px 2px">正在加载 Skill 详情…</div>';
+      }
+      syncHeadFoot();
+      return;
+    }
+    box.innerHTML = drawerHtml(cur.edit ? cur.draft : cur.dto, cur.edit);
+    bindDrawer();
     syncHeadFoot();
   }
-  function harvest(s) {
-    if (!cur || !cur.edit) return;
-    var box = document.getElementById('sk-dbody');
-    if (!box) return;
-    var sum = box.querySelector('#sk-d-sum');
-    if (sum) s.summary = sum.value.trim();
-    box.querySelectorAll('textarea[data-sec]').forEach(function (t) {
-      s.sections[t.getAttribute('data-sec')] = t.value;
-    });
+
+  /* ---------------- 抽屉内容 ---------------- */
+  function catOptionsHtml(code) {
+    var list = state.cats;
+    var has = false;
+    var html = list.map(function (c) {
+      if (c.code === code) has = true;
+      return '<option value="' + DF.esc(c.code) + '"' + (c.code === code ? ' selected' : '') + '>' +
+        DF.esc(c.label) + '</option>';
+    }).join('');
+    if (code && !has) {
+      html = '<option value="' + DF.esc(code) + '" selected>' + DF.esc(code) + '</option>' + html;
+    }
+    return html;
   }
-  function saveSkill() {
-    var s = byId(cur.id);
-    if (!s) return;
-    harvest(s);
-    s.version = bumpVersion(s.version);
-    s.updatedM = 0;
-    cur.edit = false;
-    cur.snap = JSON.stringify(s);
-    renderList(); renderSide();
-    paintDrawer();
-    DF.toast('已保存', 'ok');
-  }
+
   function drawerHtml(s, edit) {
     var trig = s.triggers || [];
+    var tags = s.tags || [];
     var pf = s.pitfalls || [];
+    var refs = s.refs || [];
+    var sum = String(s.summary || '');
     var secBlock = function (k, label, idx) {
-      var val = (s.sections || {})[k] || '';
-      return '<details' + (idx === 0 ? ' open' : '') + '><summary>' + label + '<span class="sk-load">按需加载</span></summary>' +
-        '<div class="sk-sec">' + (edit
-          ? '<textarea class="inp" data-sec="' + k + '" rows="' + (k === 'overview' ? 4 : 5) + '">' + DF.esc(val) + '</textarea>'
-          : '<div class="sk-pre">' + DF.esc(val) + '</div>') + '</div></details>';
+      var val = String((s.sections || {})[k] || '');
+      var inner = edit
+        ? '<textarea class="inp" data-sec="' + k + '" rows="' + (k === 'overview' ? 4 : 5) + '">' + DF.esc(val) + '</textarea>'
+        : (val ? '<div class="sk-pre">' + DF.esc(val) + '</div>' : '<div class="sub" style="padding:2px 0">暂无内容</div>');
+      return '<details' + (idx === 0 ? ' open' : '') + '><summary>' + label +
+        '<span class="sk-load">按需加载</span></summary><div class="sk-sec">' + inner + '</div></details>';
     };
     return (
       /* ① 描述与路由 */
       '<div class="section-title">① 描述与路由<span class="line"></span></div>' +
       '<div class="sk-lbl">常驻摘要</div>' +
       (edit
-        ? '<textarea class="inp" id="sk-d-sum" rows="3" maxlength="200">' + DF.esc(s.summary) + '</textarea>' +
-          '<div class="hint"><span id="sk-d-sumn">' + String(s.summary || '').length + '</span>/200 字 · 常驻 Context，随专家常驻加载</div>'
-        : '<div class="sk-ptext">' + DF.esc(s.summary) + '</div>') +
+        ? '<textarea class="inp" id="sk-d-sum" rows="3" maxlength="200">' + DF.esc(sum) + '</textarea>' +
+          '<div class="hint"><span id="sk-d-sumn">' + sum.length + '</span>/200 字 · 常驻 Context，随专家常驻加载</div>'
+        : '<div class="sk-ptext">' + DF.esc(sum) + '</div>') +
+      '<div class="sk-kv"><span class="sk-k">类别</span><span>' +
+        (edit
+          ? '<select class="inp" id="sk-d-cat" style="max-width:240px">' + catOptionsHtml(s.categoryCode) + '</select>'
+          : DF.tag(s.categoryLabel || catLabelOf(s.categoryCode), catColor(s.categoryCode))) +
+      '</span></div>' +
       '<div class="sk-kv"><span class="sk-k">能力清单</span><span>' + DF.esc(capLine(s)) + '</span></div>' +
       '<div class="sk-kv"><span class="sk-k">触发场景</span><span>' + DF.esc(sceneLine(s)) + '</span></div>' +
       '<div class="sk-lbl">触发关键词</div>' +
@@ -419,6 +648,13 @@
         }).join('') : '<span class="sk-n">暂无</span>') +
       '</div>' +
       (edit ? '<input class="inp sk-chipin" id="sk-d-trigin" placeholder="输入关键词后回车添加">' : '') +
+      '<div class="sk-lbl">标签</div>' +
+      '<div class="chips">' +
+        (tags.length ? tags.map(function (t, i) {
+          return '<span class="chip">' + DF.esc(t) + (edit ? '<span class="sk-x" data-dtag="' + i + '" title="删除">×</span>' : '') + '</span>';
+        }).join('') : '<span class="sk-n">暂无</span>') +
+      '</div>' +
+      (edit ? '<input class="inp sk-chipin" id="sk-d-tagin" placeholder="输入标签后回车添加">' : '') +
 
       /* ② 工作内容（渐进式披露） */
       '<div class="section-title">② 工作内容（渐进式披露）<span class="line"></span></div>' +
@@ -436,66 +672,146 @@
 
       /* ④ 参考引用 */
       '<div class="section-title">④ 参考引用<span class="line"></span></div>' +
-      ((s.refs || []).length ? s.refs.map(function (r, i) {
-        var isSkill = r.type === 'skill';
-        return '<div class="sk-ref">' + DF.tag(r.type === 'skill' ? 'Skill' : r.type, REF_COLOR[r.type] || 'gray') +
-          (isSkill
-            ? '<span class="rowlink" data-goref="' + i + '" title="打开关联 Skill">' + DF.esc(r.label) + '</span>'
-            : '<span class="mono sk-refpath">' + DF.esc(r.label) + '</span>') +
+      (refs.length ? refs.map(function (r) {
+        return '<div class="sk-ref">' + DF.tag(r.refType || 'ref', REF_COLORS[r.refType] || 'gray') +
+          '<span>' + DF.esc(r.label) + '</span>' +
+          (r.path ? '<span class="mono sk-refpath">' + DF.esc(r.path) + '</span>' : '') +
           '</div>';
       }).join('') : '<div class="sub" style="padding:2px 0">暂无参考引用</div>') +
 
-      /* ⑤ 版本历史 */
-      '<div class="section-title">⑤ 版本历史<span class="line"></span></div>' +
+      /* ⑤ 版本（B1 只提供当前版本与更新时间，无版本历史） */
+      '<div class="section-title">⑤ 版本<span class="line"></span></div>' +
       '<div class="kv">' +
-        '<div class="k mono">' + DF.esc(s.version) + '</div><div>' + DF.relTime(s.updatedM) + ' · 当前版本</div>' +
-        '<div class="k mono">' + DF.esc(prevVersion(s.version)) + '</div><div>例行修订</div>' +
+        '<div class="k mono">' + DF.esc(s.version || '—') + '</div>' +
+        '<div>当前版本 · 更新于 ' + DF.esc(fmtDateTime(s.updatedAt)) + '</div>' +
       '</div>'
     );
   }
-  function bindDrawer(s) {
+
+  /* ---------------- 抽屉编辑态 ---------------- */
+  function harvest() {
+    if (!cur || !cur.edit || !cur.draft) return;
+    var box = document.getElementById('sk-dbody');
+    if (!box) return;
+    var sum = box.querySelector('#sk-d-sum');
+    if (sum) cur.draft.summary = sum.value;
+    var cat = box.querySelector('#sk-d-cat');
+    if (cat) cur.draft.categoryCode = cat.value;
+    box.querySelectorAll('textarea[data-sec]').forEach(function (t) {
+      cur.draft.sections[t.getAttribute('data-sec')] = t.value;
+    });
+  }
+
+  function bindDrawer() {
+    if (!cur || !cur.edit || !cur.draft) return;
     var box = document.getElementById('sk-dbody');
     if (!box) return;
     var sum = box.querySelector('#sk-d-sum');
     if (sum) {
       var cnt = box.querySelector('#sk-d-sumn');
-      sum.oninput = function () { cnt.textContent = sum.value.length; };
+      sum.oninput = function () { if (cnt) cnt.textContent = sum.value.length; };
     }
     box.querySelectorAll('[data-dtrig]').forEach(function (el) {
-      el.onclick = function () { harvest(s); s.triggers.splice(+el.getAttribute('data-dtrig'), 1); paintDrawer(); };
+      el.onclick = function () {
+        harvest();
+        cur.draft.triggers.splice(+el.getAttribute('data-dtrig'), 1);
+        paintDrawer();
+      };
+    });
+    box.querySelectorAll('[data-dtag]').forEach(function (el) {
+      el.onclick = function () {
+        harvest();
+        cur.draft.tags.splice(+el.getAttribute('data-dtag'), 1);
+        paintDrawer();
+      };
     });
     box.querySelectorAll('[data-dpf]').forEach(function (el) {
-      el.onclick = function () { harvest(s); s.pitfalls.splice(+el.getAttribute('data-dpf'), 1); paintDrawer(); };
+      el.onclick = function () {
+        harvest();
+        cur.draft.pitfalls.splice(+el.getAttribute('data-dpf'), 1);
+        paintDrawer();
+      };
     });
     var tin = box.querySelector('#sk-d-trigin');
     if (tin) tin.onkeydown = function (e) {
       if (e.key !== 'Enter') return;
-      e.preventDefault(); harvest(s);
+      e.preventDefault();
+      harvest();
       var v = tin.value.trim();
       if (!v) return;
-      if (s.triggers.indexOf(v) >= 0) { DF.toast('关键词已存在', 'warn'); return; }
-      s.triggers.push(v);
+      if ((cur.draft.triggers || []).indexOf(v) >= 0) { DF.toast('关键词已存在', 'warn'); return; }
+      cur.draft.triggers.push(v);
+      paintDrawer();
+    };
+    var tagin = box.querySelector('#sk-d-tagin');
+    if (tagin) tagin.onkeydown = function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      harvest();
+      var v = tagin.value.trim();
+      if (!v) return;
+      if ((cur.draft.tags || []).indexOf(v) >= 0) { DF.toast('标签已存在', 'warn'); return; }
+      cur.draft.tags.push(v);
       paintDrawer();
     };
     var pin = box.querySelector('#sk-d-pfin');
     if (pin) pin.onkeydown = function (e) {
       if (e.key !== 'Enter') return;
-      e.preventDefault(); harvest(s);
+      e.preventDefault();
+      harvest();
       var v = pin.value.trim();
       if (!v) return;
-      s.pitfalls.unshift(v); // 禁令置顶
+      cur.draft.pitfalls.unshift(v); // 禁令置顶
       paintDrawer();
     };
-    box.querySelectorAll('[data-goref]').forEach(function (el) {
-      el.onclick = function () {
-        var r = (s.refs || [])[+el.getAttribute('data-goref')];
-        if (!r) return;
-        var name = r.label.replace(/^关联 Skill:\s*/, '').trim();
-        var t = MOCK.skills.filter(function (x) { return x.name === name; })[0];
-        if (!t) { DF.toast('未找到关联 Skill「' + name + '」', 'err'); return; }
-        DF.drawer.close();
-        openDrawer(t.id, false);
-      };
+  }
+
+  function saveSkill() {
+    if (!cur || !cur.edit || !cur.draft || cur.saving) return;
+    harvest();
+    var d = cur.draft;
+    var name = String(d.name || '').trim();
+    var summary = String(d.summary || '').trim();
+    if (!name) { DF.toast('请填写 Skill 名称', 'err'); return; }
+    if (!summary) { DF.toast('请填写常驻摘要', 'err'); return; }
+    if (summary.length > 200) { DF.toast('常驻摘要不能超过 200 字', 'err'); return; }
+    if (!d.categoryCode) { DF.toast('请选择 Skill 类别', 'err'); return; }
+    var sections = {};
+    SECTIONS.forEach(function (x) {
+      sections[x[0]] = String((d.sections || {})[x[0]] || '');
+    });
+    var body = {
+      name: name,
+      categoryCode: d.categoryCode,
+      summary: summary,
+      tags: (d.tags || []).slice(),
+      triggers: (d.triggers || []).slice(),
+      sections: sections,
+      pitfalls: (d.pitfalls || []).slice(),
+      refs: (d.refs || []).map(function (r) {
+        return { label: r.label, refType: r.refType, path: r.path == null ? null : r.path };
+      })
+    };
+    var id = cur.id;
+    cur.saving = true;
+    var saveBtn = document.querySelector('.drawer #sk-d-save');
+    if (saveBtn) saveBtn.disabled = true;
+    API.update('skill', id, body, API.revision('skill', id)).then(function (dto) {
+      replaceItem(dto);
+      renderSide();
+      renderList();
+      if (!cur || cur.id !== id) return;
+      cur.saving = false;
+      cur.dto = dto;
+      cur.draft = DF.deep(dto);
+      cur.edit = false;
+      paintDrawer();
+      DF.toast('已保存 · 当前版本 ' + dto.version, 'ok');
+    }).catch(function (err) {
+      if (cur && cur.id === id) cur.saving = false;
+      var btn = document.querySelector('.drawer #sk-d-save');
+      if (btn) btn.disabled = false;
+      DF.toast(API.errorText(err), 'err');
     });
   }
 

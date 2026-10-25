@@ -1,39 +1,52 @@
 /**
- * AgentFlow 原型 · 工具与集成页（pages/tools.html）
- * 依赖: window.MOCK (assets/js/mock-data.js) + window.DF (assets/js/ui.js)
- * 规格: docs/design/components/tools/spec.md —— Tab 列表 + 调试抽屉(680px) + 注册/编辑弹窗
+ * AgentFlow · 工具与集成页（pages/tools.html）
+ * 依赖: window.API（B1 客户端数据层）+ window.DF（assets/js/ui.js）
+ * 直接消费 B1 Tool DTO；不读本地夹具，不引入客户端视图模型。
+ * B1 无调试端点：状态与 lastDebugAt 只读展示，页面不执行工具、不改状态。
  */
 (function () {
   'use strict';
 
-  var TYPES = ['MCP', 'CLI', '脚本'];
-  var STATUSES = ['可用', '不可用', '未验证'];
-  var TYPE_COLOR = { 'MCP': 'teal', 'CLI': 'blue', '脚本': 'orange' };
+  /* ---------- DTO 枚举 → 中文标签（仅渲染时映射，不写回 DTO） ---------- */
+  var KINDS = [
+    { value: 'mcp', label: 'MCP' },
+    { value: 'cli', label: 'CLI' },
+    { value: 'script', label: '脚本' }
+  ];
+  var KIND_COLOR = { mcp: 'teal', cli: 'blue', script: 'orange' };
+  var KIND_LABEL = Object.create(null);
 
-  var filterType = '';
+  var STATUSES = [
+    { value: 'unverified', label: '未验证' },
+    { value: 'available', label: '可用' },
+    { value: 'unavailable', label: '不可用' }
+  ];
+  var STATUS_COLOR = { unverified: 'gray', available: 'green', unavailable: 'red' };
+  var STATUS_LABEL = Object.create(null);
+
+  var PARAM_TYPES = ['string', 'int'];
+
+  KINDS.forEach(function (k) { KIND_LABEL[k.value] = k.label; });
+  STATUSES.forEach(function (s) { STATUS_LABEL[s.value] = s.label; });
+
+  /* ---------- 页面状态（只存 B1 DTO / 请求状态） ---------- */
+  var state = {
+    tools: [],
+    harnesses: [],
+    loading: true,
+    error: null
+  };
+
+  var filterKind = '';
   var filterStatus = '';
   var filterKw = '';
-
-  /* ---------- 参数示例值（symbol 类参数预填，如 OrderService#submit） ---------- */
-  var EXAMPLES = {
-    symbol: 'OrderService#submit', depth: '3', entity: 'OrderService',
-    keyword: '订单', project: 'trading-core', path: 'trade/UFX/src/main/java/com/fin/order',
-    rules: 'default', suite: 'magic', spec: 'api/order-submit.spec', env: 'test',
-    scene: '订单提交', rows: '100', src: 'replay/2025-09-30',
-    node: '金融证券交易/交易执行/订单提交', pipeline: 'PL-TRADING-3102', stage: '制品级'
-  };
-  function exampleVal(p) {
-    if (EXAMPLES[p.k] != null) return EXAMPLES[p.k];
-    if (p.type === 'int') return '3';
-    return p.k;
-  }
 
   /* ---------- 页面骨架 ---------- */
   var body = DF.renderShell({
     active: 'tools',
     breadcrumb: [{ label: '资产与注册' }, { label: '工具与集成' }],
     title: '工具与集成',
-    subtitle: '确定性工具注册与调试',
+    subtitle: '确定性工具注册与引用治理 · B1 未提供调试',
     actions: '<button class="btn primary" id="tl-add">' + DF.icon('plus') + '注册工具</button>'
   });
 
@@ -46,11 +59,15 @@
       '<div class="toolbar">' +
         '<select class="inp inp-sm" id="tl-ft-type" title="按类型筛选">' +
           '<option value="">全部</option>' +
-          TYPES.map(function (t) { return '<option>' + t + '</option>'; }).join('') +
+          KINDS.map(function (k) {
+            return '<option value="' + k.value + '">' + k.label + '</option>';
+          }).join('') +
         '</select>' +
         '<select class="inp inp-sm" id="tl-ft-status" title="按状态筛选">' +
           '<option value="">全部</option>' +
-          STATUSES.map(function (s) { return '<option>' + s + '</option>'; }).join('') +
+          STATUSES.map(function (s) {
+            return '<option value="' + s.value + '">' + s.label + '</option>';
+          }).join('') +
         '</select>' +
         DF.searchBox('tl-ft-kw', '搜索名称 / 调用方式 / 说明') +
         '<span class="sp"></span>' +
@@ -62,7 +79,7 @@
       '<div class="card">' + DF.empty({
         icon: 'server', iconSize: 40,
         html: '<div class="tl-empty-title">CI/CD 环境绑定暂未开放</div>' +
-          '<div class="tl-empty-sub">当前版本聚焦编排模型演示，流水线绑定将在后续版本提供</div>',
+          '<div class="tl-empty-sub">B1 未提供 CI/CD 集成接口，本页仅保留占位</div>',
         style: 'padding:70px 20px'
       }) + '</div>' +
     '</div>';
@@ -71,67 +88,175 @@
   body.querySelector('#tl-tabs').addEventListener('click', function (e) {
     var tab = e.target.closest('.tab');
     if (!tab) return;
-    body.querySelectorAll('#tl-tabs .tab').forEach(function (x) { x.classList.toggle('active', x === tab); });
+    var tabs = body.querySelectorAll('#tl-tabs .tab');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('active', tabs[i] === tab);
+    }
     body.querySelector('#tl-tab-tools').classList.toggle('tl-hide', tab.getAttribute('data-tab') !== 'tools');
     body.querySelector('#tl-tab-cicd').classList.toggle('tl-hide', tab.getAttribute('data-tab') !== 'cicd');
   });
 
   /* ---------- 筛选与入口按钮 ---------- */
-  body.querySelector('#tl-ft-type').onchange = function () { filterType = this.value; renderTable(); };
+  body.querySelector('#tl-ft-type').onchange = function () { filterKind = this.value; renderTable(); };
   body.querySelector('#tl-ft-status').onchange = function () { filterStatus = this.value; renderTable(); };
   body.querySelector('#tl-ft-kw').oninput = function () { filterKw = this.value.trim().toLowerCase(); renderTable(); };
-  document.getElementById('tl-add').onclick = function () { openRegister(null); };
-  body.querySelector('#tl-btn-add').onclick = function () { openRegister(null); };
+  document.getElementById('tl-add').onclick = openCreate;
+  body.querySelector('#tl-btn-add').onclick = openCreate;
+
+  /* 把同步抛错的传输层也收敛成 rejected Promise，统一走页面错误态 */
+  function run(fn) {
+    return new Promise(function (resolve) { resolve(fn()); });
+  }
+
+  /* ---------- 数据加载 ---------- */
+  function loadPage() {
+    state.loading = true;
+    state.error = null;
+    renderTable();
+    return Promise.all([
+      run(function () { return API.list('tool', { limit: 200 }); }),
+      run(function () { return API.list('harness', { limit: 200 }); })
+    ]).then(function (res) {
+      state.tools = res[0].items || [];
+      state.harnesses = res[1].items || [];
+      state.loading = false;
+      renderTable();
+    }).catch(function (err) {
+      state.loading = false;
+      state.error = err;
+      renderTable();
+    });
+  }
+
+  function loadTools() {
+    state.loading = true;
+    state.error = null;
+    renderTable();
+    return run(function () { return API.list('tool', { limit: 200 }); }).then(function (page) {
+      state.tools = page.items || [];
+      state.loading = false;
+      renderTable();
+    }).catch(function (err) {
+      state.loading = false;
+      state.error = err;
+      renderTable();
+    });
+  }
+
+  /* ---------- 错误文案 ---------- */
+  function errText(err) {
+    if (err && (err.code === 'referenced' || err.code === 'name_conflict') && err.message) return err.message;
+    return API.errorText(err);
+  }
 
   /* ---------- 工具表格 ---------- */
+  function kindLabel(kind) {
+    return KIND_LABEL[kind] || kind || '—';
+  }
+
+  function statusLabel(status) {
+    return STATUS_LABEL[status] || status || '—';
+  }
+
+  function paramCount(t) {
+    if (t.paramCount != null) return t.paramCount;
+    return (t.params || []).length;
+  }
+
+  function harnessLabel(t) {
+    for (var i = 0; i < state.harnesses.length; i++) {
+      if (state.harnesses[i].id === t.harnessId) return state.harnesses[i].name;
+    }
+    return t.harnessName || t.harnessId || '—';
+  }
+
+  function lastDebugCell(t) {
+    if (t.lastDebugAt == null) return '—';
+    var ms = Date.parse(t.lastDebugAt);
+    if (isNaN(ms)) return DF.esc(t.lastDebugAt);
+    return '<span title="' + DF.esc(t.lastDebugAt) + '">' +
+      DF.relTime((Date.now() - ms) / 60000) + '</span>';
+  }
+
   function filteredTools() {
-    return MOCK.tools.filter(function (t) {
-      if (filterType && t.type !== filterType) return false;
+    return state.tools.filter(function (t) {
+      if (filterKind && t.kind !== filterKind) return false;
       if (filterStatus && t.status !== filterStatus) return false;
-      if (filterKw && (t.name + ' ' + (t.invocation || '') + ' ' + (t.desc || '')).toLowerCase().indexOf(filterKw) < 0) return false;
+      if (filterKw) {
+        var hay = [t.name, t.invocation, t.description].join(' ').toLowerCase();
+        if (hay.indexOf(filterKw) < 0) return false;
+      }
       return true;
     });
   }
 
   function rowHtml(t) {
-    var h = MOCK.byId(MOCK.harnesses, t.harness);
-    var locked = (t.refCount || 0) > 0;
+    var used = t.usedByCount == null ? 0 : t.usedByCount;
+    var delTitle = used > 0
+      ? ' title="被 ' + used + ' 个专家引用，删除时后端会拒绝"'
+      : ' title="删除工具"';
     return '<tr>' +
-      '<td><span class="mono rowlink" data-act="debug" data-id="' + t.id + '" title="打开调试抽屉">' + DF.esc(t.name) + '</span></td>' +
-      '<td>' + DF.tag(t.type, TYPE_COLOR[t.type] || 'gray') + '</td>' +
-      '<td><div class="mono ellipsis" style="max-width:280px" title="' + DF.esc(t.invocation) + '">' + DF.esc(t.invocation) + '</div>' +
-        '<div class="sub">' + (t.params || []).length + ' 个参数</div></td>' +
-      '<td><a class="tag gray tl-hlink" href="harnesses.html" title="前往 Harness 管理">' + DF.esc(h ? h.name : (t.harness || '—')) + '</a></td>' +
-      '<td>' + DF.tag(t.status) + '</td>' +
-      '<td><a class="tl-count" data-act="refs" data-id="' + t.id + '" title="查看引用方">' + (t.refCount || 0) + '</a></td>' +
-      '<td>' + DF.relTime(t.lastDebugM) + '</td>' +
+      '<td><span class="mono rowlink" data-act="edit" data-id="' + DF.esc(t.id) + '" title="编辑工具">' +
+        DF.esc(t.name) + '</span></td>' +
+      '<td>' + DF.tag(kindLabel(t.kind), KIND_COLOR[t.kind] || 'gray') + '</td>' +
+      '<td><div class="mono ellipsis" style="max-width:280px" title="' + DF.esc(t.invocation) + '">' +
+        DF.esc(t.invocation) + '</div>' +
+        '<div class="sub">' + paramCount(t) + ' 个参数</div></td>' +
+      '<td><a class="tag gray tl-hlink" href="harnesses.html" title="前往 Harness 管理">' +
+        DF.esc(harnessLabel(t)) + '</a></td>' +
+      '<td><span title="B1 未提供调试，状态由后端返回">' +
+        DF.tag(statusLabel(t.status), STATUS_COLOR[t.status] || 'gray') + '</span></td>' +
+      '<td><a class="tl-count" data-act="refs" data-id="' + DF.esc(t.id) + '" title="查看引用计数">' +
+        used + '</a></td>' +
+      '<td>' + lastDebugCell(t) + '</td>' +
       '<td style="white-space:nowrap">' +
-        '<button class="btn sm" data-act="debug" data-id="' + t.id + '">调试</button> ' +
-        '<button class="btn sm" data-act="edit" data-id="' + t.id + '">编辑</button> ' +
-        '<button class="btn sm danger" data-act="del" data-id="' + t.id + '"' +
-          (locked ? ' disabled title="被 ' + t.refCount + ' 处引用，禁止删除"' : ' title="删除工具"') + '>删除</button>' +
+        '<button class="btn sm" data-act="edit" data-id="' + DF.esc(t.id) + '">编辑</button> ' +
+        '<button class="btn sm danger" data-act="del" data-id="' + DF.esc(t.id) + '"' + delTitle + '>删除</button>' +
       '</td></tr>';
   }
 
   function renderTable() {
     var box = document.getElementById('tl-table');
-    var list = filteredTools();
-    if (!list.length) {
-      var noneAll = !MOCK.tools.length;
-      box.innerHTML =
-        '<div class="card">' + DF.empty({
-          icon: 'tool', iconSize: 40,
-          html: noneAll
-            ? '<div class="tl-empty-title">还没有注册任何工具</div>' +
-              '<div class="tl-empty-sub" style="margin-bottom:14px">注册第一个确定性工具，减少对模型的依赖</div>'
-            : '<div class="tl-empty-title" style="font-weight:400">未找到匹配的工具</div>' +
-              '<div class="tl-empty-sub">调整类型 / 状态 / 搜索条件后重试</div>',
-          action: noneAll ? { id: 'tl-empty-add', label: '注册工具', icon: 'plus', primary: true } : null
-        }) + '</div>';
-      var ea = box.querySelector('#tl-empty-add');
-      if (ea) ea.onclick = function () { openRegister(null); };
+    if (!box) return;
+
+    if (state.loading) {
+      box.innerHTML = '<div class="card">' + DF.empty({
+        icon: 'tool', iconSize: 40,
+        html: '<div class="tl-empty-title">正在加载工具列表…</div>' +
+          '<div class="tl-empty-sub">从 B1 读取工具与 Harness</div>'
+      }) + '</div>';
       return;
     }
+
+    if (state.error) {
+      box.innerHTML = '<div class="card">' + DF.empty({
+        icon: 'warn', iconSize: 40,
+        html: '<div class="tl-empty-title">工具列表加载失败</div>' +
+          '<div class="tl-empty-sub">' + DF.esc(errText(state.error)) + '</div>',
+        action: { id: 'tl-retry', label: '重新加载', icon: 'retry', primary: true }
+      }) + '</div>';
+      var retry = box.querySelector('#tl-retry');
+      if (retry) retry.onclick = loadPage;
+      return;
+    }
+
+    var list = filteredTools();
+    if (!list.length) {
+      var noneAll = !state.tools.length;
+      box.innerHTML = '<div class="card">' + DF.empty({
+        icon: 'tool', iconSize: 40,
+        html: noneAll
+          ? '<div class="tl-empty-title">还没有注册任何工具</div>' +
+            '<div class="tl-empty-sub" style="margin-bottom:14px">注册第一个确定性工具，减少对模型的依赖</div>'
+          : '<div class="tl-empty-title" style="font-weight:400">未找到匹配的工具</div>' +
+            '<div class="tl-empty-sub">调整类型 / 状态 / 搜索条件后重试</div>',
+        action: noneAll ? { id: 'tl-empty-add', label: '注册工具', icon: 'plus', primary: true } : null
+      }) + '</div>';
+      var emptyAdd = box.querySelector('#tl-empty-add');
+      if (emptyAdd) emptyAdd.onclick = openCreate;
+      return;
+    }
+
     box.innerHTML = DF.table(
       ['名称', '类型', '调用方式', '所属 Harness', '状态', '被引用数', '最近调试', '操作'],
       list.map(rowHtml)
@@ -139,360 +264,279 @@
     bindActs(box);
   }
 
+  function findTool(id) {
+    for (var i = 0; i < state.tools.length; i++) {
+      if (state.tools[i].id === id) return state.tools[i];
+    }
+    return null;
+  }
+
   function bindActs(root) {
-    root.querySelectorAll('[data-act]').forEach(function (el) {
-      var t = MOCK.byId(MOCK.tools, el.getAttribute('data-id'));
-      if (!t) return;
-      var act = el.getAttribute('data-act');
-      if (act === 'del') {
-        el.onclick = function () { confirmDelete(t); };
-      } else {
+    var nodes = root.querySelectorAll('[data-act]');
+    for (var i = 0; i < nodes.length; i++) {
+      (function (el) {
+        var t = findTool(el.getAttribute('data-id'));
+        if (!t) return;
+        var act = el.getAttribute('data-act');
         el.onclick = function () {
-          if (act === 'debug') openDebug(t);
-          else if (act === 'edit') openRegister(t);
+          if (act === 'edit') startEdit(t);
+          else if (act === 'del') confirmDelete(t, el);
           else if (act === 'refs') openRefs(t);
         };
+      })(nodes[i]);
+    }
+  }
+
+  /* ---------- 引用计数（B1 只有 usedByCount，无引用方明细接口） ---------- */
+  function openRefs(t) {
+    var used = t.usedByCount == null ? 0 : t.usedByCount;
+    DF.modal.open({
+      title: '引用详情 · ' + t.name,
+      width: 480,
+      body:
+        '<div style="font-size:12px;color:var(--t-3);margin-bottom:4px">引用该工具的专家数</div>' +
+        '<div style="font-size:24px;font-weight:700;margin-bottom:14px">' + used + '</div>' +
+        '<div class="notice warn" style="margin-bottom:0">' + DF.icon('warn', 14) +
+          '<div>B1 未提供引用方明细，这里只显示引用计数。</div></div>',
+      footer: '<button class="btn primary" id="tl-ref-close">关闭</button>',
+      onMount: function (b, close) {
+        b.closest('.modal').querySelector('#tl-ref-close').onclick = close;
       }
     });
   }
 
-  function confirmDelete(t) {
+  /* ---------- 删除 ---------- */
+  function revisionOf(dto) {
+    var rev = API.revision('tool', dto.id);
+    return rev == null ? dto.revision : rev;
+  }
+
+  function confirmDelete(t, btn) {
     DF.modal.confirm({
       title: '删除工具',
-      html: '确定删除工具 <b>' + DF.esc(t.name) + '</b> 吗？删除后不可恢复。',
+      html: '确定删除工具 <b>' + DF.esc(t.name) + '</b> 吗？删除后不可恢复。' +
+        (t.usedByCount > 0 ? '<div class="tl-empty-sub" style="margin-top:8px">该工具仍被专家引用，后端会拒绝删除。</div>' : ''),
       danger: true,
       okText: '删除'
     }).then(function (yes) {
       if (!yes) return;
-      var i = MOCK.tools.indexOf(t);
-      if (i >= 0) MOCK.tools.splice(i, 1);
-      DF.drawer.close();
-      DF.toast('已删除工具 ' + t.name, 'ok');
-      renderTable();
-    });
-  }
-
-  /* ---------- 被引用详情弹层 ---------- */
-  function findRefs(t) {
-    var refs = [];
-    (MOCK.experts || []).forEach(function (e) {
-      if ((e.tools || []).indexOf(t.id) >= 0) refs.push({ icon: 'user', text: '专家: ' + e.name, sub: e.role || '' });
-    });
-    (MOCK.workflows || []).forEach(function (wf) {
-      var nodes = (wf.graph && wf.graph.nodes) || [];
-      nodes.forEach(function (n) {
-        // 兼容 config.tools 与 mock 数据实际使用的 config.ctx.tools
-        var tl = (n.config && (n.config.tools || (n.config.ctx && n.config.ctx.tools))) || [];
-        if (tl.indexOf(t.id) >= 0) refs.push({ icon: 'flow', text: '工作流节点: ' + wf.name + '/' + n.name, sub: wf.type + ' · ' + wf.ver });
+      if (btn) btn.disabled = true;
+      run(function () { return API.remove('tool', t.id, revisionOf(t)); }).then(function () {
+        DF.toast('已删除工具 ' + t.name, 'ok');
+        loadTools();
+      }).catch(function (err) {
+        if (btn) btn.disabled = false;
+        DF.toast('删除失败：' + errText(err), 'err');
       });
-    });
-    return refs;
-  }
-
-  function openRefs(t) {
-    var refs = findRefs(t);
-    DF.modal.open({
-      title: '被引用详情 · ' + t.name,
-      width: 480,
-      body: refs.length
-        ? '<div class="tl-dim" style="margin-bottom:6px">共 ' + refs.length + ' 处引用</div>' +
-          refs.map(function (r) {
-            return '<div class="tl-ref-item">' + DF.icon(r.icon) + '<div><div>' + DF.esc(r.text) + '</div>' +
-              (r.sub ? '<div class="sub">' + DF.esc(r.sub) + '</div>' : '') + '</div></div>';
-          }).join('')
-        : DF.empty({
-            icon: 'search', iconSize: 36,
-            html: '<div class="tl-empty-title" style="font-weight:400">暂无引用</div>' +
-              '<div class="tl-empty-sub">没有专家或工作流节点引用该工具</div>'
-          }),
-      footer: '<button class="btn primary" id="tl-ref-close">关闭</button>',
-      onMount: function (b, close) { b.closest('.modal').querySelector('#tl-ref-close').onclick = close; }
-    });
-  }
-
-  /* ---------- 调试抽屉 ---------- */
-  function paramsHtml(t) {
-    if (!(t.params || []).length) return '<div class="tl-hist-empty">该工具未定义参数</div>';
-    return t.params.map(function (p) {
-      return '<div class="tl-prow">' +
-        '<div class="tl-pmeta"><span class="mono tl-pkey">' + DF.esc(p.k) + '</span>' +
-          '<span class="tag gray">' + DF.esc(p.type || 'string') + '</span>' +
-          '<span class="tl-pdesc">' + DF.esc(p.desc || '') + '</span></div>' +
-        '<input class="inp mono" data-k="' + DF.esc(p.k) + '" value="' + DF.esc(exampleVal(p)) + '">' +
-      '</div>';
-    }).join('');
-  }
-
-  function runAgoM(t, i) {
-    return t.lastDebugM == null ? null : t.lastDebugM + i * 45; // 历史记录无时间戳，按最近调试时间近似展开
-  }
-
-  function histHtml(t) {
-    var runs = (t.runs || []).slice(0, 5);
-    if (!runs.length) return '<div class="tl-hist-empty">暂无调试记录，点击「运行」开始第一次调试</div>';
-    return runs.map(function (r, i) {
-      return '<div class="tl-hist-item"><span class="dot ' + (r.ok ? 'green' : 'red') + '"></span>' +
-        '<span class="' + (r.ok ? 'tl-ok-t' : 'tl-err-t') + '">' + (r.ok ? '成功' : '失败') + '</span>' +
-        '<span class="mono">' + r.ms + 'ms</span><span class="sp"></span>' +
-        '<span class="tl-dim">' + DF.relTime(runAgoM(t, i)) + '</span></div>';
-    }).join('');
-  }
-
-  function buildCommand(t, values) {
-    var cmd = t.invocation || '';
-    Object.keys(values).forEach(function (k) {
-      cmd = cmd.split('{' + k + '}').join(values[k] == null ? '' : values[k]);
-    });
-    return cmd;
-  }
-
-  /* 紧凑 JSON 格式化：数组元素逐行、标量数组收为一行，整体控制在 3-6 行左右 */
-  function isScalar(x) { return x == null || typeof x !== 'object'; }
-  function fmtJson(v, indent) {
-    indent = indent || 0;
-    var pad = ''; var i;
-    for (i = 0; i < indent; i++) pad += '  ';
-    if (Array.isArray(v)) {
-      if (!v.length) return '[]';
-      if (v.every(isScalar)) return JSON.stringify(v);
-      return '[\n' + v.map(function (x) { return pad + '  ' + fmtJson(x, indent + 1); }).join(',\n') + '\n' + pad + ']';
-    }
-    if (v && typeof v === 'object') {
-      var keys = Object.keys(v);
-      if (!keys.length) return '{}';
-      return '{\n' + keys.map(function (k) {
-        return pad + '  ' + JSON.stringify(k) + ': ' + fmtJson(v[k], indent + 1);
-      }).join(',\n') + '\n' + pad + '}';
-    }
-    return JSON.stringify(v);
-  }
-
-  /* 按工具身份生成 3-6 行 JSON 结果样例 */
-  function resultPayload(t, values, ms) {
-    var sym = values.symbol || 'OrderService#submit';
-    var path = values.path || 'trade/UFX/src/main/java/com/fin/order';
-    switch (t.id) {
-      case 't-trace': {
-        var depth = Math.max(1, Math.min(4, parseInt(values.depth, 10) || 3));
-        var down = ['OrderDAO#insert', 'SqlSessionTemplate#flush', 'DataSourceProxy#getConn', 'HikariPool#borrow'];
-        var chain = []; var caller = sym;
-        for (var i = 0; i < depth; i++) {
-          var s = down[i] || 'Object#wait';
-          chain.push({ depth: i + 1, symbol: s, caller: caller });
-          caller = s;
-        }
-        return chain; // 调用链数组
-      }
-      case 't-lint':
-        return [ // 告警列表
-          { file: 'UFX/OrderService.java', line: 87, rule: 'magic-number', msg: '魔法数 86400 应提取为命名常量' },
-          { file: 'UFX/OrderDAO.java', line: 143, rule: 'naming', msg: '方法名 doQuery1 不符合驼峰规范' },
-          { file: 'UFX/MoneyUtil.java', line: 22, rule: 'unused-import', msg: '未使用的导入 java.util.HashMap' }
-        ];
-      case 't-meta':
-        return [ // 实体字段
-          { field: 'orderId', type: 'string(32)', required: true, desc: '订单号' },
-          { field: 'amount', type: 'decimal(18,2)', required: true, desc: '订单金额' },
-          { field: 'createdAt', type: 'datetime', required: false, desc: '创建时间' }
-        ];
-      case 't-dsl':
-        return [
-          { asset: 'form/order-submit.form.json', node: 'LDP/Form/OrderSubmit', score: 0.93 },
-          { asset: 'flow/order-cancel.flow.xml', node: 'LDP/Flow/OrderCancel', score: 0.81 },
-          { asset: 'svc/OrderSubmitSvc.dsm', node: 'LDP/Service/OrderSubmitSvc', score: 0.76 }
-        ];
-      case 't-smell':
-        return [
-          { file: 'UFX/OrderService.java', line: 87, rule: 'magic-number', detail: '魔法数 86400' },
-          { file: 'UFX/QuotePush.java', line: 51, rule: 'mem-release', detail: 'Buffer 未在 finally 中释放' },
-          { file: 'UFX/LimitCheck.java', line: 130, rule: 'param-check', detail: '入口参数 amount 未做非空校验' }
-        ];
-      case 't-contract':
-        return [
-          { contract: 'order-submit.spec', field: 'orderId', verdict: 'pass' },
-          { contract: 'settle-result.spec', field: 'settleMode', verdict: 'pass' },
-          { contract: 'quote-push.spec', field: 'pushRate', verdict: 'pass' }
-        ];
-      case 't-factory':
-        return { scene: values.scene || '订单提交', rows: parseInt(values.rows, 10) || 100, tables: ['t_order', 't_order_item'], tookMs: ms };
-      case 't-btree':
-        return { node: values.node || '金融证券交易/交易执行/订单提交', domain: '金融证券交易', stream: '交易执行', scene: '订单提交', entries: ['UFX/OrderService.java', 'api/order-submit.spec'] };
-      case 't-smoke':
-        return { pipeline: values.pipeline || 'PL-TRADING-3102', stage: values.stage || '制品级', cases: 86, passed: 86, failed: 0 };
-      default:
-        return { tool: t.name, tookMs: ms, message: '执行完成（演示输出）' };
-    }
-  }
-
-  /* 单次模拟执行：按 runs[] 轮换结果；不可用工具固定依赖缺失输出 */
-  function runOnce(t, values) {
-    var runs = t.runs || [];
-    var i = runs.length;
-    var fixedErr = t.status === '不可用';
-    var ok, ms;
-    if (fixedErr) {
-      ok = false;
-      ms = i ? runs[i % runs.length].ms : 1200;
-    } else if (i) {
-      var rec = runs[i % runs.length];
-      ok = !!rec.ok;
-      ms = rec.ms || 800;
-    } else {
-      ok = true; ms = 680;
-    }
-    var html = '<div class="tl-cmd">$ ' + DF.esc(buildCommand(t, values)) + '</div>';
-    if (fixedErr) {
-      html += '<div class="lv-err">[err] 依赖缺失: lib replay-core not found (exit 1)</div>';
-    } else if (ok) {
-      html += '<div class="tl-pre">' + DF.esc(fmtJson(resultPayload(t, values, ms), 0)) + '</div>' +
-        '<div class="lv-ok">[ok] exit 0 · ' + ms + 'ms</div>';
-    } else {
-      html += '<div class="lv-err">[err] exit 1 · 超时</div>';
-    }
-    return { ok: ok, ms: ms, html: html };
-  }
-
-  function openDebug(t) {
-    var h = MOCK.byId(MOCK.harnesses, t.harness);
-    var html =
-      '<div class="notice">' + DF.icon('tool', 14) + '<div>' + DF.esc(t.desc || '（无说明）') +
-        ' · Harness: ' + DF.esc(h ? h.name : (t.harness || '—')) + ' · 超时 ' + t.timeoutMs + 'ms</div></div>' +
-      '<div class="section-title">参数<span class="line"></span></div>' +
-      '<div id="tl-params">' + paramsHtml(t) + '</div>' +
-      '<div class="tl-run-row"><button class="btn primary" id="tl-run">' + DF.icon('play') + '运行</button>' +
-        '<span class="hint">模拟执行 1s，结果写入调试记录并刷新列表</span></div>' +
-      '<div class="section-title">执行输出<span class="line"></span></div>' +
-      '<div class="log-view" id="tl-out"><span class="tl-cmd">$ 等待运行…</span></div>' +
-      '<div class="section-title">最近 5 次调试<span class="line"></span></div>' +
-      '<div id="tl-hist">' + histHtml(t) + '</div>';
-
-    DF.drawer.open({
-      title: '调试 · ' + t.name,
-      width: 680,
-      body: html,
-      onMount: function (b) {
-        var out = b.querySelector('#tl-out');
-        var runBtn = b.querySelector('#tl-run');
-        runBtn.onclick = function () {
-          var values = {};
-          b.querySelectorAll('#tl-params [data-k]').forEach(function (inp) {
-            values[inp.getAttribute('data-k')] = inp.value;
-          });
-          runBtn.disabled = true;
-          runBtn.textContent = '执行中…';
-          setTimeout(function () {
-            var res = runOnce(t, values);
-            out.innerHTML = res.html;
-            out.scrollTop = 0;
-            (t.runs = t.runs || []).unshift({ ok: res.ok, ms: res.ms });
-            t.lastDebugM = 0;
-            if (res.ok && t.status === '未验证') t.status = '可用';
-            renderTable();
-            b.querySelector('#tl-hist').innerHTML = histHtml(t);
-            runBtn.disabled = false;
-            runBtn.innerHTML = DF.icon('play') + '运行';
-            DF.toast(res.ok ? '调试成功: ' + t.name : '调试失败: ' + t.name + '（exit 1）', res.ok ? 'ok' : 'err');
-          }, 1000);
-        };
-      }
     });
   }
 
   /* ---------- 注册 / 编辑弹窗 ---------- */
-  function openRegister(existing) {
+  function openCreate() {
+    if (state.loading) { DF.toast('工具数据加载中，请稍后再试', 'warn'); return; }
+    if (state.error) { DF.toast('工具数据加载失败，请先重试', 'err'); return; }
+    if (!state.harnesses.length) { DF.toast('暂无可用 Harness，请先在 Harness 管理页创建', 'err'); return; }
+    openEditor(null);
+  }
+
+  function startEdit(t) {
+    run(function () { return API.get('tool', t.id); }).then(function (detail) {
+      openEditor(detail);
+    }).catch(function (err) {
+      DF.toast('加载工具详情失败：' + errText(err), 'err');
+    });
+  }
+
+  function collectParams(pbox) {
+    var params = [];
+    var seen = Object.create(null);
+    var rows = pbox.querySelectorAll('.tl-frow');
+    for (var i = 0; i < rows.length; i++) {
+      var key = rows[i].querySelector('.tl-fk').value.trim();
+      var description = rows[i].querySelector('.tl-fd').value.trim();
+      if (!key) {
+        if (description) return { error: '第 ' + (i + 1) + ' 行参数缺少键' };
+        continue;
+      }
+      if (seen[key]) return { error: '参数键重复：' + key };
+      seen[key] = true;
+      params.push({
+        key: key,
+        type: rows[i].querySelector('.tl-ft').value,
+        description: description
+      });
+    }
+    return { params: params };
+  }
+
+  function openEditor(existing) {
     var isEdit = !!existing;
-    var t = existing || { name: '', type: 'CLI', invocation: '', params: [], harness: (MOCK.harnesses[0] || {}).id, timeoutMs: 30000, desc: '' };
-    var segHtml = TYPES.map(function (x) {
-      return '<button type="button" data-v="' + x + '"' + (t.type === x ? ' class="on"' : '') + '>' + x + '</button>';
+    var draft = existing || {
+      name: '',
+      kind: 'cli',
+      invocation: '',
+      description: '',
+      harnessId: state.harnesses.length ? state.harnesses[0].id : '',
+      timeoutMs: 30000,
+      params: []
+    };
+
+    var harnessOpts = state.harnesses.map(function (h) {
+      return '<option value="' + DF.esc(h.id) + '"' +
+        (h.id === draft.harnessId ? ' selected' : '') + '>' + DF.esc(h.name) + '</option>';
     }).join('');
+
+    var harnessFound = false;
+    for (var hi = 0; hi < state.harnesses.length; hi++) {
+      if (state.harnesses[hi].id === draft.harnessId) { harnessFound = true; break; }
+    }
+    if (draft.harnessId && !harnessFound) {
+      harnessOpts += '<option value="' + DF.esc(draft.harnessId) + '" selected>' +
+        DF.esc(draft.harnessName || draft.harnessId) + '（不在 Harness 列表）</option>';
+    }
+    if (!harnessOpts) {
+      harnessOpts = '<option value="">暂无可用 Harness</option>';
+    } else if (!draft.harnessId) {
+      harnessOpts = '<option value="">请选择 Harness</option>' + harnessOpts;
+    }
+
+    var segHtml = KINDS.map(function (k) {
+      return '<button type="button" data-v="' + k.value + '"' +
+        (draft.kind === k.value ? ' class="on"' : '') + '>' + k.label + '</button>';
+    }).join('');
+
     var html =
       '<div class="field"><label>名称<span class="req">*</span></label>' +
-        '<input class="inp mono" id="tl-f-name" placeholder="如 trace_call_chain" value="' + DF.esc(t.name) + '"></div>' +
+        '<input class="inp mono" id="tl-f-name" maxlength="80" placeholder="如 trace_call_chain" value="' +
+          DF.esc(draft.name) + '"></div>' +
       '<div class="field"><label>类型</label><div class="seg" id="tl-f-type">' + segHtml + '</div></div>' +
       '<div class="field"><label>调用方式<span class="req">*</span></label>' +
-        '<input class="inp mono" id="tl-f-inv" placeholder="如 trace --symbol {symbol}" value="' + DF.esc(t.invocation) + '">' +
-        '<div class="hint">{} 为参数占位符，运行时按参数定义替换</div></div>' +
+        '<input class="inp mono" id="tl-f-inv" maxlength="500" placeholder="如 trace --symbol {symbol}" value="' +
+          DF.esc(draft.invocation) + '">' +
+        '<div class="hint">{} 为参数占位符，按参数定义替换（B1 不执行工具）</div></div>' +
       '<div class="field"><label>参数定义</label><div id="tl-f-params"></div>' +
         '<button class="btn sm" type="button" id="tl-f-addp">' + DF.icon('plus', 12) + '添加参数</button></div>' +
       '<div class="grid2">' +
         '<div class="field"><label>超时（ms）</label>' +
-          '<input class="inp" id="tl-f-timeout" type="number" min="0" step="1000" value="' + (t.timeoutMs || 30000) + '"></div>' +
-        '<div class="field"><label>所属 Harness</label><select class="inp" id="tl-f-harness">' +
-          (MOCK.harnesses || []).map(function (h) {
-            return '<option value="' + h.id + '"' + (h.id === t.harness ? ' selected' : '') + '>' + DF.esc(h.name) + '</option>';
-          }).join('') +
-        '</select></div>' +
+          '<input class="inp" id="tl-f-timeout" type="number" min="1000" max="600000" step="1000" value="' +
+            DF.esc(draft.timeoutMs == null ? '' : draft.timeoutMs) + '"></div>' +
+        '<div class="field"><label>所属 Harness<span class="req">*</span></label>' +
+          '<select class="inp" id="tl-f-harness">' + harnessOpts + '</select></div>' +
       '</div>' +
       '<div class="field"><label>说明</label>' +
-        '<textarea class="inp" id="tl-f-desc" placeholder="工具用途说明">' + DF.esc(t.desc || '') + '</textarea></div>';
+        '<textarea class="inp" id="tl-f-desc" maxlength="500" placeholder="工具用途说明">' +
+          DF.esc(draft.description || '') + '</textarea></div>';
 
-    var type = t.type;
+    var kind = draft.kind;
     var pbox = null;
+    var okBtn = null;
+    var saving = false;
+    var okText = isEdit ? '保存' : '注册';
+
     DF.modal.form({
-      title: isEdit ? '编辑工具 · ' + t.name : '注册工具',
+      title: isEdit ? '编辑工具 · ' + draft.name : '注册工具',
       width: 560,
       body: html,
-      okText: isEdit ? '保存' : '注册',
-      onMount: function (b) {
+      okText: okText,
+      onMount: function (b, close, btn) {
+        okBtn = btn;
+
         var seg = b.querySelector('#tl-f-type');
         seg.addEventListener('click', function (e) {
-          var btn = e.target.closest('button');
-          if (!btn) return;
-          type = btn.getAttribute('data-v');
-          seg.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === btn); });
+          var target = e.target.closest('button');
+          if (!target) return;
+          kind = target.getAttribute('data-v');
+          var buttons = seg.querySelectorAll('button');
+          for (var i = 0; i < buttons.length; i++) {
+            buttons[i].classList.toggle('on', buttons[i] === target);
+          }
         });
 
         pbox = b.querySelector('#tl-f-params');
         function addRow(p) {
-          p = p || { k: '', type: 'string', desc: '' };
+          p = p || { key: '', type: 'string', description: '' };
           var row = document.createElement('div');
           row.className = 'tl-frow';
           row.innerHTML =
-            '<input class="inp mono inp-sm tl-fk" placeholder="键（如 symbol）" value="' + DF.esc(p.k) + '">' +
+            '<input class="inp mono inp-sm tl-fk" placeholder="键（如 symbol）" value="' + DF.esc(p.key) + '">' +
             '<select class="inp inp-sm tl-ft">' +
-              '<option' + (p.type !== 'int' ? ' selected' : '') + '>string</option>' +
-              '<option' + (p.type === 'int' ? ' selected' : '') + '>int</option></select>' +
-            '<input class="inp inp-sm tl-fd" placeholder="说明" value="' + DF.esc(p.desc || '') + '">' +
+              PARAM_TYPES.map(function (type) {
+                return '<option value="' + type + '"' +
+                  (p.type === type ? ' selected' : '') + '>' + type + '</option>';
+              }).join('') +
+            '</select>' +
+            '<input class="inp inp-sm tl-fd" placeholder="说明" value="' + DF.esc(p.description) + '">' +
             '<button class="icon-btn tl-fx" type="button" title="移除该参数">' + DF.icon('x', 14) + '</button>';
           row.querySelector('.tl-fx').onclick = function () { row.remove(); };
           pbox.appendChild(row);
         }
-        (t.params || []).forEach(addRow);
-        if (!(t.params || []).length) addRow();
+
+        var initial = draft.params || [];
+        for (var pi = 0; pi < initial.length; pi++) addRow(initial[pi]);
+        if (!initial.length) addRow();
         b.querySelector('#tl-f-addp').onclick = function () { addRow(); };
       },
       onOk: function (b, close) {
+        if (saving) return;
+
         var name = b.querySelector('#tl-f-name').value.trim();
-        var inv = b.querySelector('#tl-f-inv').value.trim();
-        if (!name || !inv) { DF.toast('名称与调用方式为必填项', 'err'); return; }
-        var params = [];
-        pbox.querySelectorAll('.tl-frow').forEach(function (r) {
-          var k = r.querySelector('.tl-fk').value.trim();
-          if (k) params.push({ k: k, type: r.querySelector('.tl-ft').value, desc: r.querySelector('.tl-fd').value.trim() });
-        });
+        var invocation = b.querySelector('#tl-f-inv').value.trim();
+        var description = b.querySelector('#tl-f-desc').value.trim();
         var timeoutMs = parseInt(b.querySelector('#tl-f-timeout').value, 10);
-        if (!(timeoutMs > 0)) timeoutMs = 30000;
-        var harness = b.querySelector('#tl-f-harness').value;
-        var desc = b.querySelector('#tl-f-desc').value.trim();
-        if (isEdit) {
-          existing.name = name; existing.type = type; existing.invocation = inv;
-          existing.params = params; existing.timeoutMs = timeoutMs; existing.harness = harness; existing.desc = desc;
-          DF.toast('已保存修改', 'ok');
-        } else {
-          var nid = 't-' + Date.now().toString(36);
-          while (MOCK.byId(MOCK.tools, nid)) nid += 'x';
-          MOCK.tools.unshift({
-            id: nid, name: name, type: type, invocation: inv, params: params,
-            harness: harness, timeoutMs: timeoutMs, status: '未验证',
-            desc: desc, refCount: 0, lastDebugM: null, runs: []
-          });
-          DF.toast('已注册，调试一次成功后变为可用', 'ok');
+        var harnessId = b.querySelector('#tl-f-harness').value;
+
+        if (!name) { DF.toast('名称为必填项', 'err'); return; }
+        if (name.length > 80) { DF.toast('名称不能超过 80 个字符', 'err'); return; }
+        if (!invocation) { DF.toast('调用方式为必填项', 'err'); return; }
+        if (invocation.length > 500) { DF.toast('调用方式不能超过 500 个字符', 'err'); return; }
+        if (description.length > 500) { DF.toast('说明不能超过 500 个字符', 'err'); return; }
+        if (!(timeoutMs >= 1000 && timeoutMs <= 600000)) {
+          DF.toast('超时需在 1000–600000 ms 之间', 'err');
+          return;
         }
-        close();
-        renderTable();
+        if (!harnessId) { DF.toast('请选择所属 Harness', 'err'); return; }
+
+        var collected = collectParams(pbox);
+        if (collected.error) { DF.toast(collected.error, 'err'); return; }
+
+        var payload = {
+          name: name,
+          kind: kind,
+          invocation: invocation,
+          description: description,
+          harnessId: harnessId,
+          timeoutMs: timeoutMs,
+          params: collected.params
+        };
+
+        saving = true;
+        if (okBtn) {
+          okBtn.disabled = true;
+          okBtn.textContent = '保存中…';
+        }
+
+        var task = run(function () {
+          return isEdit
+            ? API.update('tool', draft.id, payload, revisionOf(draft))
+            : API.create('tool', payload);
+        });
+
+        task.then(function () {
+          close();
+          DF.toast(isEdit ? '已保存修改' : '已注册工具', 'ok');
+          loadTools();
+        }).catch(function (err) {
+          saving = false;
+          if (okBtn) {
+            okBtn.disabled = false;
+            okBtn.textContent = okText;
+          }
+          DF.toast((isEdit ? '保存失败：' : '注册失败：') + errText(err), 'err');
+        });
       }
     });
   }
 
-  renderTable();
+  /* ---------- 首次加载 ---------- */
+  loadPage();
 })();

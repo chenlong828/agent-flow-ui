@@ -5,12 +5,12 @@ component: CMP-tools
 requirement: REQ-0008
 scenario: SCN-0008
 status: active
-updated: 2026-10-23
+updated: 2026-10-25
 ---
 
 # 工具与集成
 
-> 导航：资产与注册 / 工具与集成　|　形态：Tab 列表 + 抽屉　|　前置：`design/components/ui-shell/spec.md`
+> 导航：资产与注册 / 工具与集成　|　形态：Tab 列表 + 编辑弹窗　|　前置：`design/components/ui-shell/spec.md`
 
 ## 0 模块卡
 
@@ -18,21 +18,21 @@ updated: 2026-10-23
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
-- 业务价值：为专家与流程设计者提供确定性工具（MCP/CLI/脚本）的注册、调试、引用查看与治理入口；没有它，工具只能散落在专家提示词里，无法复用、验证被谁引用。
-- 负责 / 不负责：负责工具注册表（类型/状态/搜索筛选）、注册/编辑弹窗（参数定义、超时、所属 Harness）、调试抽屉（模拟 trace/结果、运行记录）、引用方查看、删除保护；不负责工具真实执行运行时、Harness 的注册与健康（`CMP-harnesses`）、专家/工作流节点对工具的绑定（各自组件）、CI/CD 集成（本版占位）。
-- 数据所有权：读 `MOCK.tools`、`MOCK.harnesses`、`MOCK.experts`、`MOCK.workflows`（引用方统计与节点引用反查）；写 `MOCK.tools`（注册 `push`、删除 `splice`、调试运行记录 `runs`、状态「未验证→可用」，仅内存态，刷新复位）；调试抽屉的输入/输出/执行中状态只在内存。
-- 公开契约：页面入口 `pages/tools.html`；操作 `CMP-tools#list`、`#register`、`#debug`、`#refs`、`#delete`；不变量 被专家或工作流节点引用的工具（`refCount > 0`）不可直接删除，删除入口置灰并显示引用数；只有调试成功一次才从「未验证」转「可用」，失败保持不可用；引用方统计必须来自 `MOCK.experts[].tools` 与 `MOCK.workflows` 节点配置的同源扫描，不得使用静态数字冒充。
-- 依赖：`DF`（外壳、Tabs、表格、抽屉、弹窗、Toast、图标）/ `MOCK`；不依赖其他页面组件（跨页只走 URL）。
-- 变化轴：工具调用协议与参数 schema（MCP 端点 / CLI 命令模板 / 脚本）最易变，新增类型须同步注册表单、调试抽屉与引用方展示。
-- 验证入口：`npm start` + `/pages/tools.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0008（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0008`）。
-- 预算：`tools.js` 约 19 KB + 本规格约 7 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，远低于上限。
-- 单独运行：`npm start` → `/pages/tools.html`（所属 Harness 下拉只读 `MOCK.harnesses`）。
-- 删除测试：删除后工具资产无法注册、调试、查引用与治理，专家/节点失去可引用的确定性工具来源；复杂度会集中到专家与编辑器，故保留为独立组件。
-- 已知偏差：M1 追溯已补（REQ-0008/SCN-0008），场景 verified（DOM/jsdom 3 正 1 反 40/40）；行为级断言已由 M1 runner 覆盖；调试为模拟执行、无真实工具调用；CI/CD 环境绑定仅为占位 Tab；删除保护只按 `refCount` 夹具字段判断，不阻断真实并发引用。
+- 业务价值：为专家与流程设计者提供确定性工具（MCP/CLI/脚本）的注册与治理入口；没有它，工具只能散落在专家提示词里，无法复用、查看被引用情况。
+- 负责 / 不负责：负责工具列表（类型/状态/搜索筛选）、注册/编辑弹窗（参数定义、超时、所属 Harness）、引用计数查看、删除；不负责工具真实执行运行时、Harness 注册与健康（`CMP-harnesses`）、专家/工作流节点对工具的绑定（各自组件）、CI/CD 集成（本版占位）。
+- 数据所有权：页面状态直接保存 B1 `ToolListItem` / `ToolDetail` DTO；列表 `GET /tools`、详情 `GET /tools/{id}`、创建 `POST`、更新 `PUT`、删除 `DELETE` 均经 `window.API`；所属 Harness 下拉只读 `GET /harnesses`。不读 `MOCK`，不建第二套视图模型；写成功后重新拉列表或更新 DTO。
+- 公开契约：页面入口 `pages/tools.html`；操作 `CMP-tools#list`、`#register`、`#edit`、`#refs`、`#delete`；不变量 ①列表筛选的 value 使用 DTO 枚举 `mcp/cli/script` 与 `unverified/available/unavailable`，中文只在显示时映射；②创建/更新 body 为 `name/kind/invocation/description/harnessId/timeoutMs/params[{key,type,description}]`；③状态只按 B1 返回值展示，B1 没有调试端点，页面不提供调试、不把状态改为 `available`；④引用只显示 `usedByCount`，B1 不提供引用方明细；⑤删除被引用工具由 B1 返回 409 `referenced`，页面提示并保留数据。
+- 依赖：`DF`（外壳、Tabs、表格、弹窗、Toast、图标）/ `window.API`；不依赖 `MOCK` 或其他页面组件。
+- 变化轴：工具调用协议与参数 schema（MCP 端点 / CLI 命令模板 / 脚本）最易变。
+- 验证入口：`npm start` + `/pages/tools.html`；`node tools/verify-m1-scenarios.js SCN-0008`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`。
+- 预算：`tools.js` 约 22 KB + 本规格约 4 KB；上限 120k token，远低于上限。
+- 单独运行：`npm start` → `/pages/tools.html`（所属 Harness 下拉读真实 Harness 列表）。
+- 删除测试：删除后专家/节点失去可引用的确定性工具来源，复杂度会集中到专家与编辑器，故保留为独立组件。
+- 已知偏差：B1 没有调试端点、运行记录与引用方明细；原调试抽屉、`runs`、状态转可用、`MOCK` 引用扫描均已移除。`lastDebugAt` 可为空，页面显示「—」。M1 SCN-0008 使用 `tools/fake-b1.js` 内存传输，真实读写由 `verify-b1-pages.js` / `verify-b1-writes.js` 覆盖。
 
 ## 1 页面定位
 
-确定性工具资产注册中心（PPT P5「能用工具解决的不依赖模型」「固定方法沉淀」）：MCP/CLI 工具注册与调试；CI/CD 环境绑定为本版占位（R3）。
+确定性工具资产注册中心（PPT P5「能用工具解决的不依赖模型」「固定方法沉淀」）：MCP/CLI/脚本工具注册与治理；CI/CD 环境绑定为本版占位（R3）。
 
 ## 2 布局结构
 
@@ -43,49 +43,36 @@ updated: 2026-10-23
 ├──────────────────────────────────────────────────────────────────┤
 │ 筛选: 类型[全部▾] 状态[全部▾]                     [🔍搜索]           │
 │ 名称            类型   调用方式                    所属Harness 状态  引用  最近调试 操作 │
-│ trace_call_chain CLI   $ trace --symbol {sym}     build-01   可用  5    2h前  调试 ⋮ │
-│ linter          CLI    $ lint --path {path}       agent-07   可用  3    1d前  调试 ⋮ │
-│ metadata_query  MCP    mcp://meta/query           build-02   可用  4    3h前  调试 ⋮ │
-│ data_factory    脚本    python tools/make_data.py  build-01   未验证 2    —     调试 ⋮ │
-│ …                                                                │
-├──────────────────────────────────────────────────────────────────┤
-│ Tab2 CI/CD 环境: ┌────────────────────────┐                       │
-│                  │   ⛔ 暂未开放            │  （占位空态）           │
-│                  │ 当前版本聚焦编排模型演示  │                       │
-│                  └────────────────────────┘                       │
+│ trace_call_chain CLI   trace --symbol {sym}      build-01   可用  5    2h前    编辑 删除 │
+│ data_factory     脚本   python tools/make_data.py build-01   未验证 2    —       编辑 删除 │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## 3 元素明细（Tab1 工具注册表）
+## 3 元素明细
 
 | 区域 | 元素 | 类型 | 说明与交互 |
 |---|---|---|---|
-| 筛选 | 类型下拉、状态下拉、搜索 | 控件 | 类型：MCP / CLI / 脚本；状态：可用/不可用/未验证 |
-| 表格 | 名称 | 等宽文字 | 点击打开调试抽屉 |
+| 筛选 | 类型下拉、状态下拉、搜索 | 控件 | 类型：mcp/cli/script；状态：unverified/available/unavailable |
+| 表格 | 名称 | 等宽文字 | 点击打开编辑弹窗 |
 | 表格 | 类型 | 标签 | 颜色区分 MCP/CLI/脚本 |
-| 表格 | 调用方式 | 等宽代码样式 | 命令模板或 mcp:// 端点，`{}` 为参数占位 |
-| 表格 | 所属 Harness | 标签 | 工具在该设施上运行；点击跳 Harness 详情 |
-| 表格 | 被引用数 | 数字链接 | 弹层列出引用它的专家/节点 |
-| 表格 | 最近调试时间 | 相对时间 | — |
-| 表格 | 操作 | 按钮组 | 调试、编辑、删除（被引用时禁删并提示） |
+| 表格 | 调用方式 | 等宽代码样式 | 命令模板或 mcp:// 端点 |
+| 表格 | 所属 Harness | 标签 | 显示 Harness 名称；找不到时显示 ID |
+| 表格 | 状态、被引用数、最近调试 | 标签/数字/时间 | 状态只读；引用数点击显示 B1 计数说明 |
+| 表格 | 操作 | 按钮组 | 编辑、删除（引用时后端 409） |
 
-## 4 调试抽屉
+## 4 注册/编辑弹窗
 
-| 区块 | 内容 |
-|---|---|
-| 参数 | 键值对表单（按调用方式模板自动生成参数行） |
-| 执行 | [运行] 按钮 → loading → 输出区（终端样式）+ 退出码 + 耗时 |
-| 结果记录 | 最近 5 次调试结果列表（成功/失败、耗时） |
+名称、类型（MCP/CLI/脚本）、调用方式、参数定义（key/type/description，可增删行）、超时（1000–600000 ms）、所属 Harness（下拉）、说明。编辑时先 `GET /tools/{id}` 取完整 `params`，保存用 `PUT`；状态由后端返回，不在页面修改。
 
-## 5 注册工具弹窗
+## 5 引用与删除
 
-名称、类型（MCP/CLI/脚本）、调用方式（命令模板 / 端点）、参数定义（键/类型/说明，可增删行）、超时（ms）、所属 Harness（下拉）、说明 → 保存后状态=未验证（调试一次成功后变可用）。
+引用弹层只显示 `usedByCount` 和「B1 未提供引用方明细」。删除按钮不按引用数预先禁用；确认后调用 `DELETE`，B1 返回 409 `referenced` 时提示「资产仍被引用，不能删除」，列表保留。
 
 ## 6 状态与空态
 
 - 无工具：空态「注册第一个确定性工具，减少对模型的依赖」
-- CI/CD Tab：固定占位空态（R3：暂不展开）
+- 加载中、加载失败（`#tl-retry`）、筛选无结果、CI/CD 占位空态
 
-## 7 模拟数据依赖
+## 7 B1 数据契约
 
-`MOCK.tools[]`：10 个（trace_call_chain、metadata_query、dsl_search、linter、code_smell_scan、contract_assert、data_factory、replay_clean、business_tree_query、smoke_runner），字段 `{id,name,type,invocation,params[],harnessId,timeout,status,usedBy,refCount,lastDebugAt}`。
+列表/详情字段：`id,name,kind,invocation,description,harnessId,timeoutMs,params,paramCount,status,usedByCount,lastDebugAt,revision,createdAt,updatedAt`。创建/更新不提交 `status`；删除必须带 `If-Match`（由 `window.API` 生成）。
