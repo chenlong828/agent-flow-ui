@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-23
+updated: 2026-10-25
 ---
 
 # 开发环境配置（本机实况）
@@ -11,13 +11,14 @@ updated: 2026-10-23
 
 ## 1. 项目本体与本地运行
 
-- 项目形态：纯前端高保真交互原型，原生 HTML / CSS / JavaScript，零第三方依赖，无构建步骤。
-- 静态服务器：项目根目录 `server.js`，Node.js 原生模块实现，无任何 npm 依赖。
+- 项目形态：前端高保真交互原型 + 同源 BFF，原生 HTML / CSS / JavaScript，零第三方依赖，无构建步骤。
+- 静态服务器与 BFF：项目根目录 `server.js`（Node.js 原生模块）做静态托管与 `CMP-bff` 挂载；`bff/` 只转发 `/api/v1/*` 与 `/healthz`。
 - 启动方式与端口：
   - 默认端口 3000，可用环境变量 `PORT` 覆盖（例如 `PORT=3001 node server.js`）。
   - 根路径 `/` 返回 302 跳转到 `/pages/workflow-list.html`。
+  - B1 后端默认 `http://127.0.0.1:3100`，可用 `API_BASE` 覆盖；BFF 超时/body 上限用 `BFF_TIMEOUT_MS` / `BFF_MAX_BODY`。
   - 本次会话中以分离（detached）方式常驻运行，日志输出到 `/tmp/agentflow-server.log`。
-- 验证服务是否存活：`curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/pages/workflow-list.html`，期望 200。
+- 验证服务是否存活：`curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/pages/workflow-list.html`，期望 200；同源 BFF 用 `curl http://localhost:3000/healthz` 验证。
 
 ## 2. 网络代理（本机固定事实）
 

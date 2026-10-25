@@ -7,7 +7,7 @@ docs/
 ├── README.md
 ├── requirements/                  ← 需求：为什么做（一卡一文件）
 │   ├── REQ-0001-user-menu.md
-│   └── REQ-0002..0011-<slug>.md   ← M1 十页
+│   └── REQ-0002..0012-<slug>.md   ← M1 十页 + B1 接入
 ├── plan/                          ← 调度：接下来做什么（三份固定文档）
 │   ├── roadmap.md
 │   ├── risks.md
@@ -15,8 +15,8 @@ docs/
 ├── design/                        ← 现行真相：系统现在是什么
 │   ├── product.md / architecture.md
 │   ├── dev-environment.md / debugging-and-testing.md / code-refactoring.md
-│   ├── components/<id>/spec.md    ← 组件规格（11 个）
-│   └── scenarios/<领域>/<价值流>/<场景>/scenario.md  ← 11 个，索引 _index.md 自动生成
+│   ├── components/<id>/spec.md    ← 组件规格（12 个）
+│   └── scenarios/<领域>/<价值流>/<场景>/scenario.md  ← 12 个，索引 _index.md 自动生成
 ├── works/                         ← 执行：正在做什么（一级只有工序目录）
 └── history/                       ← 记忆：怎么走到这里（冻结只读）
     ├── decisions/                 ← 决策与裁定
@@ -26,7 +26,7 @@ docs/
 
 ## 组件清单（`design/components/` 目录名即组件 ID）
 
-`ui-shell` · `workflow-list` · `workflow-editor` · `skills` · `experts` · `harnesses` · `tools` · `instances` · `analytics` · `workspaces` · `keys`
+`ui-shell` · `workflow-list` · `workflow-editor` · `skills` · `experts` · `harnesses` · `tools` · `instances` · `analytics` · `workspaces` · `keys` · `bff`
 
 每个组件目录内 `spec.md` 为入口规格；组件的公开能力以 `CMP-<id>` 引用，场景入口写成 `CMP-<id>/file#symbol`。
 

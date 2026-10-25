@@ -6,11 +6,13 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { createBff } = require('./bff');
 
 const ROOT = __dirname;
 const PORT = process.env.PORT || 3000;
 const HOST = '127.0.0.1';
 const ALLOWED = ['/pages/', '/assets/'];
+const bff = createBff();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -48,6 +50,11 @@ const server = http.createServer((req, res) => {
   if (urlPath === '/' || urlPath === '/index.html') {
     res.writeHead(302, { Location: '/pages/workflow-list.html' });
     return res.end();
+  }
+
+  // 同源 API 网关：只转发 /api/v1/* 与 /healthz，不改变 DTO/状态/错误体
+  if (urlPath === '/healthz' || urlPath.startsWith('/api/v1/')) {
+    return bff.handle(req, res);
   }
 
   // 白名单前缀；拒绝点文件、空字节与路径段里的 ..
@@ -92,4 +99,5 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, HOST, () => {
   console.log('AgentFlow 研发智能体工作流编排原型已启动');
   console.log('➜  http://' + HOST + ':' + PORT);
+  console.log('➜  BFF  /api/v1/*  /healthz  →  ' + bff.config.apiBase);
 });

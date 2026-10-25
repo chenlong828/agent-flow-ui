@@ -1,21 +1,35 @@
 # AgentFlow · 研发智能体工作流编排服务 UE 原型
 
-高保真可交互纯前端原型：无构建、零运行时依赖，Node 仅用于静态托管。
+高保真可交互前端 + 同源 BFF：无构建、零运行时依赖；Node 用于静态托管与 B1 API 透明转发。
 
 ## 运行
 
 ```bash
+# 1) 先起 B1 后端（agent-flow-orchaster，:3100）
+# 2) 再起原型
 node server.js
 # ➜ http://127.0.0.1:3000   （/ 重定向到工作流列表）
+# ➜ /api/v1/*、/healthz 同源转发到 API_BASE（默认 http://127.0.0.1:3100）
 ```
 
-也可指定端口：`PORT=8080 node server.js`。静态服务只监听 `127.0.0.1`，只服务 `pages/` 与 `assets/`。
+也可指定端口：`PORT=8080 node server.js`。静态服务与 BFF 只监听 `127.0.0.1`；静态只服务 `pages/` 与 `assets/`。
+
+## B1 同源接入
+
+`CMP-bff`（`bff/`）只做透明转发，不做 DTO 映射、revision 缓存、重试或聚合：
+
+- 路径：`/api/v1/*`、`/healthz`
+- 配置：`API_BASE`（默认 `http://127.0.0.1:3100`）、`BFF_TIMEOUT_MS`（默认 10000）、`BFF_MAX_BODY`（默认 1 MiB）
+- 单独运行：`PORT=3001 node bff/standalone.js`
+- 当前状态：BFF 已就绪（`npm run test:bff` 9/9）；四个资产页的 live 切换在 P2/P3，当前仍读 MOCK；其余 8 页继续 MOCK 并标注演示数据。
 
 ## 目录结构
 
 ```
-├─ server.js              零依赖静态服务器（/ 重定向到首页；拒绝越界与点文件）
-├─ package.json           npm start / test / check:docs / docs:index
+├─ server.js              零依赖静态服务器 + /api/v1、/healthz 同源挂载
+├─ bff/                   CMP-bff：透明转发、超时/body 上限/502
+├─ tests/bff/             BFF 契约单测（node --test）
+├─ package.json           npm start / test / test:bff / check:docs / docs:index
 ├─ assets/
 │  ├─ css/main.css        设计系统：布局/组件/语义色/画布样式（全局唯一）
 │  └─ js/
@@ -47,7 +61,7 @@ node server.js
 
 ## 原型说明
 
-- 所有数据来自 `assets/js/mock-data.js`（内存态），刷新即复位；不持久化、无后端。
+- B1 四类资产的目标数据源是 `http://127.0.0.1:3100`，经 `CMP-bff` 同源访问；P1 只落 BFF，四个资产页在 P2/P3 切 live。其余 8 页与切换前的资产页仍来自 `assets/js/mock-data.js`（内存态），刷新即复位；不持久化。
 - 页面 JS 一律调用 `DF.*` 公共组件拼装 UI；组件地图、依赖方向与数据所有权见 `docs/design/architecture.md`，每个组件的契约见对应规格的 `## 0 模块卡`。
-- 门禁：`npm test`（语法 + 五态文档 + 场景索引）；冒烟：`npm run test:smoke`（需 jsdom）；业务场景：`npm run test:scenarios`（jsdom，10 场景 × 3 正 1 反）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
-- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件已补 `REQ-0002..0011` / `SCN-0002..0011`，场景 `verified`（40/40），REQ `delivered`；详见 `docs/plan/roadmap.md` 与 `docs/history/works/2026-10-23-m1-scenario-verification/result.md`。
+- 门禁：`npm test`（语法 + 五态文档 + 场景索引 + BFF 单测）；BFF 单测：`npm run test:bff`；冒烟：`npm run test:smoke`（需 jsdom）；业务场景：`npm run test:scenarios`（jsdom，10 场景 × 3 正 1 反）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
+- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件已补 `REQ-0002..0011` / `SCN-0002..0011`，场景 `verified`（40/40），REQ `delivered`；B1 接入见 `REQ-0012` / `SCN-0012` / `CMP-bff`。
