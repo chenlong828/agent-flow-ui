@@ -117,6 +117,7 @@ async function load(page, query) {
     pretendToBeVisual: true,
     virtualConsole: vc,
     beforeParse(window) {
+      window.eval(fs.readFileSync(path.join(ROOT, 'tools/fake-b1.js'), 'utf8'));
       window.HTMLElement.prototype.scrollIntoView = function () {};
       window.scrollTo = function () {};
     }
@@ -418,8 +419,8 @@ async function scn0005T1() {
   try {
     assert.equal(ctx.doc.querySelectorAll('#sk-tblbox tbody tr').length, ctx.win.MOCK.skills.length);
     assert.match(q(ctx.doc, '#sk-count').textContent, new RegExp('共\\s*' + ctx.win.MOCK.skills.length));
-    const cat = '检索';
-    const target = ctx.win.MOCK.skills.filter((x) => x.category === cat).length;
+    const cat = 'retrieval';
+    const target = ctx.win.MOCK.skills.filter((x) => x.category === '检索').length;
     click(q(ctx.doc, '[data-cat="' + cat + '"]'));
     assert.equal(ctx.doc.querySelectorAll('#sk-tblbox tbody tr').length, target);
     assert.match(q(ctx.doc, '#sk-count').textContent, new RegExp('共\\s*' + target));
@@ -462,6 +463,7 @@ async function scn0005T3() {
     click(q(ctx.doc, '#sk-new'));
     await wait(30);
     setValue(q(ctx.doc, '#sk-nk-name'), '回归 Skill');
+    setValue(q(ctx.doc, '#sk-nk-sum'), '回归 Skill 的常驻摘要');
     click(q(ctx.doc, '.modal .d-foot .btn.primary'));
     await wait(60);
     assert.equal(ctx.win.MOCK.skills.length, before + 1);
@@ -483,6 +485,8 @@ async function scn0005T4() {
     assert.ok(del, '菜单缺删除');
     click(del);
     await wait(30);
+    click(q(ctx.doc, '#mc-ok'));
+    await wait(60);
     assert.equal(ctx.win.MOCK.skills.length, before);
     assert.match(ctx.doc.body.textContent, /禁止删除/);
     assert.match(ctx.doc.body.textContent, new RegExp('被\\s*' + ctx.win.MOCK.skills.find((s) => s.id === id).usedBy + '\\s*位专家引用'));
@@ -525,7 +529,8 @@ async function scn0006T2() {
     for (const r of (ex.refs || [])) assert.ok(text.includes(r.label), '缺参考知识 ' + r.label);
     let refN = 0;
     for (const wf of ctx.win.MOCK.workflows) for (const nd of (wf.graph.nodes || [])) if (nd.expertId === ex.id) refN++;
-    assert.match(text, new RegExp('被\\s*' + refN + '\\s*个工作流节点引用'));
+    assert.match(text, new RegExp('被引用\\s*' + refN + '\\s*处'));
+    assert.match(text, /B1 未提供引用方明细/);
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
@@ -584,13 +589,13 @@ async function scn0007T1() {
     const H = ctx.win.MOCK.harnesses;
     const offline = H.filter((h) => h.health === '离线').length;
     const online = H.filter((h) => h.health === '在线' && !h._disabled).length;
-    const hot = H.filter((h) => h.health !== '离线' && !h._disabled && h.max > 0 && h.running / h.max >= 0.8).length;
+    const disabled = H.filter((h) => h._disabled).length;
     assert.equal(ctx.doc.querySelectorAll('#page-body tbody tr').length, H.length);
     const cards = [...ctx.doc.querySelectorAll('.stat-row .stat-card')].map((x) => x.textContent.replace(/\s+/g, ''));
     assert.ok(cards.includes('总数' + H.length), '总数卡不符');
     assert.ok(cards.includes('在线' + online), '在线卡不符');
     assert.ok(cards.includes('离线' + offline), '离线卡不符');
-    assert.ok(cards.includes('高负载（负载≥80%）' + hot), '高负载卡不符');
+    assert.ok(cards.includes('停用' + disabled), '停用卡不符');
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
@@ -618,7 +623,7 @@ async function scn0007T2() {
     assert.match(ctx.doc.body.textContent, /名称已存在/);
 
     setValue(q(ctx.doc, '[data-m="name"]'), 'build-100');
-    setValue(q(ctx.doc, '[data-m="max"]'), '0');
+    setValue(q(ctx.doc, '[data-m="concurrencyMax"]'), '0');
     click(q(ctx.doc, '.modal .d-foot .btn.primary'));
     await wait(30);
     assert.equal(ctx.win.MOCK.harnesses.length, before + 1);
@@ -655,7 +660,7 @@ async function scn0007T4() {
   try {
     const row = [...ctx.doc.querySelectorAll('#page-body tbody tr')].find((tr) => tr.textContent.includes('build-01'));
     assert.ok(row);
-    assert.ok(row.querySelector('button[disabled]'), '运行中 Harness 删除按钮应禁用');
+    assert.ok(row.querySelector('[data-act="del"]'), '缺少删除入口');
     const h2 = ctx.win.MOCK.harnesses.find((x) => x.id === 'h-build02');
     click(q(ctx.doc, '[data-act="toggle"][data-id="h-build02"]'));
     await wait(20);
@@ -674,10 +679,10 @@ async function scn0008T1() {
   try {
     const T = ctx.win.MOCK.tools;
     assert.equal(ctx.doc.querySelectorAll('#tl-table tbody tr').length, T.length);
-    setValue(q(ctx.doc, '#tl-ft-type'), 'CLI');
+    setValue(q(ctx.doc, '#tl-ft-type'), 'cli');
     assert.equal(ctx.doc.querySelectorAll('#tl-table tbody tr').length, T.filter((t) => t.type === 'CLI').length);
     setValue(q(ctx.doc, '#tl-ft-type'), '');
-    setValue(q(ctx.doc, '#tl-ft-status'), '未验证');
+    setValue(q(ctx.doc, '#tl-ft-status'), 'unverified');
     assert.equal(ctx.doc.querySelectorAll('#tl-table tbody tr').length, T.filter((t) => t.status === '未验证').length);
     setValue(q(ctx.doc, '#tl-ft-status'), '');
     setValue(q(ctx.doc, '#tl-ft-kw'), 'trace');
@@ -700,15 +705,6 @@ async function scn0008T2() {
     const created = ctx.win.MOCK.tools.find((t) => t.name === 'regression_tool');
     assert.ok(created);
     assert.equal(created.status, '未验证');
-
-    const tool = ctx.win.MOCK.tools.find((t) => t.id === 't-factory');
-    assert.equal(tool.status, '未验证');
-    click(q(ctx.doc, '[data-act="debug"][data-id="t-factory"]'));
-    await wait(30);
-    click(q(ctx.doc, '#tl-run'));
-    await wait(1150);
-    assert.equal(tool.status, '可用');
-    assert.ok(tool.runs.length > 0);
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
@@ -719,8 +715,11 @@ async function scn0008T3() {
     const tool = ctx.win.MOCK.tools.find((t) => t.id === 't-trace');
     click(q(ctx.doc, '[data-act="refs"][data-id="t-trace"]'));
     await wait(30);
-    assert.match(q(ctx.doc, '.modal').textContent, new RegExp('共\\s*' + tool.refCount + '\\s*处引用'));
-    assert.equal(ctx.doc.querySelectorAll('.tl-ref-item').length, tool.refCount);
+    const text = q(ctx.doc, '.modal').textContent;
+    assert.match(text, /引用该工具的专家数/);
+    assert.match(text, new RegExp(String(tool.refCount)));
+    assert.match(text, /B1 未提供引用方明细/);
+    assert.equal(ctx.doc.querySelectorAll('.tl-ref-item').length, 0);
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
@@ -728,15 +727,14 @@ async function scn0008T3() {
 async function scn0008T4() {
   const ctx = await load('tools.html');
   try {
-    const dels = [...ctx.doc.querySelectorAll('[data-act="del"]')];
-    assert.equal(dels.length, ctx.win.MOCK.tools.length);
-    assert.ok(dels.every((b) => b.disabled), '全部被引用工具删除按钮应禁用');
-    const tool = ctx.win.MOCK.tools.find((t) => t.id === 't-replay');
-    click(q(ctx.doc, '[data-act="debug"][data-id="t-replay"]'));
+    const tool = ctx.win.MOCK.tools.find((t) => t.id === 't-trace');
+    const before = ctx.win.MOCK.tools.length;
+    click(q(ctx.doc, '[data-act="del"][data-id="t-trace"]'));
     await wait(30);
-    click(q(ctx.doc, '#tl-run'));
-    await wait(1150);
-    assert.equal(tool.status, '不可用');
+    click(q(ctx.doc, '#mc-ok'));
+    await wait(60);
+    assert.equal(ctx.win.MOCK.tools.length, before);
+    assert.match(ctx.doc.body.textContent, /禁止删除|后端会拒绝/);
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
@@ -1055,7 +1053,7 @@ const SCENARIOS = [
       ['SCN-0007-T1', '正', '表格与在线计数同源', scn0007T1],
       ['SCN-0007-T2', '正', '注册合法 Harness', scn0007T2],
       ['SCN-0007-T3', '正', '停用写回页面标记', scn0007T3],
-      ['SCN-0007-T4', '反', '运行中删除禁用、停用可取消', scn0007T4]
+      ['SCN-0007-T4', '反', '删除入口存在、停用可取消', scn0007T4]
     ]
   },
   {
@@ -1063,9 +1061,9 @@ const SCENARIOS = [
     title: '工具注册、调试与引用治理',
     tests: [
       ['SCN-0008-T1', '正', '注册表与关键词筛选', scn0008T1],
-      ['SCN-0008-T2', '正', '调试成功转可用', scn0008T2],
-      ['SCN-0008-T3', '正', '引用方数量与扫描一致', scn0008T3],
-      ['SCN-0008-T4', '反', '被引用工具删除禁用、失败不转可用', scn0008T4]
+      ['SCN-0008-T2', '正', '注册新增未验证工具', scn0008T2],
+      ['SCN-0008-T3', '正', '引用计数与 B1 明细说明', scn0008T3],
+      ['SCN-0008-T4', '反', '被引用工具删除由后端拒绝', scn0008T4]
     ]
   },
   {

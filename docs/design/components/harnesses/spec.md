@@ -5,7 +5,7 @@ component: CMP-harnesses
 requirement: REQ-0007
 scenario: SCN-0007
 status: active
-updated: 2026-10-23
+updated: 2026-10-25
 ---
 
 # Harness 管理
@@ -19,16 +19,16 @@ updated: 2026-10-23
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为平台运维者提供执行设施（Agent 实际运行处）的注册、健康与配额管理；没有它，节点「按标签自动」调度无池可调，工作流只能绑死在单一设施上。
-- 负责 / 不负责：负责设施列表（统计卡 + 表格）、详情抽屉（基本信息/能力标签/配额/当前任务/心跳记录）、注册弹窗（含模拟连接测试）、抽屉编辑保存、启用停用与删除；不负责节点图的 Harness 选择与标签匹配（`CMP-workflow-editor`）、运行任务的实际调度与节点状态（`CMP-instances`）、工具的绑定（`CMP-tools`）、密钥绑定用途（`CMP-keys`）、外壳与公共组件（`CMP-ui-shell`）。
-- 数据所有权：读 `MOCK.harnesses`（列表、统计卡、详情抽屉、启停/删除定位；本页不读其他 MOCK 集合）；写 `MOCK.harnesses`（注册 `push`、删除 `splice`、启停写页面标记 `_disabled`、抽屉编辑保存改写 `name/type/address/accessMode/tags/max/queuePolicy/desc`，仅内存态，刷新复位）；抽屉编辑态 `draft`（含 `tags` 拷贝）只在内存，取消/关闭不落数据。无第二写入口：`MOCK.harnesses` 仅本页写，`instance-detail` / `tools` / `workflow-editor` / `keys` 均只读（`MOCK.byId` / 列表渲染），刷新即复位。
-- 公开契约：页面入口 `pages/harnesses.html`；操作 `CMP-harnesses#list`（统计卡 + 表格渲染）、`#register`（注册弹窗，含连接测试）、`#detail`（详情抽屉，只读）、`#toggle`（启用/停用）、`#delete`（删除）；不变量 ①在线/离线/负载状态展示一致：统计卡与表格行状态点、健康列同源同判据（`_disabled` 优先置灰；离线取 `health==='离线'`；高负载取未停用未离线且 `running/max ≥ 80%`，且「在线」计数只计 `health==='在线'` 且未停用）；②并发上限与配额为正数：注册与编辑均校验 `max ≥ 1`（`parseInt` 后拒绝非正数），`max ≤ 0` 时负载按 0 处理；名称全池唯一（注册与编辑都查重，重名拒绝）；③删除有二次确认：删除必经 `DF.modal.confirm`，`running > 0` 时删除按钮禁用；停用必经二次确认（有运行任务时附加警示），启用不确认直接生效。
-- 依赖：`DF`（`renderShell`、`drawer.open`、`modal.form/confirm`、`table/empty/statRow/statCard`、`tag/dot/icon/esc`、`relTime/ts/fmtClock`、`toast`）/ `MOCK`；不依赖其他页面组件（跳实例详情只走 URL 约定，不共享 JS 状态）。
-- 变化轴：健康判定与配额下发方式（当前 `health`/`heartbeatM`/`max`/`queuePolicy` 全为夹具字段，最可能先换成真实心跳探测 + 后端配额）。
-- 验证入口：`npm start` + `/pages/harnesses.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0007（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0007`）。
-- 预算：源码 + 规格 + 测试约 28 KB（`harnesses.js` 21.5 KB + 本规格约 6.5 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，本组件远低于上限）。
-- 单独运行：`npm start` → `/pages/harnesses.html`（详情抽屉内的实例跳转仅作 URL 出口，不参与本页渲染）。
-- 删除测试：删除后执行设施无法注册、查看、启停与删除，调度池失去管理入口；但 `MOCK.harnesses` 夹具仍被编辑器/实例详情/工具/密钥只读引用，管理复杂度会分散到各消费页，故保留为独立组件。
-- 已知偏差：M1 追溯已补（REQ-0007/SCN-0007），场景 verified（DOM/jsdom 3 正 1 反 40/40）；行为级断言已由 M1 runner 覆盖；心跳/健康为模拟数据（`heartbeatM`、`health` 为夹具字段，无真实探测，连接测试按接入地址是否为空模拟成功/失败）；停用标记 `_disabled` 是页面内存标记而非 `MOCK` 夹具字段，刷新复位；本节之后 §7 记的 `concurrencyMax` 与代码实际字段 `max` 不一致，以代码为准。
+- 负责 / 不负责：负责 Harness 列表（统计卡 + 表格）、详情抽屉、注册弹窗、抽屉编辑保存、启停与删除；不负责节点图的 Harness 选择与标签匹配（`CMP-workflow-editor`）、运行任务的实际调度（`CMP-instances`）、工具绑定（`CMP-tools`）、密钥绑定（`CMP-keys`）、外壳与公共组件（`CMP-ui-shell`）。
+- 数据所有权：页面状态直接保存 B1 `HarnessListItem` / `HarnessDetail` DTO；列表 `GET /harnesses`、详情 `GET /harnesses/{id}`、创建 `POST`、更新 `PUT`、启停 `PATCH /enabled`、删除 `DELETE` 均经 `window.API`；不读 `MOCK`，不建第二套视图模型。写成功后用响应 DTO 更新本地列表；`If-Match` 由 API 层从 revision 派生。B1 没有当前任务数、任务列表与心跳历史，页面不展示这些运行时字段。
+- 公开契约：页面入口 `pages/harnesses.html`；操作 `CMP-harnesses#list`、`#register`、`#detail`、`#edit`、`#toggle`、`#delete`；不变量 ①统计卡与表格行同源：在线=`enabled && health==='online'`，离线=`health==='offline'`，停用=`!enabled`，总数取 `page.total`；②创建必填 `name/kind/address/accessMode/concurrencyMax/queuePolicy`，并发上限为正整数；③更新 `PUT` 全量字段但不提交 `enabled`，启停单独 `PATCH`，删除经二次确认并带 revision；被引用设施的删除由 B1 返回 409 `referenced`，页面提示后保留数据。
+- 依赖：`DF`（`renderShell`、`drawer.open`、`modal.form/confirm`、`table/empty/statRow/statCard`、`tag/dot/icon/esc`、`relTime`、`toast`）/ `window.API`；不依赖 `MOCK` 或其他页面组件。
+- 变化轴：B1 健康/心跳字段与引用规则（当前 `health`、`lastHeartbeatAt`、`toolCount` 由 DTO 提供）。
+- 验证入口：`npm start` + `/pages/harnesses.html`；`node tools/verify-m1-scenarios.js SCN-0007`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`。
+- 预算：`harnesses.js` 约 23 KB + 本规格约 4 KB；上限 120k token，远低于上限。
+- 单独运行：`npm start` → `/pages/harnesses.html`。
+- 删除测试：删除后执行设施无法注册、查看、启停与删除，调度池失去管理入口，故保留为独立组件。
+- 已知偏差：B1 不提供当前任务数/任务列表/心跳历史，相关假数据与「连接测试」已移除；`health` 与 `lastHeartbeatAt` 由 B1 返回，未做本地探测；M1 SCN-0007 使用 `tools/fake-b1.js` 内存传输，真实读写由 `verify-b1-pages.js` / `verify-b1-writes.js` 覆盖。
 
 ## 1 页面定位
 
@@ -40,13 +40,11 @@ updated: 2026-10-23
 ┌──────────────────────────────────────────────────────────────────┐
 │ Harness 管理  执行设施注册与健康                     [+ 注册 Harness] │
 ├──────────────────────────────────────────────────────────────────┤
-│ [总数 5] [在线 3] [离线 1] [高负载 1]                              │
+│ [总数 5] [在线 3] [离线 1] [停用 1]                               │
 ├──────────────────────────────────────────────────────────────────┤
-│ 名称        类型     接入地址            能力标签        健康   心跳   任务/上限   操作 │
-│ ● build-01  容器     10.0.4.11:7801    [CICD][构建]    在线   5s前   ▓▓▓░ 8/20  详情 ⋮ │
-│ ● agent-07  服务器   10.0.5.23:7801    [审视][检索]    高负载 12s前  ▓▓▓▓ 18/20 详情 ⋮ │
-│ ○ dev-lap   笔记本   192.168.1.8:7801  [调试]          离线   2h前   —     0/5  详情 ⋮ │
-│ …                                                                │
+│ 名称        类型     接入地址            能力标签     健康   最近心跳  并发上限  操作 │
+│ ● build-01  容器     10.0.4.11:7801    [CICD][构建]  在线   5 分钟前  20     详情 编辑 停用 删除 │
+│ ○ dev-lap   笔记本   192.168.1.8:7801  [调试]       离线   2 小时前  5      详情 编辑 启用 删除 │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -54,35 +52,33 @@ updated: 2026-10-23
 
 | 区域 | 元素 | 类型 | 说明与交互 |
 |---|---|---|---|
-| 统计卡 | 总数/在线/离线/高负载 | 卡片 | 高负载=负载≥80% |
+| 统计卡 | 总数/在线/离线/停用 | 卡片 | 由 DTO 的 `enabled` 与 `health` 计算 |
 | 表格 | 名称 + 状态点 | — | 点击名称打开详情抽屉 |
-| 表格 | 类型 | 图标+文字 | 容器 / 服务器 / 台式机 / 笔记本 |
-| 表格 | 接入地址、接入方式 | 等宽文字 | 接入方式：常驻 Agent / SSH / 容器注册 |
-| 表格 | 能力标签 | chips | 调度匹配依据（对应节点「按标签自动」分配） |
-| 表格 | 健康 | 状态点+文字 | 在线（绿）/ 离线（灰）/ 高负载（橙） |
-| 表格 | 最近心跳 | 相对时间 | 超时阈值 60s 判离线 |
-| 表格 | 当前任务/并发上限 | 进度条 | 达上限后新任务排队 |
-| 表格 | 操作 | 按钮组 | 详情、编辑、停用（排队中任务提示）、删除（有任务时禁用） |
+| 表格 | 类型 | 图标+文字 | `container/server/desktop/laptop` 映射为容器/服务器/台式机/笔记本 |
+| 表格 | 接入地址、接入方式 | 等宽文字 | 接入方式：`agent/ssh/container_registry` |
+| 表格 | 能力标签 | chips | 调度匹配依据 |
+| 表格 | 健康 | 状态点+文字 | `online/offline/overloaded/unknown` |
+| 表格 | 最近心跳、并发上限 | 时间/数字 | `lastHeartbeatAt` 相对时间；`concurrencyMax` |
+| 表格 | 操作 | 按钮组 | 详情、编辑、启用/停用、删除 |
 
 ## 4 详情抽屉
 
 | 区块 | 内容 | 交互 |
 |---|---|---|
 | 基本信息 | 名称/类型/地址/接入方式/注册时间/描述 | 编辑态可改 |
-| 能力标签 | chips 增删（预置标签 + 自定义输入） | 保存后影响调度 |
-| 配额 | 并发上限（数字）、排队策略（下拉：先进先出/优先级） | — |
-| 当前任务 | 表格：子任务/所属实例与节点/开始时间/耗时 | 点击跳实例详情对应节点 |
-| 心跳记录 | 最近 20 条时间点列表 | 只读 |
+| 能力标签 | chips 增删（预置 + 自定义） | 保存后影响调度 |
+| 配额 | 并发上限、排队策略（fifo/priority） | 编辑态可改 |
+| 运行信息 | 健康、最近心跳、工具数 | 只读；B1 未提供任务/心跳历史 |
 
 ## 5 注册弹窗
 
-名称、类型（四选一）、接入地址、接入方式、能力标签、并发上限、描述；**[连接测试]** 按钮（模拟成功/失败结果提示）→ 确定后进入列表（在线）。
+名称、类型（四选一）、接入地址、接入方式、能力标签、并发上限、排队策略、描述 → 确定后 `POST /harnesses`，成功刷新列表。B1 未提供连接测试端点，页面不提供该按钮。
 
 ## 6 状态与空态
 
 - 无设施：空态「注册第一台 Harness，Agent 将在此执行任务」
-- 离线设施行置灰但保留数据
+- 加载中、加载失败（可重试）、离线设施行置灰
 
-## 7 模拟数据依赖
+## 7 B1 数据契约
 
-`MOCK.harnesses[]`：5 个（容器 ×2、服务器 ×2、笔记本 ×1），字段 `{id,name,type,address,accessMode,tags[],health,heartbeat,lastTasks[],concurrencyMax,running,queuePolicy}`，覆盖在线/离线/高负载。
+列表/详情字段：`id,name,kind,address,accessMode,description,concurrencyMax,queuePolicy,tags,enabled,health,lastHeartbeatAt,toolCount,revision,createdAt,updatedAt`。创建/更新 body 不提交 `enabled`；启停与删除必须带 `If-Match`（由 `window.API` 生成）。

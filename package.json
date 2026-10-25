@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "start:bff": "node bff/standalone.js",
-    "check:syntax": "for f in server.js bff/*.js assets/js/ui.js assets/js/mock-data.js assets/js/pages/*.js tools/*.js tests/bff/*.js; do node --check \"$f\" || exit 1; done",
+    "check:syntax": "for f in server.js bff/*.js assets/js/ui.js assets/js/mock-data.js assets/js/api.js assets/js/pages/*.js tools/*.js tests/bff/*.js; do node --check \"$f\" || exit 1; done",
     "check:docs": "node tools/check-docs.js docs",
     "docs:index": "node tools/gen-scenario-index.js docs",
     "docs:index:check": "node tools/gen-scenario-index.js --check docs",
@@ -14,6 +14,8 @@
     "test:bff": "node --test tests/bff",
     "test:smoke": "node tools/smoke-test.js",
     "test:engine": "BASE_URL=http://127.0.0.1:3000/pages/ node tools/verify-user-menu.js",
-    "test:scenarios": "node tools/verify-m1-scenarios.js"
+    "test:scenarios": "node tools/verify-m1-scenarios.js",
+    "test:b1-pages": "node tools/verify-b1-pages.js",
+    "test:b1-writes": "node tools/verify-b1-writes.js"
   }
 }

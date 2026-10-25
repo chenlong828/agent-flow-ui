@@ -14,7 +14,7 @@ updated: 2026-10-25
 
 ## 0 模块卡
 
-> 追溯：`REQ-0012` / `SCN-0012`（designed；P1 先落 BFF，四页 live 接入在 P2/P3）。
+> 追溯：`REQ-0012` / `SCN-0012`（verified；四页已 live）。
 
 - 状态：active
 - 单元 / 层：基础设施组件 / L0 技术边界
@@ -24,11 +24,11 @@ updated: 2026-10-25
 - 公开契约：`GET|POST|PUT|PATCH|DELETE /api/v1/*` 与 `GET /healthz`；只转发白名单路径；请求/响应原样透传；代理自身错误为 `{error:{code,message,details?}}`，HTTP 502/504/413/405。
 - 依赖：仅 Node 内置 `http`/`https`/`crypto`；由 `server.js` 组合根挂载；不得 import `DF`/`MOCK`/页面模块/后端源码。
 - 变化轴：`API_BASE`、超时、body 上限；后续若加登录/限流/审计，只加在转发边界，不改 DTO。
-- 验证入口：`npm run test:bff`（stub 上游，9/9 通过）；`node bff/standalone.js`；`curl http://127.0.0.1:3000/healthz` 与 `/api/v1/skills`。
+- 验证入口：`npm run test:bff`（stub 上游，9/9 通过）；`npm run test:b1-pages` / `npm run test:b1-writes`（真实 B1，需先启动 BFF 与后端）；`node bff/standalone.js`；`curl http://127.0.0.1:3000/healthz` 与 `/api/v1/skills`。
 - 预算：源码 + 测试约 20 KB；组件上限 120k token，远低于上限。
 - 单独运行：`PORT=3001 node bff/standalone.js`（只起 BFF，便于组件验证；生产由 `node server.js` 同进程挂载）。
 - 删除测试：删除后浏览器跨源访问 B1 失败，四个资产页无法读写；静态页面仍可用。它的价值是部署隔离，不是业务能力；若后端直接提供同源入口，可整体删除。
-- 已知偏差：无鉴权、无 TLS、仅绑定 `127.0.0.1`；不代理 `/docs` 与 `/openapi.yaml`；P1 已落 BFF（9/9 单测），四页仍读 MOCK，P2/P3 切换为 live；不保留演示回退。
+- 已知偏差：无鉴权、无 TLS、仅绑定 `127.0.0.1`；不代理 `/docs` 与 `/openapi.yaml`；四页已 live-only，不保留演示回退；BFF 仍只做传输，无 DTO 映射/revision 缓存。
 
 ## 1 定位与边界
 
@@ -73,7 +73,7 @@ updated: 2026-10-25
 
 - `npm run test:bff`：stub 上游覆盖透传、查询串、`If-Match`、`X-Actor`、409 错误体、502/504/413/405、无 CORS、路径越界。
 - 同源冒烟：`node server.js` + `curl :3000/healthz`、`curl :3000/api/v1/skills`；后端停掉后 `curl` 返回 502 JSON。
-- 与四页联调由 `SCN-0012` 覆盖；BFF 自身不写业务数据。
+- 与四页联调由 `SCN-0012` 覆盖：`tools/verify-b1-pages.js`（真实读）与 `tools/verify-b1-writes.js`（页面创建 + BFF 更新/启停/删除）；BFF 自身不写业务数据。
 
 ## 6 部署与配置
 

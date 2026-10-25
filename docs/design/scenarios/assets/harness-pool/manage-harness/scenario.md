@@ -4,7 +4,7 @@ module: harnesses
 status: verified
 flow: manage-harness
 scenario: SCN-0007
-updated: 2026-10-23
+updated: 2026-10-25
 ---
 
 # SCN-0007 Harness 注册与健康治理
@@ -16,26 +16,26 @@ updated: 2026-10-23
 
 ## 运行序
 
-1. 列表渲染统计卡与表格：在线/离线/负载状态点、健康列、并发与排队策略；状态与 `MOCK.harnesses` 同源。
-2. 注册弹窗校验名称唯一、`max ≥ 1`、接入地址与接入方式；通过后 `push` 到 `MOCK.harnesses`。
-3. 编辑保存连接/配额/标签；启停切换页面标记 `_disabled`；运行中设施删除按钮禁用。
-4. 删除空闲设施先 `DF.modal.confirm`，确认后 `splice`；取消不写。
+1. 列表通过 `API.list('harness',{limit:200})` 读 DTO；统计卡与表格同源：在线=`enabled && health==='online'`、离线=`health==='offline'`、停用=`!enabled`。
+2. 注册弹窗校验名称、接入地址、`concurrencyMax ≥ 1`、`kind/accessMode/queuePolicy`；通过后 `POST /harnesses`，用响应 DTO 更新列表。
+3. 编辑 `PUT /harnesses/{id}`（不提交 enabled）；启停 `PATCH /enabled`；删除 `DELETE`，均带 revision。B1 无当前任务数，删除按钮不按运行中预禁用。
+4. 详情 `GET /harnesses/{id}` 展示健康、最近心跳、工具数、排队策略；B1 无任务/心跳历史，页面不展示假数据。
 
-失败路径：重名、`max <= 0`、空地址不得注册；运行中删除被禁用；停用取消保持启用。
+失败路径：重名、`concurrencyMax <= 0`、空地址不得注册；取消停用保持启用；被引用设施删除由 B1 返回 409 并提示。
 
 ## 不可变引用
 
-- `MOCK.harnesses` 的 `id/name/type/address/accessMode/health/running/max/queuePolicy/tags` 字段契约。
-- 在线/离线/负载的展示判据（`health === '在线'`、`running/max ≥ 80%`、`_disabled` 优先）。
+- B1 `HarnessListItem/HarnessDetail` 的 `id/name/kind/address/accessMode/description/concurrencyMax/queuePolicy/tags/enabled/health/lastHeartbeatAt/toolCount/revision` 字段契约。
+- 统计判据与 DTO 字段的对应关系；`If-Match` 由 `window.API` 生成。
 - `DF.renderShell`、`DF.modal`、`DF.toast` 的公共语义。
 
 ## 测试
 
-执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
+执行层：DOM（jsdom）+ `tools/fake-b1.js` 内存传输；真实读取/写入另由 `tools/verify-b1-pages.js`、`tools/verify-b1-writes.js` 覆盖。最近一次执行：2026-10-25，40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0007-T1 | 正 | 表格行数同源；总数/在线/离线/高负载卡与夹具判据一致 | `tools/verify-m1-scenarios.js#SCN-0007-T1` |
-| SCN-0007-T2 | 正 | 注册合法设施 +1；重名或 max=0 时提示且不写集合 | `tools/verify-m1-scenarios.js#SCN-0007-T2` |
-| SCN-0007-T3 | 正 | 停用确认后行显示已停用；删除空闲 h-devlap 后行数 -1 | `tools/verify-m1-scenarios.js#SCN-0007-T3` |
-| SCN-0007-T4 | 反 | running>0 的设施删除按钮禁用；取消停用后仍为启用 | `tools/verify-m1-scenarios.js#SCN-0007-T4` |
+| SCN-0007-T1 | 正 | 表格行数同源；总数/在线/离线/停用卡与 DTO 判据一致 | `tools/verify-m1-scenarios.js#SCN-0007-T1` |
+| SCN-0007-T2 | 正 | 注册合法设施 +1；重名或 concurrencyMax=0 时提示且不写集合 | `tools/verify-m1-scenarios.js#SCN-0007-T2` |
+| SCN-0007-T3 | 正 | 停用确认后行显示已停用；删除空闲设施后行数 -1 | `tools/verify-m1-scenarios.js#SCN-0007-T3` |
+| SCN-0007-T4 | 反 | 删除入口存在；取消停用后仍为启用 | `tools/verify-m1-scenarios.js#SCN-0007-T4` |

@@ -5,7 +5,7 @@ component: CMP-experts
 requirement: REQ-0006
 scenario: SCN-0006
 status: active
-updated: 2026-10-23
+updated: 2026-10-25
 ---
 
 # 专家管理
@@ -19,16 +19,16 @@ updated: 2026-10-23
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为工作流设计者提供可复用的智能体角色（人格与职责 + Skill 组合 + 工具清单 + 参考知识）；没有它，工作流节点无法指定执行者，「评审/审视视角」也没有承载实体。
-- 负责 / 不负责：负责专家卡片列表（名称/角色搜索 + 启用状态筛选、被引用数展示）、新建专家弹窗、五区详情抽屉（只读与编辑态）、启用/停用；不负责 Skill 与工具自身的定义（`CMP-skills` / `CMP-tools`）、工作流节点上的专家绑定与评审要点（`CMP-workflow-editor`）、被引用数的数据源维护（`MOCK.workflows` 只读）。
-- 数据所有权：读 `MOCK.experts`、`MOCK.skills`、`MOCK.tools`；写 `MOCK.experts`（注册 push、编辑 `duty/notes/persona/skills/tools/refs`、启停 `enabled`，仅内存态，刷新复位）；抽屉编辑草稿 `draft` 与 `dId/dEdit` 为纯内存态，不落 localStorage/sessionStorage。无第二写入口说明：`MOCK.experts` 另被 `CMP-instances`、`CMP-workflow-editor`、`CMP-keys` 等页只读消费，写入口仅本页（原型夹具，多页读、单页写，R8 豁免）。补充只读：`usedByCount()` 遍历 `MOCK.workflows` 的 `graph.nodes[].expertId` 统计引用数，只读不写（brief 底稿读集合未列此项，以代码为准）。
-- 公开契约：页面入口 `pages/experts.html`；操作 `CMP-experts#list`（卡片网格渲染 + 搜索/状态筛选 + 空态新建）、`#create`（新建弹窗，校验名称与角色定位后 push 并直接进入编辑态抽屉）、`#edit`（详情抽屉编辑态：快照草稿 → 保存回写专家记录）、`#toggle`（启停；停用需 `DF.modal.confirm` 确认并提示引用节点数）、`#detail`（五区详情抽屉只读）、`#picker`（`DF.modal.picker` 从 Skill 库/工具库多选，已加入项不再列出）；不变量 详情恒为五区结构（① 角色描述 ② Skill 组合 ③ 工具清单 ④ 主要工作内容 ⑤ 参考知识）；Skill 与工具只能取自本页可见资产 `MOCK.skills` / `MOCK.tools`，本页不定义新资产；启停结果与卡片标签、开关勾选、状态筛选一致（`MOCK.experts[i].enabled` 为唯一真相，切换后立即重绘本页）；取消编辑丢弃草稿、不改记录。
-- 依赖：`DF`（`renderShell`、`modal.open/form/confirm/picker`、`toast`、`tag/chip/empty/field/icon/esc`）/ `MOCK`（含 `byId` 查表）；不依赖 `WSC`，不依赖其他页面组件（跨页只走 URL 与共享 `MOCK`）。
+- 负责 / 不负责：负责专家卡片列表（名称/角色搜索 + 启用状态筛选、`refCount` 展示）、新建专家弹窗、五区详情抽屉（只读与编辑态）、Skill/工具装配、启用/停用、删除；不负责 Skill 与工具自身的定义（`CMP-skills` / `CMP-tools`）、工作流节点上的专家绑定与评审要点（`CMP-workflow-editor`）。
+- 数据所有权：页面状态直接保存 B1 `ExpertListItem` / `ExpertDetail` DTO；列表 `GET /experts`（只含前 3 个 Skill 预览与 `skillCount/toolCount/refCount`）、详情 `GET /experts/{id}`（完整 Skill/工具摘要）、创建 `POST`、聚合更新 `PATCH`、启停 `PATCH /enabled`、删除 `DELETE` 均经 `window.API`。不读 `MOCK`，不建第二套视图模型；抽屉编辑草稿由详情 DTO 派生，取消即丢弃。
+- 公开契约：页面入口 `pages/experts.html`；操作 `CMP-experts#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail`、`#picker`；不变量 ①卡片 `+N` 使用 `skillCount`，不用预览数组长度；②详情五区结构固定，Skill/工具装配顺序取详情 `skills[].id` / `tools[].id`；③聚合保存 `PATCH /experts/{id}` 提交 `name/color/role/persona/duty/skillOrder/verifyOrder/notes/refs` 与有序 `skillIds/toolIds`，不提交 `enabled/version`；④引用只显示 DTO `refCount`，B1 不提供引用方明细，不遍历 `MOCK.workflows`；⑤启停/删除带 revision，`If-Match` 由 API 层生成。
+- 依赖：`DF`（`renderShell`、`modal`、`toast`、`tag/chip/empty/field/icon/esc`）/ `window.API`；不依赖 `MOCK` 或其他页面组件。
 - 变化轴：Skill/工具的组合与排序方式（当前有序列表 + 勾选弹窗）最可能演化为带权重/条件的能力编排。
-- 验证入口：`npm start` + `/pages/experts.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0006（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0006`）。
-- 预算：源码 + 规格 + 测试约 31 KB（`experts.js` 22.6 KB + 本规格约 8.3 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，本组件远低于上限）。
-- 单独运行：`npm start` → `/pages/experts.html`（卡片/抽屉/弹窗均为本页内交互，无需其他页面配合）。
-- 删除测试：删除后无法注册与编辑智能体角色，工作流节点失去执行者来源，复杂度会集中到编辑器与实例页而非消失，故保留为独立组件。
-- 已知偏差：M1 追溯已补（REQ-0006/SCN-0006），场景 verified（DOM/jsdom 3 正 1 反 40/40）；行为级断言已由 M1 runner 覆盖；挑选弹窗（`#picker`）的交互仍无断言；brief 底稿读集合未列 `MOCK.workflows`（代码只读用于引用计数）；`MOCK.experts` 刷新即复位，不持久化。
+- 验证入口：`npm start` + `/pages/experts.html`；`node tools/verify-m1-scenarios.js SCN-0006`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`。
+- 预算：`experts.js` 约 28 KB + 本规格约 4 KB；上限 120k token，远低于上限。
+- 单独运行：`npm start` → `/pages/experts.html`。
+- 删除测试：删除后无法注册与编辑智能体角色，工作流节点失去执行者来源，复杂度会集中到编辑器与实例页，故保留为独立组件。
+- 已知偏差：B1 没有工作流引用方接口，页面只显示 `refCount`；列表 Skill 预览最多 3 个，完整装配需打开详情；详情每次打开都重新 `GET`，不缓存旧装配。M1 SCN-0006 使用 `tools/fake-b1.js` 内存传输，真实读写由 `verify-b1-pages.js` / `verify-b1-writes.js` 覆盖。
 
 ## 1 页面定位
 
@@ -41,13 +41,12 @@ updated: 2026-10-23
 │ 专家管理  注册并管理执行智能体角色                  [🔍] [状态▾] [+ 新建专家] │
 ├──────────────────────────────────────────────────────────────────┤
 │ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐               │
-│ │ ●(色块头像)   │ │ ●            │ │ ●            │               │
-│ │ 需求分析专家   │ │ 评审专家      │ │ 代码审视专家   │               │
+│ │ ● 需求分析专家 │ │ ● 评审专家    │ │ ● 代码审视专家 │               │
 │ │ 厘清真实需求… │ │ 独立否决视角… │ │ AB交叉…      │               │
 │ │ [严谨][刨根问底]│ │[否决视角][独立]│ │[挑剔][规范控] │               │
 │ │ Skill: CRES…+3│ │ Skill: 审视…+2│ │ Skill: Lint…+2│              │
 │ │ 工具 ×4       │ │ 工具 ×2      │ │ 工具 ×6       │               │
-│ │ 引用 3 个工作流 │ │ 引用 4 个工作流│ │ 引用 2 个工作流 │              │
+│ │ 引用 3 处      │ │ 引用 4 处     │ │ 引用 2 处      │               │
 │ │ [启用 ⬤]  详情 │ │ [启用 ⬤] 详情 │ │ [启用 ⬤] 详情 │               │
 │ └──────────────┘ └──────────────┘ └──────────────┘               │
 └──────────────────────────────────────────────────────────────────┘
@@ -59,33 +58,34 @@ updated: 2026-10-23
 |---|---|---|---|
 | 页头 | 新建专家 | 主按钮 | 打开新建弹窗 |
 | 筛选 | 搜索 / 状态下拉 | 输入 | 按名称、启用状态 |
-| 卡片 | 色块头像 + 姓名 | — | 头像色为专家标识色，画布/实例中复用 |
+| 卡片 | 色块头像 + 姓名 | — | 头像色为专家标识色 |
 | 卡片 | 角色定位一句话 | 文字截断 | 如「厘清客户真实需求并成体系展开」 |
-| 卡片 | 性格标签 | chips | 如 严谨 / 否决视角 / 规范控 |
-| 卡片 | Skill 组合预览 | chips（前 3 + N） | 点击打开详情定位到 Skill 区块 |
-| 卡片 | 工具数、被引用数 | 数字 | 被引用数=绑定该专家的工作流节点数 |
-| 卡片 | 状态开关 | switch | 停用需确认（提示 N 个节点引用） |
+| 卡片 | 性格标签 | chips | 如 严谨 / 否决视角 |
+| 卡片 | Skill 组合预览 | chips（前 3 + N） | `N = skillCount - 3` |
+| 卡片 | 工具数、引用数 | 数字 | 引用数取 DTO `refCount`，B1 无明细 |
+| 卡片 | 状态开关 | switch | 停用需确认 |
 | 卡片 | 详情 | 链接/按钮 | 打开详情抽屉 |
 
 ## 4 详情抽屉（五区，编辑态表单化）
 
 | 区块 | 内容 | 交互 |
 |---|---|---|
-| ① 角色描述 | 职责范围（多行）、性格描述（多行）、关注视角（文本） | 固定部分 = R1「专家模板固定部分」 |
-| ② Skill 组合 | 有序列表（拖拽排序）：Skill 名 + 类别 + 常驻摘要；[从 Skill 库添加]（弹窗多选）、移除 | 引用 `design/components/skills/spec.md` 资产 |
-| ③ 工具清单 | 引用「工具与集成」页资产：工具名 + 类型 + 用途说明；[添加工具]（从工具库勾选） | 只读引用，不在此定义工具 |
-| ④ 主要工作内容 | 渐进式披露分节（Markdown）：主要职责 → 技能配合顺序 → 重点验证顺序 → 对承担任务的解读 | 折叠展开 |
-| ⑤ 参考知识 | 链接列表：业务经验沉淀 / 行业规则 / 运行期注入数据（workspace 路径） | 增删行 |
+| ① 角色描述 | 职责范围、性格描述、关注视角 | 编辑态可改 |
+| ② Skill 组合 | 有序列表：Skill 名 + 类别 + 摘要；从 Skill 库多选、移除、上下移 | 保存为 `skillIds` 顺序 |
+| ③ 工具清单 | 工具名 + 类型 + 状态；从工具库多选、移除 | 保存为 `toolIds` |
+| ④ 主要工作内容 | `duty/skillOrder/verifyOrder/notes` | 折叠/编辑 |
+| ⑤ 参考知识 | `refs[{label,refType,path}]` | 增删行 |
 
 ## 5 新建专家弹窗
 
-名称（必填）、头像色（色板选择）、角色定位一句话 → 创建后打开详情抽屉继续补全。
+名称（必填）、头像色、角色定位一句话（必填）→ `POST /experts` → 用返回 DTO 的 `id` 打开编辑态详情继续补全。
 
 ## 6 状态与空态
 
 - 无专家：空态「注册第一位专家，组合 Skill 形成执行角色」
-- 说明：**评审专家不是独立实体**——同一专家库，绑定到评审节点时承担独立否决视角（配置其评审要点与回退目标在节点上）
+- 列表/详情加载中、错误可重试、空态
+- 说明：**评审专家不是独立实体**——同一专家库，绑定到评审节点时承担独立否决视角。
 
-## 7 模拟数据依赖
+## 7 B1 数据契约
 
-`MOCK.experts[]`：8 个（需求分析、方案设计、开发实现、测试验证、代码审视、评审专家、集成验证、知识库运营），字段 `{id,name,color,role,persona[],skills[],tools[],workContent,references[],enabled,usedByCount}`。
+列表：`id,name,color,role,persona,enabled,skillCount,toolCount,refCount,skills[≤3]{id,name,...}`；详情另含 `duty,skillOrder,verifyOrder,notes,refs[]{label,refType,path},skills[],tools[],createdAt`。创建必填 `name,color,role`；聚合更新用 `skillIds/toolIds`，不提交 `enabled/version`；启停/删除必须带 `If-Match`（由 `window.API` 生成）。
