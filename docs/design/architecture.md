@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-23
+updated: 2026-10-25
 ---
 
 # 系统架构（现行真相）
@@ -11,11 +11,11 @@ updated: 2026-10-23
 
 ## 1 技术基线与边界
 
-- 形态：纯前端高保真交互原型，12 个 HTML 页面；原生 HTML/CSS/JS，无构建、无第三方运行时依赖。
-- 数据：`assets/js/mock-data.js` 在页面加载时构造 `window.MOCK`；全部页面只读消费，写操作只改内存，刷新复位；无后端、无数据库、无真实鉴权。
-- 服务：`server.js`（Node 原生 `http`）只做静态托管与 `/` 302；不承载业务 API。
-- 验证：`tools/check-docs.js`（五态文档）、`tools/smoke-test.js`（jsdom 12 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）；人工 Safari 走查为发布门禁。
-- 明确不做：真实工作流执行引擎、Agent 运行时、CI/CD 触发、权限体系、密钥加密存储、移动端适配、持久化。
+- 形态：前端高保真交互原型 + 同源 BFF，12 个 HTML 页面；原生 HTML/CSS/JS，无构建、无第三方运行时依赖。
+- 数据：B2–B4 页面仍由 `assets/js/mock-data.js` 的 `window.MOCK` 提供，写操作只改内存；B1 四类资产（Harness / Tool / Skill / Expert）的 live 接入在 P2/P3 切换到后端，当前四页仍读 MOCK。前端不直接持有数据库或鉴权态。
+- 服务：`server.js`（Node 原生 `http`）是组合根，做静态托管、`/` 302 与 `CMP-bff` 挂载；`CMP-bff` 只透明转发 `/api/v1/*` 与 `/healthz`，不承载业务逻辑。
+- 验证：`tools/check-docs.js`（五态文档）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（jsdom 12 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）；人工 Safari 走查为发布门禁。
+- 明确不做：真实工作流执行引擎、Agent 运行时、CI/CD 触发、权限体系、密钥加密存储、移动端适配、前端持久化；BFF 不做 CORS、鉴权、TLS、DTO 映射、revision 缓存或聚合。
 
 ## 2 组件地图
 
@@ -43,6 +43,7 @@ updated: 2026-10-23
 | 模拟数据 | `assets/js/mock-data.js`（`window.MOCK`） | 集合 + `MOCK.byId/now/m/mts` | 原型夹具；读写都在内存 |
 | 工作区共用 | `assets/js/pages/workspace-common.js`（`window.WSC`） | `treeHtml/createdText/readNewWs/saveNewWs/dropNewWs/syncNewWs/pad` | 仅 `CMP-workspaces` 两页使用 |
 | 静态服务 | `server.js` | 静态文件 + `/` 302 | 只服务 `pages/` 与 `assets/`，绑定 `127.0.0.1`；拒绝点文件与越界路径 |
+| 同源网关 | `bff/`（`CMP-bff`） | `/api/v1/*`、`/healthz` 透明转发 | 与 `server.js` 同进程；不做 DTO 映射、revision、重试、聚合；详见 `components/bff/spec.md` |
 | 验证工具 | `tools/check-docs.js`、`tools/smoke-test.js`、`tools/verify-user-menu.js`、`tools/gen-scenario-index.js` | npm scripts | 不参与页面运行 |
 
 ## 3 依赖方向与禁止边
@@ -51,16 +52,20 @@ updated: 2026-10-23
 |---|---|---|---|---|
 | 页面 JS | `DF` | `DF.renderShell` / 公共组件 | 同步，全局对象 | 12 页统一外壳；禁止绕开 `DF` 自建弹层/表格 |
 | 页面 JS | `MOCK` | 集合读取 + 内存写 | 同步，全局对象 | 只读为主；写只改内存 |
+| 页面 JS（P2 起） | `API` | `/api/v1` DTO | HTTP，同源 | 仅 B1 四类资产；不直连 3100 |
 | `CMP-workspaces` 两页 | `WSC` | 目录树/跨页联动 | 同步，全局对象 | 不供其他页面使用 |
 | 页面 ↔ 页面 | — | URL 参数 / sessionStorage 单键 | 跳转或一次性传递 | 禁止互相 `import`/调用 JS |
-| `server.js` | 静态文件 | `/pages/*`、`/assets/*` | HTTP | 不执行页面逻辑 |
+| `server.js` | 静态文件 / `CMP-bff` | `/pages/*`、`/assets/*`、`/api/v1/*` | HTTP / 进程内 | 组合根；不承载业务逻辑 |
+| `CMP-bff` | B1 后端 | `/api/v1/*`、`/healthz` | HTTP | 透明转发；不改写 DTO/状态/错误体 |
 | `tools/*` | 页面 | jsdom / Playwright | 测试进程 | 不进入生产依赖 |
 
 **禁止边**：
 
 - 页面组件之间不得互相引用 JS 或共享可变模块状态；跨页只允许 URL 与 `df-new-instance` / `df-new-workspace` 两个一次性键。
 - `DF` 与 `MOCK` 不得出现业务规则或页面专属逻辑；`MOCK` 不是数据服务，不得新增“写入口 API”来掩盖多写。
-- `server.js` 不得承载 API；页面不得依赖 Node 侧能力。
+- `server.js` 不得承载业务 API；只允许挂载 `CMP-bff` 做透明转发；页面不得依赖 Node 侧能力。
+- `CMP-bff` 不得 import `DF`/`MOCK`/页面代码，不得做 DTO 映射、revision 缓存、重试、聚合或模拟数据。
+- 四页 live 后不得自动回落 MOCK；失败必须显式报错。
 - 同层页面不横调；共享能力下沉到 `DF`/`WSC`，跨页流程上提到 URL 约定。
 
 ## 4 契约与入口
@@ -115,10 +120,18 @@ updated: 2026-10-23
 | `df-new-workspace` | `CMP-workspaces`（`WSC`） | 列表 → 详情 | sessionStorage | 一次性；消费后删除 |
 
 > `MOCK` 是夹具而非数据服务：没有事务、没有并发控制、没有跨标签页一致性；`workflows` 有两个页面写入口。接真实后端时按数据服务重切，不沿用本表的“所有者”作为数据库权属（R8）。
+>
+> B1 四类资产（Harness / Tool / Skill / Expert）的目标写入口是 B1 后端（P2/P3 切换），当前仍由本表对应 `MOCK.*` 行承担；切换后四个资产页不再写 MOCK，`MOCK` 仅保留给其余 8 页。`CMP-bff` 无业务数据所有权。
 
 ## 6 冷热路径
 
-**N/A（原型）**。理由：没有后端、真实异步任务、队列、重试或 SLA；页面加载与交互全部是同步内存操作，唯一的延时是 `setTimeout` 模拟渲染/跳转。不设“热路径”与“冷路径”预算，也不编造延迟指标；真实执行引擎落地时再按 `arch-design-spec` 补路径卡。
+除 BFF 外仍为 N/A（原型页面同步内存操作）。BFF 是唯一热路径：
+
+| 路径 | 依赖 | 失败语义 | 资源隔离 | 预算 |
+|---|---|---|---|---|
+| `/api/v1/*`、`/healthz` | Node `http`/`fetch`；无业务依赖 | 502/504/413/405；不重试；不改写后端状态 | body ≤1 MiB；timeout 10s；单进程事件循环 | 源码 + 测试约 20 KB |
+
+静态页面与 MOCK 页面不设延迟预算，不编造指标。
 
 ## 7 验证矩阵
 
@@ -135,11 +148,13 @@ updated: 2026-10-23
 | `CMP-analytics` | ✓ | ✓ | `SCN-0009` verified（40/40） | — |
 | `CMP-workspaces` | ✓ | ✓ | `SCN-0010` verified（40/40） | — |
 | `CMP-keys` | ✓ | ✓ | `SCN-0011` verified（40/40） | — |
+| `CMP-bff` | ✓ | — | `SCN-0012` designed（P1 单测 9/9） | — |
 
-- 语法层：`node --check` 全部页面 JS。
+- 语法层：`node --check` 全部页面 JS、`bff/*.js`、`tests/bff/*.js`。
 - 结构层：`node tools/smoke-test.js`（需 jsdom，安装见 `dev-environment.md`）。
 - 引擎层：`node tools/verify-user-menu.js`（需 Playwright WebKit 与运行中的 `:3000`）。
 - 业务场景层：`node tools/verify-m1-scenarios.js`（DOM/jsdom，10 场景 × 3 正 1 反，40/40）。
+- BFF 层：`npm run test:bff`（Node `node:test` + stub 上游；9 条契约断言）。
 - 人工层：Safari 走查为发布门禁；未完成不宣称“浏览器全兼容”。
 - **M1 十页场景已 verified**：3 正 1 反全部落地并通过（40/40）；冒烟仍只作结构层，不替代业务验收。
 
@@ -148,13 +163,14 @@ updated: 2026-10-23
 1. **M1 追溯与验收闭环**：10 个页面已补 `REQ-0002..0011` / `SCN-0002..0011`；场景 `verified`，3 正 1 反 40/40 通过，10 张 REQ 转 `delivered`（R7/R10 关闭）。冒烟仍不是业务验收。
 2. **MOCK 多写/复位**：`workflows` 有两个页面写入口；其余集合单写但都只改内存；刷新复位，无事务/并发控制（R8）。
 3. **Safari 人工未完成**：engine 层只覆盖 WebKit 2104 的 transform 兜底路径；zoom 路径需真实 Safari 确认（R1/R9）。
-4. **页面组件不是独立部署单元**：11 个组件共享 `DF`/`MOCK`，按页面入口划分；不引入模块打包、事务或分层过度设计（KISS）。
-5. **静态服务仅本地**：无鉴权、无 TLS；只服务 `pages/` 与 `assets/`，绑定 `127.0.0.1`。
+4. **页面组件不是独立部署单元**：11 个业务组件 + 1 个基础设施组件（`CMP-bff`）共享 `DF`/`MOCK`（BFF 不共享）；按页面入口划分；不引入模块打包、事务或分层过度设计（KISS）。
+5. **静态服务与 BFF 仅本地**：无鉴权、无 TLS；只服务 `pages/` 与 `assets/`，BFF 只转发 `/api/v1/*` 与 `/healthz`，均绑定 `127.0.0.1`。
+6. **B1 接入进行中**：`CMP-bff` P1 已落地（9 条单测通过）；四个资产页 live 切换在 P2/P3，当前仍读 MOCK；其余 8 页始终 MOCK。B2–B4 未接后端，页面按演示数据标注。
 
 ## 9 查阅与变更
 
 - 组件边界与契约：`design/components/<id>/spec.md` §0；组件 frontmatter 的 `requirement` / `scenario` 是 REQ/SCN 反查入口。
-- 需求与场景：`requirements/REQ-0001..0011`、`design/scenarios/`（`_index.md` 为生成索引）。
-- 工序与决策：`history/works/2026-10-23-component-baseline/brief.md`、`history/decisions/2026-10-23-skill-system-upgrade.md`。
+- 需求与场景：`requirements/REQ-0001..0012`、`design/scenarios/`（`_index.md` 为生成索引）。
+- 工序与决策：`works/2026-10-25-b1-integration/brief.md`、`history/works/2026-10-23-component-baseline/brief.md`、`history/decisions/2026-10-23-skill-system-upgrade.md`。
 - 编码防御规则：`design/code-refactoring.md`；测试方法：`design/debugging-and-testing.md`。
 - **变更规则**：改页面边界、数据所有权、CMP 操作或共享契约 → 先按 `arch-design-spec` 定级；P1 需人确认，更新对应模块卡 + 本文 + `check-docs`，再动代码。新增页面必须登记组件卡与验证入口，禁止静默扩页。
