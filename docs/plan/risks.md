@@ -19,4 +19,4 @@ updated: 2026-10-25
 | R8 | `MOCK` 为原型夹具，`workflows` 有两个页面写入口，其余集合单写但都只改内存，刷新复位 | 误当真实数据层；接后端时数据权属需重切 | 架构文档明确多写入口与复位；组件卡登记读/写；接后端时按数据服务重切，不沿用 MOCK 权属 | 接受 |
 | R9 | SCN-0001 的 Safari 人工走查未完成，engine 层只覆盖 WebKit 构建 2104 的 transform 兜底路径 | 真实 Safari 的 zoom 路径仍可能分叉 | 登记为发布门禁；`REQ-0001` 交付不依赖人工项，但 Safari 验证完成前不宣称浏览器全兼容 | 开放 |
 | R10 | M1 十页场景曾只到 `designed`，3 正 1 反测试尚未落地 | 追溯链完整但验收未闭环，REQ 不能转 delivered | 已补 `tools/verify-m1-scenarios.js`，10 场景 × 3 正 1 反 40/40 通过；SCN 转 `verified`、REQ 转 `delivered` | 已关闭 |
-| R11 | B1 后端本地工作区仍显示未提交（HEAD `3171154`，工作区有修改），联调基线未冻结 | 无法回溯联调用的是哪版后端，验收证据不可复现 | 联调前补 commit hash；若在外部 worktree 提交，登记路径与 hash；BFF 只锁 API 契约，不锁后端源码 | 开放 |
+| R11 | B1 后端联调基线曾未登记，无法回溯用的是哪版后端 | 验收证据不可复现 | 2026-10-25 已确认代码提交：`b38fffc`（专家聚合写）、`ef376de`（列表读模型）；199 tests / 0 fail / 1953 expect，typecheck 通过；仅 `docs/playbook` 未提交，不影响 API。联调以 `ef376de` 为基线 | 已缓解 |
