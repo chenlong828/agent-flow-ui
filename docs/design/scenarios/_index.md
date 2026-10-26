@@ -25,3 +25,5 @@ updated: 2026-10-26
 | SCN-0011 | SCN-0011 个人 Key 登记、校验与绑定 | workspace / credential | verified | `design/scenarios/workspace/credential/manage-key/scenario.md` |
 | SCN-0012 | SCN-0012 B1 资产同源接入与四类资产读写 | integration / b1-integration | verified | `design/scenarios/integration/b1-integration/scenario.md` |
 | SCN-0013 | SCN-0013 Skill 契约 v2 展示端适配 | integration / b1-integration | verified | `design/scenarios/integration/b1-integration/skill-contract-v2/scenario.md` |
+| SCN-0014 | SCN-0014 Skill 专门页面查看与编辑 | assets / skill-library | verified | `design/scenarios/assets/skill-library/open-skill-detail/scenario.md` |
+| SCN-0015 | SCN-0015 Milkdown 渲染 Skill 文档 | assets / skill-library | verified | `design/scenarios/assets/skill-library/render-skill-document/scenario.md` |

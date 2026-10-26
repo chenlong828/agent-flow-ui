@@ -40,7 +40,7 @@ async function load(page) {
     if (!IGNORE.test(msg)) errors.push(msg);
   });
   vc.on('error', (...args) => errors.push('console.error: ' + args.map(String).join(' ')));
-  const dom = new JSDOM(fs.readFileSync(path.join(ROOT, 'pages', page), 'utf8'), {
+  const dom = new JSDOM(fs.readFileSync(path.join(ROOT, 'pages', page.split('?')[0]), 'utf8'), {
     url: BASE + '/pages/' + page,
     runScripts: 'dangerously',
     resources: 'usable',
@@ -117,31 +117,37 @@ async function skills() {
   assert.equal(cached.res.status, 304, 'If-None-Match 未返回 304');
   assert.equal(cached.text, '', '304 不应有响应体');
 
-  const ctx = await load('skills.html');
+  const listCtx = await load('skills.html');
   try {
     const rows = await waitFor(() => {
-      const n = ctx.doc.querySelectorAll('#sk-tblbox tbody tr').length;
+      const n = listCtx.doc.querySelectorAll('#sk-tblbox tbody tr').length;
       return n ? n : null;
     }, 'skill rows');
     assert.equal(rows, total, 'Skill 行数与 B1 总数不一致');
-    assert.match(ctx.doc.querySelector('#sk-count').textContent, new RegExp('共\\s*' + total));
-    assert.equal(ctx.doc.querySelectorAll('[data-cat]').length >= 4, true, '缺少分类入口');
-    const head = ctx.doc.querySelector('#sk-tblbox thead').textContent;
+    assert.match(listCtx.doc.querySelector('#sk-count').textContent, new RegExp('共\\s*' + total));
+    assert.equal(listCtx.doc.querySelectorAll('[data-cat]').length >= 4, true, '缺少分类入口');
+    const head = listCtx.doc.querySelector('#sk-tblbox thead').textContent;
     assert.ok(head.includes('描述') && !head.includes('触发'), 'Skill 列表列头仍是旧契约');
+    assert.equal(listCtx.doc.querySelectorAll('.drawer').length, 0, 'Skill 列表不应再使用详情抽屉');
+    assert.equal(listCtx.doc.querySelector('#sk-tblbox [data-view="' + first.id + '"]') !== null, true, '缺少首个 Skill 行');
+    assert.deepEqual(listCtx.errors, [], 'Skill 列表错误: ' + listCtx.errors.join(' | '));
+  } finally { listCtx.close(); }
 
-    const row = ctx.doc.querySelector('#sk-tblbox [data-view="' + first.id + '"]');
-    assert.ok(row, '找不到首个 Skill 行');
-    row.dispatchEvent(new ctx.win.MouseEvent('click', { bubbles: true, cancelable: true, view: ctx.win }));
-    await waitFor(() => ctx.doc.querySelector('[data-skview="document"]'), '全文 tab');
-    ctx.doc.querySelector('[data-skview="document"]').dispatchEvent(new ctx.win.MouseEvent('click', {
+  const ctx = await load('skill-detail.html?id=' + encodeURIComponent(first.id));
+  try {
+    await waitFor(() => ctx.doc.querySelector('#sk-viewbox details'), 'skill detail structured view');
+    assert.ok(ctx.doc.querySelector('#sk-tab [data-tab="document"]'), 'Skill 专门页缺文档 Tab');
+    assert.ok(ctx.doc.querySelector('#sk-viewbox').textContent.includes(first.description), '专门页未展示 description');
+    ctx.win.SKILL_MD = {
+      render: function (el, text) { el.textContent = text; return Promise.resolve(); }
+    };
+    ctx.doc.querySelector('#sk-tab [data-tab="document"]').dispatchEvent(new ctx.win.MouseEvent('click', {
       bubbles: true, cancelable: true, view: ctx.win
     }));
-    const shown = await waitFor(() => {
-      const el = ctx.doc.querySelector('#sk-doc-text');
-      return el && el.textContent ? el.textContent : null;
-    }, '全文内容');
-    assert.equal(shown, direct.text, '全文视图与 GET /document 响应不一致');
-    assert.deepEqual(ctx.errors, [], 'Skill 页面错误: ' + ctx.errors.join(' | '));
+    await waitFor(() => ctx.doc.querySelector('#sk-doc-root'), 'document tab');
+    assert.equal(ctx.doc.querySelector('#sk-doc-root').textContent, direct.text, '文档 Tab 与 GET /document 响应不一致');
+    assert.equal(ctx.doc.querySelector('#sk-doc-text'), null, '文档仍走 <pre> 原文视图');
+    assert.deepEqual(ctx.errors, [], 'Skill 专门页错误: ' + ctx.errors.join(' | '));
   } finally { ctx.close(); }
   console.log('✓ skills.html live rows=' + total + ' · document 200/304');
 }

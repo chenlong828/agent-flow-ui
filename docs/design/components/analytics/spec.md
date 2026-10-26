@@ -24,7 +24,7 @@ updated: 2026-10-23
 - 公开契约：页面入口 `pages/analytics.html`；操作 `CMP-analytics#overview`、`#trend`、`#stage-pass`、`#review-records`、`#skill-audit`；不变量 所有数字与 `MOCK.analytics` 同源，页面不做二次业务计算；趋势默认近 8 周、可切近 4 周（近 12 周禁用，标注「数据积累中」）；阶段准出固定 4 个阶段；评审记录按夹具顺序（新→旧）分页展示，页面不重排；审计条目只读，不提供修复按钮。
 - 依赖：`DF`（外壳、统计卡、表格、Tabs、图标）/ `MOCK`；不依赖其他页面组件。
 - 变化轴：指标口径与数据来源（当前为夹具，接真实运行数据时最易变），新增指标须同时改卡片、趋势与空态。
-- 验证入口：`npm start` + `/pages/analytics.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0009（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0009`）。
+- 验证入口：`npm start` + `/pages/analytics.html`；`node tools/smoke-test.js`（全站冒烟，含本页）；SCN-0009（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0009`）。
 - 预算：`analytics.js` 约 8 KB + 本规格约 4 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/analytics.html`（全部数据来自 `MOCK.analytics`，无跨页依赖）。
 - 删除测试：删除后失去唯一的跨实例经营回看入口，指标会散落到实例页；但无业务写入，删除只影响可视化，故保留为独立只读组件。

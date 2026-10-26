@@ -150,7 +150,7 @@ async function load(page) {
     if (!IGNORE.test(msg)) errors.push(msg);
   });
   vc.on('error', (...args) => errors.push('console.error: ' + args.map(String).join(' ')));
-  const dom = new JSDOM(fs.readFileSync(path.join(ROOT, 'pages', page), 'utf8'), {
+  const dom = new JSDOM(fs.readFileSync(path.join(ROOT, 'pages', page.split('?')[0]), 'utf8'), {
     url: BASE + '/pages/' + page,
     runScripts: 'dangerously',
     resources: 'usable',
@@ -226,18 +226,22 @@ async function pageTool() {
 
 async function pageSkill() {
   const name = 'AF Skill ' + stamp;
-  const ctx = await load('skills.html');
+  const ctx = await load('skill-detail.html?mode=new');
   try {
-    await waitFor(() => ctx.doc.querySelectorAll('#sk-tblbox tbody tr').length, 'skill list');
-    click(ctx.doc.querySelector('#sk-new'));
-    await wait(150);
-    setValue(ctx.doc.querySelector('#sk-nk-name'), name);
-    setValue(ctx.doc.querySelector('#sk-nk-desc'), '适用：B1 写入验证；触发：冒烟；不适用：生产。');
-    click(ctx.doc.querySelector('.modal .d-foot .btn.primary'));
+    await waitFor(() => ctx.doc.querySelector('#sk-name'), 'skill new form');
+    await waitFor(() => {
+      const sel = ctx.doc.querySelector('#sk-cat');
+      return sel && sel.options.length > 0 ? sel : null;
+    }, 'skill categories');
+    setValue(ctx.doc.querySelector('#sk-name'), name);
+    setValue(ctx.doc.querySelector('#sk-cat'), ctx.doc.querySelector('#sk-cat').options[0].value);
+    setValue(ctx.doc.querySelector('#sk-desc'), '适用：B1 写入验证；触发：冒烟；不适用：生产。');
+    click(ctx.doc.querySelector('#sk-save'));
     await waitName('skills', name, 'Skill');
+    await waitFor(() => ctx.doc.querySelector('#sk-save'), 'skill edit mode');
     await fullCrud('skills', name);
     assert.deepEqual(ctx.errors, [], 'Skill 页面错误: ' + ctx.errors.join(' | '));
-    console.log('✓ skills.html 创建 ' + name);
+    console.log('✓ skill-detail.html 创建 ' + name);
   } finally {
     ctx.close();
     await removeByName('skills', name);

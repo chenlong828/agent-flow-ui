@@ -1,6 +1,6 @@
 # AgentFlow · 研发智能体工作流编排服务 UE 原型
 
-高保真可交互前端 + 同源 BFF：无构建、零运行时依赖；Node 用于静态托管与 B1 API 透明转发。
+高保真可交互前端 + 同源 BFF：无构建步骤，运行时依赖默认零、例外走准入清单（`docs/design/dependencies.md`）；Node 用于静态托管与 B1 API 透明转发。
 
 ## 运行
 

@@ -22,3 +22,4 @@ updated: 2026-10-25
 | R11 | B1 后端联调基线曾未登记，无法回溯用的是哪版后端 | 验收证据不可复现 | 2026-10-25 已确认代码提交：`b38fffc`（专家聚合写）、`ef376de`（列表读模型）；199 tests / 0 fail / 1953 expect，typecheck 通过；仅 `docs/playbook` 未提交，不影响 API。联调以 `ef376de` 为基线 | 已缓解 |
 | R12 | B1 不可用时四个资产页直接报错，不回落 MOCK | 本地演示需同时启动 B1 与 BFF | 需求卡明确 live-only；页面提供错误态/重试；`verify-b1-pages` / `verify-b1-writes` 作为联调门禁 | 接受 |
 | R13 | M1 四页使用内存 fake B1，可能掩盖真实契约漂移 | 页面测试通过但真实 DTO 不匹配 | 增加 `tools/verify-b1-pages.js` 与 `tools/verify-b1-writes.js`，按真实 B1 验证读写 | 已缓解 |
+| R14 | 第三方运行时依赖引入后带来许可/体积/维护/CVE 风险 | 页面性能、合规与供应链安全 | 准入程序 + `design/dependencies.md` 清单 + `tools/check-deps.js` 门禁（哈希/体积/外链）；patch 升级只登记，其余需用户签字 | 接受 |
