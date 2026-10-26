@@ -136,6 +136,28 @@ function assertNoPageErrors(ctx) {
   assert.deepEqual(ctx.errors, [], '页面运行错误: ' + ctx.errors.join(' | '));
 }
 
+async function openSkillDetail(id, mode) {
+  const qs = [];
+  if (id) qs.push('id=' + encodeURIComponent(id));
+  if (mode) qs.push('mode=' + encodeURIComponent(mode));
+  return load('skill-detail.html', qs.join('&'));
+}
+
+function stubMarkdownRenderer(ctx, html) {
+  const calls = [];
+  ctx.win.SKILL_MD.render = function (target, text) {
+    calls.push({ target, text });
+    target.innerHTML = html || '<div class="sk-md-stub">rendered</div>';
+    return Promise.resolve();
+  };
+  return calls;
+}
+
+async function openDocumentTab(ctx) {
+  click(q(ctx.doc, '[data-tab="document"]'));
+  await wait(80);
+}
+
 /* ------------------------------------------------------------------ */
 /* SCN-0002 工作流列表浏览与生命周期入口                              */
 /* ------------------------------------------------------------------ */
@@ -429,12 +451,9 @@ async function scn0005T1() {
 }
 
 async function scn0005T2() {
-  const ctx = await load('skills.html');
+  const ctx = await openSkillDetail('sk-cres');
   try {
-    click(q(ctx.doc, '#sk-tblbox [data-view]'));
-    await wait(30);
-    assert.ok(ctx.doc.querySelector('.drawer'));
-    const details = ctx.doc.querySelectorAll('#sk-dbody details');
+    const details = ctx.doc.querySelectorAll('#sk-viewbox details');
     assert.equal(details.length, 5);
     assert.equal(details[0].open, true);
     assert.equal(details[1].open, false);
@@ -443,36 +462,19 @@ async function scn0005T2() {
 }
 
 async function scn0005T3() {
-  const ctx = await load('skills.html');
+  const ctx = await openSkillDetail('sk-cres', 'edit');
   try {
-    const before = ctx.win.MOCK.skills.length;
     const target = ctx.win.MOCK.skills.find((x) => x.id === 'sk-cres');
     const beforeVer = target.version;
-    click(q(ctx.doc, '[data-more="sk-cres"]'));
-    await wait(20);
-    click([...ctx.doc.querySelectorAll('.menu .mi')].find((x) => x.textContent.includes('编辑')));
-    await wait(30);
-    setValue(q(ctx.doc, '#sk-d-desc'), '更新后的 Skill 描述');
-    click(q(ctx.doc, '#sk-d-save'));
-    await wait(40);
+    setValue(q(ctx.doc, '#sk-desc'), '更新后的 Skill 描述');
+    click(q(ctx.doc, '#sk-save'));
+    await wait(60);
     assert.notEqual(target.version, beforeVer, '保存未递增版本');
     assert.equal(target.description, '更新后的 Skill 描述');
     assert.equal(target.summary, undefined, '仍写入旧字段 summary');
     assert.equal(target.triggers, undefined, '仍写入旧字段 triggers');
-    ctx.win.DF.drawer.close();
-    await wait(20);
-
-    click(q(ctx.doc, '#sk-new'));
-    await wait(30);
-    setValue(q(ctx.doc, '#sk-nk-name'), '回归 Skill');
-    setValue(q(ctx.doc, '#sk-nk-desc'), '回归 Skill 的适用描述');
-    click(q(ctx.doc, '.modal .d-foot .btn.primary'));
-    await wait(60);
-    assert.equal(ctx.win.MOCK.skills.length, before + 1);
-    const s = ctx.win.MOCK.skills.find((x) => x.name === '回归 Skill');
-    assert.ok(s, '未写入新 Skill');
-    assert.equal(s.version, 'v1.0');
-    assert.equal(s.description, '回归 Skill 的适用描述');
+    assert.ok(q(ctx.doc, '[data-tab="structured"]'), '保存后未回到查看态');
+    assert.equal(ctx.doc.querySelector('#sk-save'), null, '保存后仍显示保存按钮');
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
@@ -538,25 +540,22 @@ async function scn0013T1() {
 }
 
 async function scn0013T2() {
-  const ctx = await load('skills.html');
+  const ctx = await openSkillDetail(null, 'new');
   try {
     const before = ctx.win.MOCK.skills.length;
-    click(q(ctx.doc, '#sk-new'));
+    setValue(q(ctx.doc, '#sk-name'), '边界 Skill');
+    setValue(q(ctx.doc, '#sk-cat'), 'coding');
+    click(q(ctx.doc, '#sk-save'));
     await wait(30);
-    setValue(q(ctx.doc, '#sk-nk-name'), '边界 Skill');
-    click(q(ctx.doc, '.modal .d-foot .btn.primary'));
-    await wait(30);
-    assert.ok(q(ctx.doc, '.modal'), '空描述未拦截');
     assert.match(ctx.doc.querySelector('#toast-box').textContent, /请填写 Skill 描述/);
-    setValue(q(ctx.doc, '#sk-nk-desc'), '字'.repeat(401));
-    click(q(ctx.doc, '.modal .d-foot .btn.primary'));
+    setValue(q(ctx.doc, '#sk-desc'), '字'.repeat(401));
+    click(q(ctx.doc, '#sk-save'));
     await wait(30);
-    assert.ok(q(ctx.doc, '.modal'), '401 字未拦截');
     assert.match(ctx.doc.querySelector('#toast-box').textContent, /1–400/);
     assert.equal(ctx.win.MOCK.skills.length, before, '非法描述写入了 Skill');
 
-    setValue(q(ctx.doc, '#sk-nk-desc'), '适用：边界描述场景；触发：边界；不适用：无。');
-    click(q(ctx.doc, '.modal .d-foot .btn.primary'));
+    setValue(q(ctx.doc, '#sk-desc'), '适用：边界描述场景；触发：边界；不适用：无。');
+    click(q(ctx.doc, '#sk-save'));
     await wait(80);
     const created = ctx.win.MOCK.skills.find((s) => s.name === '边界 Skill');
     assert.ok(created, '合法描述未创建');
@@ -564,9 +563,10 @@ async function scn0013T2() {
     assert.equal(created.summary, undefined);
     assert.equal(created.triggers, undefined);
     assert.equal(created.version, 'v1.0');
+    assert.ok(q(ctx.doc, '#sk-save'), '创建成功后未进入编辑态');
 
-    setValue(q(ctx.doc, '#sk-d-desc'), '更新后的 description');
-    click(q(ctx.doc, '#sk-d-save'));
+    setValue(q(ctx.doc, '#sk-desc'), '更新后的 description');
+    click(q(ctx.doc, '#sk-save'));
     await wait(60);
     assert.equal(created.description, '更新后的 description');
     assertNoPageErrors(ctx);
@@ -574,53 +574,52 @@ async function scn0013T2() {
 }
 
 async function scn0013T3() {
-  const ctx = await load('skills.html');
+  const ctx = await openSkillDetail('sk-cres');
   try {
-    const calls = spyTransport(ctx);
-    await openDocument(ctx, 'sk-cres');
-    const firstText = q(ctx.doc, '#sk-doc-text').textContent;
+    const calls = stubMarkdownRenderer(ctx);
+    await openDocumentTab(ctx);
     assert.equal(calls.length, 1, '首次全文请求次数不为 1');
-    assert.equal(calls[0].method, 'GET');
-    assert.equal(calls[0].path, '/skills/sk-cres/document');
-    assert.equal(calls[0].headers['If-None-Match'], undefined, '首次请求不应带 If-None-Match');
-    assert.ok(firstText.startsWith('---\nname: "CRES 技能"'), '全文缺 frontmatter');
-    assert.ok(firstText.indexOf('## 流程总述') < firstText.indexOf('## 执行步骤'), '章节顺序不符');
-    assert.ok(firstText.includes('## 常见踩坑') && firstText.includes('## 参考资料'));
-    assert.match(q(ctx.doc, '.sk-docmeta').textContent, /200/);
+    assert.equal(calls[0].text.startsWith('---\nname: "CRES 技能"'), true, '全文缺 frontmatter');
+    assert.equal(ctx.doc.querySelector('#sk-doc-text'), null, '文档仍走 <pre> 原文视图');
+    assert.ok(ctx.doc.querySelector('.sk-md-stub'), '渲染器未写入文档容器');
+    assert.match(q(ctx.doc, '.skd-docmeta').textContent, /200/);
 
-    click(q(ctx.doc, '[data-skview="structured"]'));
+    click(q(ctx.doc, '[data-tab="structured"]'));
     await wait(20);
-    click(q(ctx.doc, '[data-skview="document"]'));
-    await wait(80);
+    await openDocumentTab(ctx);
     assert.equal(calls.length, 2, '二次全文请求未发出');
-    assert.match(calls[1].headers['If-None-Match'], /^"\d+"$/);
-    assert.equal(q(ctx.doc, '#sk-doc-text').textContent, firstText, '304 后文本与首次不一致');
-    assert.match(q(ctx.doc, '.sk-docmeta').textContent, /304/);
+    assert.equal(ctx.doc.querySelector('#sk-doc-text'), null, '304 后文档仍走 <pre> 原文视图');
+    assert.ok(ctx.doc.querySelector('.sk-md-stub'), '304 后渲染器未写入文档容器');
+    assert.match(q(ctx.doc, '.skd-docmeta').textContent, /304/);
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
 
 async function scn0013T4() {
-  const ctx = await load('skills.html');
+  const ctx1 = await openSkillDetail('sk-replay');
   try {
-    await openDocument(ctx, 'sk-replay');
-    const replay = q(ctx.doc, '#sk-doc-text').textContent;
-    assert.ok(replay.includes('## 参考资料'), '有引用时缺参考资料节');
-    assert.ok(!replay.includes('## 常见踩坑'), '空踩坑仍输出章节');
-    assert.match(replay, /回放数据清洗/);
-    ctx.win.DF.drawer.close();
-    await wait(20);
-    await openDocument(ctx, 'sk-dsl');
-    const dsl = q(ctx.doc, '#sk-doc-text').textContent;
-    assert.ok(dsl.includes('## 常见踩坑'), '有踩坑时缺常见踩坑节');
-    assert.ok(!dsl.includes('## 参考资料'), '空引用仍输出章节');
-    assertNoPageErrors(ctx);
-  } finally { ctx.close(); }
+    const calls1 = stubMarkdownRenderer(ctx1);
+    await openDocumentTab(ctx1);
+    assert.ok(calls1[0].text.includes('## 参考资料'), '有引用时缺参考资料节');
+    assert.ok(!calls1[0].text.includes('## 常见踩坑'), '空踩坑仍输出章节');
+    assert.ok(calls1[0].text.includes('回放数据清洗'), '停用技能文档未渲染');
+    assertNoPageErrors(ctx1);
+  } finally { ctx1.close(); }
+
+  const ctx2 = await openSkillDetail('sk-dsl');
+  try {
+    const calls2 = stubMarkdownRenderer(ctx2);
+    await openDocumentTab(ctx2);
+    assert.ok(calls2[0].text.includes('## 常见踩坑'), '有踩坑时缺常见踩坑节');
+    assert.ok(!calls2[0].text.includes('## 参考资料'), '空引用仍输出章节');
+    assertNoPageErrors(ctx2);
+  } finally { ctx2.close(); }
 }
 
 async function scn0013T5() {
-  const ctx = await load('skills.html');
+  const ctx = await openSkillDetail('sk-cres');
   try {
+    stubMarkdownRenderer(ctx);
     const orig = ctx.win.__AGENTFLOW_TRANSPORT__;
     ctx.win.__AGENTFLOW_TRANSPORT__ = function (method, path, body, headers) {
       if (method === 'GET' && String(path) === '/skills/sk-cres/document') {
@@ -628,20 +627,20 @@ async function scn0013T5() {
       }
       return orig(method, path, body, headers);
     };
-    await openDocument(ctx, 'sk-cres');
+    await openDocumentTab(ctx);
     assert.equal(ctx.doc.querySelector('#sk-doc-text'), null, '404 仍显示全文');
-    assert.match(q(ctx.doc, '#sk-dbody').textContent, /目标不存在或已被删除/);
+    assert.match(q(ctx.doc, '#sk-viewbox').textContent, /目标不存在或已被删除/);
     assert.ok(ctx.doc.querySelector('#sk-doc-retry'), '404 缺重试入口');
     ctx.win.__AGENTFLOW_TRANSPORT__ = orig;
     click(q(ctx.doc, '#sk-doc-retry'));
     await wait(80);
-    assert.ok(q(ctx.doc, '#sk-doc-text').textContent.includes('## 流程总述'), '重试未取到全文');
+    assert.ok(q(ctx.doc, '.sk-md-stub'), '重试未取到全文');
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
 
 async function scn0013T6() {
-  const ctx = await load('skills.html');
+  const ctx = await openSkillDetail('sk-cres', 'edit');
   try {
     const orig = ctx.win.__AGENTFLOW_TRANSPORT__;
     ctx.win.__AGENTFLOW_TRANSPORT__ = function (method, path, body, headers) {
@@ -650,19 +649,156 @@ async function scn0013T6() {
       }
       return orig(method, path, body, headers);
     };
-    click(q(ctx.doc, '[data-more="sk-cres"]'));
-    await wait(20);
-    click([...ctx.doc.querySelectorAll('.menu .mi')].find((x) => x.textContent.includes('编辑')));
-    await wait(50);
-    setValue(q(ctx.doc, '#sk-d-desc'), '旧契约提交');
-    click(q(ctx.doc, '#sk-d-save'));
+    setValue(q(ctx.doc, '#sk-desc'), '旧契约提交');
+    click(q(ctx.doc, '#sk-save'));
     await wait(40);
     assert.match(ctx.doc.querySelector('#toast-box').textContent, /契约已升级，请刷新页面/);
-    assert.ok(q(ctx.doc, '#sk-d-save').disabled === false, '失败后保存按钮未恢复');
+    assert.ok(q(ctx.doc, '#sk-save').disabled === false, '失败后保存按钮未恢复');
     ctx.win.__AGENTFLOW_TRANSPORT__ = orig;
-    click(q(ctx.doc, '#sk-d-save'));
+    click(q(ctx.doc, '#sk-save'));
     await wait(50);
     assert.equal(ctx.win.MOCK.skills.find((s) => s.id === 'sk-cres').description, '旧契约提交');
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+/* ------------------------------------------------------------------ */
+/* SCN-0014 Skill 专门页面查看与编辑                                  */
+/* ------------------------------------------------------------------ */
+async function scn0014T1() {
+  const ctx = await openSkillDetail('sk-cres');
+  try {
+    assert.ok(q(ctx.doc, '#sk-tab'), '专门页面缺结构化/文档 Tab');
+    assert.equal(ctx.doc.querySelectorAll('#sk-viewbox details').length, 5, '结构化五章缺失');
+    assert.equal(ctx.doc.querySelector('.drawer'), null, '不应再出现详情抽屉');
+    assert.match(q(ctx.doc, '#sk-viewbox').textContent, /CRES 技能/);
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0014T2() {
+  const ctx = await openSkillDetail('sk-cres', 'edit');
+  try {
+    const target = ctx.win.MOCK.skills.find((s) => s.id === 'sk-cres');
+    const beforeVer = target.version;
+    setValue(q(ctx.doc, '#sk-desc'), '专门页编辑后的描述');
+    click(q(ctx.doc, '#sk-save'));
+    await wait(60);
+    assert.notEqual(target.version, beforeVer, '保存未递增版本');
+    assert.equal(target.description, '专门页编辑后的描述');
+    assert.ok(q(ctx.doc, '[data-tab="structured"]'), '保存后未回到查看态');
+    assert.equal(ctx.doc.querySelector('#sk-save'), null, '保存后仍显示保存按钮');
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0014T3() {
+  const ctx = await openSkillDetail(null, 'new');
+  try {
+    setValue(q(ctx.doc, '#sk-name'), '专门页新建 Skill');
+    setValue(q(ctx.doc, '#sk-cat'), 'coding');
+    setValue(q(ctx.doc, '#sk-desc'), '适用：专门页新建场景；触发：专门页；不适用：无。');
+    click(q(ctx.doc, '#sk-save'));
+    await wait(80);
+    const created = ctx.win.MOCK.skills.find((s) => s.name === '专门页新建 Skill');
+    assert.ok(created, '未写入新 Skill');
+    assert.equal(created.version, 'v1.0');
+    assert.ok(q(ctx.doc, '#sk-save'), '创建成功后未进入编辑态');
+    assert.match(q(ctx.doc, '.page-header').textContent, /专门页新建 Skill/);
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0014T4() {
+  const ctx1 = await openSkillDetail(null);
+  try {
+    assert.match(q(ctx1.doc, '#page-body').textContent, /缺少 Skill id/);
+    assertNoPageErrors(ctx1);
+  } finally { ctx1.close(); }
+
+  const ctx2 = await openSkillDetail('sk-not-exist');
+  try {
+    assert.match(q(ctx2.doc, '#page-body').textContent, /目标不存在或已被删除/);
+    assertNoPageErrors(ctx2);
+  } finally { ctx2.close(); }
+}
+
+/* ------------------------------------------------------------------ */
+/* SCN-0015 Milkdown 渲染 Skill 文档                                  */
+/* ------------------------------------------------------------------ */
+async function scn0015T1() {
+  const ctx = await openSkillDetail('sk-cres');
+  try {
+    const calls = stubMarkdownRenderer(ctx, '<div class="sk-md-body"><h2>流程总述</h2></div>');
+    await openDocumentTab(ctx);
+    assert.equal(ctx.doc.querySelector('#sk-doc-text'), null, '文档仍走 <pre> 原文视图');
+    assert.ok(ctx.doc.querySelector('.sk-md-body'), '渲染器未写入文档容器');
+    assert.ok(calls[0].text.includes('## 流程总述'), '渲染器未收到 Markdown 原文');
+    assert.match(q(ctx.doc, '.skd-docmeta').textContent, /200/);
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0015T2() {
+  const ctx = await openSkillDetail('sk-cres');
+  try {
+    const calls = stubMarkdownRenderer(ctx);
+    const api = spyTransport(ctx);
+    await openDocumentTab(ctx);
+    const firstText = calls[0].text;
+    click(q(ctx.doc, '[data-tab="structured"]'));
+    await wait(20);
+    await openDocumentTab(ctx);
+    assert.equal(api.length, 2, '二次进入文档 Tab 未重新请求');
+    assert.match(api[1].headers['If-None-Match'], /^"\d+"$/, '二次请求未带 If-None-Match');
+    assert.equal(calls[1].text, firstText, '304 后渲染文本与首次不一致');
+    assert.match(q(ctx.doc, '.skd-docmeta').textContent, /304/);
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0015T3() {
+  const ctx = await openSkillDetail('sk-replay');
+  try {
+    const calls = stubMarkdownRenderer(ctx);
+    await openDocumentTab(ctx);
+    assert.ok(calls[0].text.includes('回放数据清洗'), '停用 Skill 文档未渲染');
+    assert.ok(ctx.doc.querySelector('.sk-md-stub'), '停用 Skill 渲染器未写入容器');
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0015T4() {
+  const ctx = await openSkillDetail('sk-cres');
+  try {
+    stubMarkdownRenderer(ctx);
+    const orig = ctx.win.__AGENTFLOW_TRANSPORT__;
+    ctx.win.__AGENTFLOW_TRANSPORT__ = function (method, path, body, headers) {
+      if (method === 'GET' && String(path) === '/skills/sk-cres/document') {
+        return Promise.resolve({ status: 404, body: { error: { code: 'not_found', message: '目标不存在' } } });
+      }
+      return orig(method, path, body, headers);
+    };
+    await openDocumentTab(ctx);
+    assert.equal(ctx.doc.querySelector('#sk-doc-text'), null, '404 仍显示全文');
+    assert.match(q(ctx.doc, '#sk-viewbox').textContent, /目标不存在或已被删除/);
+    assert.ok(ctx.doc.querySelector('#sk-doc-retry'), '404 缺重试入口');
+    ctx.win.__AGENTFLOW_TRANSPORT__ = orig;
+    click(q(ctx.doc, '#sk-doc-retry'));
+    await wait(80);
+    assert.ok(q(ctx.doc, '.sk-md-stub'), '重试后渲染器未写入容器');
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0015T5() {
+  const ctx = await openSkillDetail('sk-cres');
+  try {
+    const calls = stubMarkdownRenderer(ctx, '<div class="sk-md-body"><p>ok</p></div>');
+    await openDocumentTab(ctx);
+    assert.ok(calls[0].text.startsWith('---\n'), '渲染器未收到完整 Markdown 原文');
+    assert.equal(ctx.doc.querySelectorAll('#sk-viewbox script').length, 0, '页面自行注入了脚本');
+    assert.equal(ctx.doc.querySelector('#sk-doc-root[contenteditable="true"]'), null, '渲染容器不应可编辑');
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
@@ -1221,6 +1357,27 @@ const SCENARIOS = [
       ['SCN-0006-T2', '正', '五区详情齐全', scn0006T2],
       ['SCN-0006-T3', '正', '停用写回 enabled=false', scn0006T3],
       ['SCN-0006-T4', '反', '取消停用保持启用', scn0006T4]
+    ]
+  },
+  {
+    id: 'SCN-0014',
+    title: 'Skill 专门页面查看与编辑',
+    tests: [
+      ['SCN-0014-T1', '正', '专门页面默认结构化五章且无抽屉', scn0014T1],
+      ['SCN-0014-T2', '正', '专门页编辑保存版本递增并回到查看态', scn0014T2],
+      ['SCN-0014-T3', '正', '专门页新建成功进入编辑态', scn0014T3],
+      ['SCN-0014-T4', '反', '缺 id/无效 id 显式报错', scn0014T4]
+    ]
+  },
+  {
+    id: 'SCN-0015',
+    title: 'Milkdown 渲染 Skill 文档',
+    tests: [
+      ['SCN-0015-T1', '正', '文档 Tab 用渲染器而非 <pre>', scn0015T1],
+      ['SCN-0015-T2', '正', '304 复用上次文本且仍走渲染器', scn0015T2],
+      ['SCN-0015-T3', '正', '停用 Skill 仍可渲染文档', scn0015T3],
+      ['SCN-0015-T4', '反', '文档 404 显式报错并可重试', scn0015T4],
+      ['SCN-0015-T5', '反', '渲染容器只读且不注入脚本', scn0015T5]
     ]
   },
   {

@@ -11,8 +11,9 @@ updated: 2026-10-26
 
 ## 1. 项目本体与本地运行
 
-- 项目形态：前端高保真交互原型 + 同源 BFF，原生 HTML / CSS / JavaScript，零第三方依赖，无构建步骤。
+- 项目形态：agent-flow 前端 + 同源 BFF，原生 HTML / CSS / JavaScript 为主，无构建步骤；第三方运行时依赖默认零，例外须经准入（`design/dependencies.md`）。
 - 静态服务器与 BFF：项目根目录 `server.js`（Node.js 原生模块）做静态托管与 `CMP-bff` 挂载；`bff/` 只转发 `/api/v1/*` 与 `/healthz`。
+- 第三方运行时依赖：准入后放 `assets/vendor/<name>/<version>/`，来源/版本/SHA-256/体积登记在 `design/dependencies.md`；下载后 `shasum -a 256` 核对，`npm run check:deps` 校验；运行时不得引用 CDN。
 - 启动方式与端口：
   - 默认端口 3000，可用环境变量 `PORT` 覆盖（例如 `PORT=3001 node server.js`）。
   - 根路径 `/` 返回 302 跳转到 `/pages/workflow-list.html`。
@@ -34,9 +35,9 @@ updated: 2026-10-26
 
 ### 3.1 安装位置与约定
 
-- 依赖装在项目目录之外（保持零依赖约定）：历史用 `/tmp/dsh`，2026-10-23 复跑用 `/tmp/afdev-deps`。临时目录可能被清理，清理后按 3.2 重装。
+- 测试与构建期依赖装在项目目录之外（保持仓库自包含；运行时依赖走 vendor 准入）：历史用 `/tmp/dsh`，2026-10-23 复跑用 `/tmp/afdev-deps`。临时目录可能被清理，清理后按 3.2 重装。
 - 浏览器构建存放目录：`/tmp/dsh/pw-browsers`，运行时通过环境变量 `PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers` 指定。
-- 场景测试脚本已入库：`tools/verify-user-menu.js`（SCN-0001，引擎层）、`tools/verify-m1-scenarios.js`（SCN-0002..0011 + SCN-0013，DOM/jsdom，11 场景、46 条用例）；结构层 `tools/smoke-test.js`（jsdom）；真实 B1：`tools/verify-b1-pages.js` / `tools/verify-b1-writes.js`。历史脚本随工序归档在 `history/works/`，不再作现行入口。
+- 场景测试脚本已入库：`tools/verify-user-menu.js`（SCN-0001，引擎层）、`tools/verify-m1-scenarios.js`（SCN-0002..0011 + SCN-0013 + SCN-0014 + SCN-0015，DOM/jsdom，13 场景、55 条用例）；结构层 `tools/smoke-test.js`（jsdom）；真实 B1：`tools/verify-b1-pages.js` / `tools/verify-b1-writes.js`。历史脚本随工序归档在 `history/works/`，不再作现行入口。
 
 ### 3.2 安装步骤（按顺序执行）
 
@@ -72,17 +73,24 @@ updated: 2026-10-26
   - 合成鼠标事件（`page.mouse`）的坐标与页面内部命中测试在缩放场景下不一致，验证拖拽必须改用页面内程序化派发事件（详见《调试方案》文档第 4 节）。
   - 该 WebKit 构建对 CSS `zoom` 的支持是残缺的（计算值存在、布局无视），不能用它推断真实 Safari 的 zoom 行为。
 
-### 3.4 DOM 场景 runner（jsdom，保持零依赖门禁）
+### 3.4 DOM 场景 runner（jsdom，测试依赖不入仓库）
 
-- 用途：跑 `SCN-0002..0011` 与 `SCN-0013` 的业务断言（各场景至少 3 正 1 反）；执行层是 jsdom，不是真实引擎。
+- 用途：跑 `SCN-0002..0011`、`SCN-0013`、`SCN-0014`、`SCN-0015` 的业务断言（各场景至少 3 正 1 反）；执行层是 jsdom，不是真实引擎。
 - 安装（只在需要跑场景时安装，不写入 `package.json`）：
   ```bash
   npm_config_cache=/tmp/agentflow-npm-cache npm install --no-save --package-lock=false jsdom
   ```
-  2026-10-26 实测 `jsdom@30.1.3` 可跑通 46/46。
+  2026-10-26 实测 `jsdom@30.1.3` 可跑通 55/55。
 - 运行：`npm run test:scenarios`；单场景 `node tools/verify-m1-scenarios.js SCN-0007`。
+- Milkdown 渲染层：`npm run test:skill-render`，用 jsdom + vendor bundle 验证只读渲染、语法高亮与原始 HTML 不执行。
+- 引擎层（Playwright WebKit，需 `:3000` 静态服务 + B1）：
+  ```bash
+  NODE_PATH=/tmp/afdev-deps/node_modules PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers \
+  BASE_URL=http://127.0.0.1:3000 node tools/verify-skill-page-engine.js
+  ```
+  也可用 `npm run test:skill-engine`，再按上面环境变量补 Playwright 依赖。
 - runner 在 `127.0.0.1:0` 自起临时静态 HTTP，结束后关闭；不依赖 `:3000`，也不要求先启动 `server.js`。必须走 HTTP 而不是 `file://`：页面用 `sessionStorage` 传递 `df-new-workspace`，不透明源下会直接抛错。
-- `npm test` 不包含此脚本，保持零依赖；jsdom 缺失时脚本会给出安装提示。
+- `npm test` 不包含此脚本，保持工具链零外部包；jsdom 缺失时脚本会给出安装提示。
 
 ### 3.5 真实 B1 页面 runner（jsdom + 运行中的 BFF）
 

@@ -11,10 +11,10 @@ updated: 2026-10-26
 
 ## 1 技术基线与边界
 
-- 形态：前端高保真交互原型 + 同源 BFF，12 个 HTML 页面；原生 HTML/CSS/JS，无构建、无第三方运行时依赖。
+- 形态：agent-flow 前端（13 个 HTML 页面 + 同源 BFF）；原生 HTML/CSS/JS 为主，无构建步骤；第三方运行时依赖默认零，例外须经准入（`design/dependencies.md`）并自托管到 `assets/vendor/`，禁止 CDN 外链。
 - 数据：Harness / Tool / Skill / Expert 四页直接消费 B1 DTO（经 `CMP-bff` 同源访问），写操作走 B1 并带 `If-Match`；B2–B4 页面仍由 `assets/js/mock-data.js` 的 `window.MOCK` 提供，写操作只改内存。前端不直接持有数据库或鉴权态。
 - 服务：`server.js`（Node 原生 `http`）是组合根，做静态托管、`/` 302 与 `CMP-bff` 挂载；`CMP-bff` 只透明转发 `/api/v1/*` 与 `/healthz`，不承载业务逻辑。
-- 验证：`tools/check-docs.js`（五态文档）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（jsdom 12 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）；人工 Safari 走查为发布门禁。
+- 验证：`tools/check-docs.js`（五态文档）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（jsdom 13 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）；人工 Safari 走查为发布门禁。
 - 明确不做：真实工作流执行引擎、Agent 运行时、CI/CD 触发、权限体系、密钥加密存储、移动端适配、前端持久化；BFF 不做 CORS、鉴权、TLS、DTO 映射、revision 缓存或聚合。
 
 ## 2 组件地图
@@ -23,11 +23,11 @@ updated: 2026-10-26
 
 | 组件 | 页面入口 | 源码 | 职责 |
 |---|---|---|---|
-| `CMP-ui-shell` | 12 页公共外壳 | `assets/js/ui.js` | 顶栏、左侧导航、面包屑/页头、用户区、待确认角标、字号缩放、`DF.*` 原语 |
+| `CMP-ui-shell` | 13 页公共外壳 | `assets/js/ui.js` | 顶栏、左侧导航、面包屑/页头、用户区、待确认角标、字号缩放、`DF.*` 原语 |
 | `CMP-workflow-list` | `pages/workflow-list.html` | `workflow-list.js` | 工作流列表、筛选、统计、新建/复制/删除/导出、发起运行入口 |
 | `CMP-workflow-editor` | `pages/workflow-editor.html?id=` | `workflow-editor.js` | 画布节点/边编辑、属性抽屉、校验、DSL 预览与导出 |
 | `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 实例列表、轨迹与留痕、暂停/终止/重试/重跑、人工批准驳回、fan-out 聚合 |
-| `CMP-skills` | `pages/skills.html` | `skills.js` | Skill 列表、筛选、详情/编辑抽屉、启停、删除、引用方 |
+| `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js` | Skill 列表、筛选、启停、删除、引用方；专门页承接查看/编辑/新建与文档 Tab 只读渲染 |
 | `CMP-experts` | `pages/experts.html` | `experts.js` | 专家列表、五区详情/编辑、Skill/工具组合、启停 |
 | `CMP-harnesses` | `pages/harnesses.html` | `harnesses.js` | 设施列表、注册、健康/配额、启停、删除 |
 | `CMP-tools` | `pages/tools.html` | `tools.js` | 工具注册表、注册、模拟调试、引用方、删除保护 |
@@ -39,7 +39,7 @@ updated: 2026-10-26
 
 | 模块 | 源码 | 对外契约 | 说明 |
 |---|---|---|---|
-| 外壳/公共组件 | `assets/js/ui.js`（`window.DF`） | `DF.renderShell`、`DF.menu`、`DF.modal.*`、`DF.drawer`、`DF.table/empty/field/kv/statCard/tabsHtml`、`DF.zoomK/zoomOnFixed`、`DF.ls*/ss*`、`DF.download/deep/esc` | 12 页共用；不含业务规则 |
+| 外壳/公共组件 | `assets/js/ui.js`（`window.DF`） | `DF.renderShell`、`DF.menu`、`DF.modal.*`、`DF.drawer`、`DF.table/empty/field/kv/statCard/tabsHtml`、`DF.zoomK/zoomOnFixed`、`DF.ls*/ss*`、`DF.download/deep/esc` | 13 页共用；不含业务规则 |
 | 模拟数据 | `assets/js/mock-data.js`（`window.MOCK`） | 集合 + `MOCK.byId/now/m/mts` | 原型夹具；读写都在内存 |
 | 共享数据层 | `assets/js/api.js`（`window.API`） | `list/get/create/update/toggle/remove/document/categories/errorText` | B1 四页共用；revision 缓存 + 文档 ETag/文本缓存；不做 DTO 映射、不回落 MOCK |
 | 工作区共用 | `assets/js/pages/workspace-common.js`（`window.WSC`） | `treeHtml/createdText/readNewWs/saveNewWs/dropNewWs/syncNewWs/pad` | 仅 `CMP-workspaces` 两页使用 |
@@ -51,7 +51,7 @@ updated: 2026-10-26
 
 | 调用方 | 被调方 | 契约 | 方式 | 备注 |
 |---|---|---|---|---|
-| 页面 JS | `DF` | `DF.renderShell` / 公共组件 | 同步，全局对象 | 12 页统一外壳；禁止绕开 `DF` 自建弹层/表格 |
+| 页面 JS | `DF` | `DF.renderShell` / 公共组件 | 同步，全局对象 | 13 页统一外壳；禁止绕开 `DF` 自建弹层/表格 |
 | 页面 JS | `MOCK` | 集合读取 + 内存写 | 同步，全局对象 | 只读为主；写只改内存 |
 | 页面 JS（B1 四类资产） | `API` | `/api/v1` DTO + `/skills/{id}/document` | HTTP，同源 | 四页直接用 DTO；文档视图只用 API-31 原文；不建客户端视图模型；不直连 3100 |
 | `CMP-workspaces` 两页 | `WSC` | 目录树/跨页联动 | 同步，全局对象 | 不供其他页面使用 |
@@ -59,6 +59,7 @@ updated: 2026-10-26
 | `server.js` | 静态文件 / `CMP-bff` | `/pages/*`、`/assets/*`、`/api/v1/*` | HTTP / 进程内 | 组合根；不承载业务逻辑 |
 | `CMP-bff` | B1 后端 | `/api/v1/*`、`/healthz` | HTTP | 透明转发；不改写 DTO/状态/错误体 |
 | `tools/*` | 页面 | jsdom / Playwright | 测试进程 | 不进入生产依赖 |
+| 页面 JS | `assets/vendor/<dep>` | `DEP-xxxx` 登记文件 | 本地 ESM/UMD | 仅登记版本；禁 CDN/远程 URL；新依赖先准入 |
 
 **禁止边**：
 
@@ -68,13 +69,14 @@ updated: 2026-10-26
 - `CMP-bff` 不得 import `DF`/`MOCK`/页面代码，不得做 DTO 映射、revision 缓存、重试、聚合或模拟数据。
 - 四页 live 后不得自动回落 MOCK；失败必须显式报错。
 - 同层页面不横调；共享能力下沉到 `DF`/`WSC`，跨页流程上提到 URL 约定。
+- 页面 JS 不得引用未登记 `DEP-xxxx` 的第三方脚本/模块，不得出现 `http(s)://` 或协议相对外链；`package.json` 的 `dependencies` / `devDependencies` 保持为空（构建链另案 P1）。
 
 ## 4 契约与入口
 
 ### 4.1 页面入口契约
 
 - 列表/配置页：`/pages/<name>.html`。
-- 详情页：`/pages/instance-detail.html?id=<instanceId>`、`/pages/workspace-detail.html?id=<workspaceId>`、`/pages/workflow-editor.html?id=<workflowId>`；缺省时回落到夹具第一条。
+- 详情页：`/pages/instance-detail.html?id=<instanceId>`、`/pages/workspace-detail.html?id=<workspaceId>`、`/pages/workflow-editor.html?id=<workflowId>`、`/pages/skill-detail.html?id=<skillId>&mode=<view|edit|new>`；缺省时回落到夹具第一条（Skill 专门页缺 `id` 时显式报错，不回落夹具）。
 - 所有页面加载后由 `DF.renderShell` 生成外壳；页面主体写入 `#page-body`。
 
 ### 4.2 组件操作契约
@@ -85,7 +87,7 @@ updated: 2026-10-26
 | `CMP-workflow-list` | `#list`、`#create`、`#run`、`#copy`、`#delete`、`#exportDsl` |
 | `CMP-workflow-editor` | `#open`、`#drag-node`、`#connect-edge`、`#inspector`、`#validate`、`#exportDsl` |
 | `CMP-instances` | `#list`、`#start-run`、`#pause-resume`、`#terminate`、`#retry-node`、`#approve-reject` |
-| `CMP-skills` | `#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail`、`#document` |
+| `CMP-skills` | `#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#document` |
 | `CMP-experts` | `#list`、`#create`、`#edit`、`#toggle`、`#detail`、`#picker` |
 | `CMP-harnesses` | `#list`、`#register`、`#detail`、`#toggle`、`#delete` |
 | `CMP-tools` | `#list`、`#register`、`#edit`、`#refs`、`#delete` |
@@ -95,12 +97,12 @@ updated: 2026-10-26
 
 ### 4.3 共享契约不变量
 
-- 12 页外壳结构一致；`DF.menu` 默认左缘、`#user-menu` 使用 `alignRight` 右缘语义，不得互换。
+- 13 页外壳结构一致；`DF.menu` 默认左缘、`#user-menu` 使用 `alignRight` 右缘语义，不得互换。
 - 缩放系数只通过 `DF.zoomK()` / `DF.zoomOnFixed()` 获取；页面不得缓存或自算。
 - 弹窗 footer 按钮以最近容器为作用域绑定；同一 id 全文档唯一；先 `innerHTML` 后 `appendChild`。
 - 错误与校验在页面入口统一处理，业务数据缺失不得用 `?? 0` / `|| "Unknown"` 掩盖；展示性占位符除外。
 - B1 四类资产的数据契约以 OpenAPI DTO 为准；其余页面以 `MOCK` 集合字段为准。字段不一致时以代码为准并登记到模块卡「已知偏差」。
-- Skill 契约 v2 的 `description` 取代 `summary/triggers`；全文视图只消费 API-31 响应体，不在前端重组 `sections`。`window.API` 的文档缓存按 revision 失效，304 复用上次文本。
+- Skill 契约 v2 的 `description` 取代 `summary/triggers`；文档视图只消费 API-31 响应体，不在前端重组 `sections`，`window.API` 的文档缓存按 revision 失效、304 复用上次文本；渲染走 `window.SKILL_MD` + `DEP-0001`，只读且不执行原始 HTML。
 
 ## 5 数据所有权
 
@@ -110,12 +112,12 @@ updated: 2026-10-26
 | `MOCK.instances` | `CMP-instances` | 实例、列表统计、外壳角标 | 内存 | 单写；刷新复位 |
 | `MOCK.workspaces` | `CMP-workspaces` | 列表、编辑器、实例、Key 绑定 | 内存 | 单写；刷新复位 |
 | B1 Harness/Tool/Skill/Expert | 四个资产页 | 四个资产页 | B1 PostgreSQL | B1 事务 + `If-Match`；不写 `MOCK` |
-| B1 Skill 文档文本/ETag | 无（`window.API` 派生缓存） | `CMP-skills` 全文视图 | 内存 | 按 skill revision 失效；304 复用上次文本；刷新复位 |
+| B1 Skill 文档文本/ETag | 无（`window.API` 派生缓存） | `CMP-skills` 文档视图 | 内存 | 按 skill revision 失效；304 复用上次文本；刷新复位 |
 | `MOCK.experts/skills/tools/harnesses` | 无（四页已切 B1） | 其余 8 页的演示数据 | 内存 | 只读夹具；刷新复位 |
 | `MOCK.keys` | `CMP-keys` | 工作区绑定、Key 列表 | 内存 | 单写；刷新复位 |
 | `MOCK.analytics` | —（只读） | 效能看板 | 内存 | 只读夹具 |
 | `MOCK.knowledgeTree` | —（只读） | 编辑器节点配置 | 内存 | 只读夹具 |
-| `df-font` / `df-collapsed` | `CMP-ui-shell` | 外壳、12 页 | localStorage | UI 偏好；跨页保留 |
+| `df-font` / `df-collapsed` | `CMP-ui-shell` | 外壳、13 页 | localStorage | UI 偏好；跨页保留 |
 | `wl-view` | `CMP-workflow-list` | 本页 | localStorage | UI 偏好；跨页保留 |
 | `df-new-instance` | `CMP-instances` | 列表 → 详情 | sessionStorage | 一次性；消费后删除 |
 | `df-new-workspace` | `CMP-workspaces`（`WSC`） | 列表 → 详情 | sessionStorage | 一次性；消费后删除 |
@@ -136,13 +138,13 @@ updated: 2026-10-26
 
 ## 7 验证矩阵
 
-| 组件 | check-docs（模块卡 + REQ/SCN） | jsdom 12 页 | 场景 | 人工 Safari |
+| 组件 | check-docs（模块卡 + REQ/SCN） | jsdom 13 页 | 场景 | 人工 Safari |
 |---|---|---|---|---|
 | `CMP-ui-shell` | ✓ | ✓ | `SCN-0001` verified（45/45） | 待验收（R9） |
 | `CMP-workflow-list` | ✓ | ✓ | `SCN-0002` verified（46/46） | — |
 | `CMP-workflow-editor` | ✓ | ✓ | `SCN-0003` verified（46/46） | — |
 | `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（46/46） | — |
-| `CMP-skills` | ✓ | ✓ | `SCN-0005` + `SCN-0013` verified（46/46） | — |
+| `CMP-skills` | ✓ | ✓ | `SCN-0005` + `SCN-0013` + `SCN-0014` + `SCN-0015` verified（M1 场景 55/55；专门页引擎 15/15） | — |
 | `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（46/46） | — |
 | `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（46/46） | — |
 | `CMP-tools` | ✓ | ✓ | `SCN-0008` verified（46/46） | — |
@@ -154,10 +156,10 @@ updated: 2026-10-26
 - 语法层：`node --check` 全部页面 JS、`bff/*.js`、`tests/bff/*.js`。
 - 结构层：`node tools/smoke-test.js`（需 jsdom，安装见 `dev-environment.md`）。
 - 引擎层：`node tools/verify-user-menu.js`（需 Playwright WebKit 与运行中的 `:3000`）。
-- 业务场景层：`node tools/verify-m1-scenarios.js`（DOM/jsdom，11 场景，46/46；各场景至少 3 正 1 反）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）与 `tools/verify-b1-writes.js`（写 4/4）。
+- 业务场景层：`node tools/verify-m1-scenarios.js`（DOM/jsdom，13 场景，55/55；各场景至少 3 正 1 反）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）与 `tools/verify-b1-writes.js`（写 4/4）。
 - BFF 层：`npm run test:bff`（Node `node:test` + stub 上游；10 条契约断言，含 `If-None-Match`/304）。
 - 人工层：Safari 走查为发布门禁；未完成不宣称“浏览器全兼容”。
-- **M1 十页 + B1/Skill v2 场景已 verified**：46/46 全部通过；冒烟仍只作结构层，不替代业务验收。
+- **M1 十页 + B1/Skill v2/Skill 专门页场景已 verified**：M1 55/55 通过；专门页另加引擎层 15/15。
 
 ## 8 已知偏差与基线登记
 
@@ -167,11 +169,12 @@ updated: 2026-10-26
 4. **页面组件不是独立部署单元**：11 个业务组件 + 1 个基础设施组件（`CMP-bff`）共享 `DF`/`MOCK`（BFF 不共享）；按页面入口划分；不引入模块打包、事务或分层过度设计（KISS）。
 5. **静态服务与 BFF 仅本地**：无鉴权、无 TLS；只服务 `pages/` 与 `assets/`，BFF 只转发 `/api/v1/*` 与 `/healthz`，均绑定 `127.0.0.1`。
 6. **B1 四类资产已接入**：`CMP-bff` 10 条单测通过；四个资产页直接消费 B1 DTO（Skill 契约 v2：`description` + 文档 200/304），真实读写由 `tools/verify-b1-pages.js` / `tools/verify-b1-writes.js` 覆盖；其余 8 页仍 MOCK 并共用「演示环境」标识。B2–B4 未接后端。
+7. **运行时依赖改为准入制**：基线由「无第三方运行时依赖」改为「默认零 + 准入登记（`DEP-xxxx`）」；当前已登记 `DEP-0001`（Milkdown 只读渲染 + Prism 语法高亮，148.3 KB gzip，按需加载）；门禁 `tools/check-deps.js`；三条红线（工具链/服务端零依赖、禁 CDN）见 `design/dependencies.md`。
 
 ## 9 查阅与变更
 
 - 组件边界与契约：`design/components/<id>/spec.md` §0；组件 frontmatter 的 `requirement` / `scenario` 是 REQ/SCN 反查入口。
-- 需求与场景：`requirements/REQ-0001..0012`、`design/scenarios/`（`_index.md` 为生成索引）。
-- 工序与决策：`works/2026-10-25-b1-integration/brief.md`、`history/works/2026-10-23-component-baseline/brief.md`、`history/decisions/2026-10-23-skill-system-upgrade.md`。
-- 编码防御规则：`design/code-refactoring.md`；测试方法：`design/debugging-and-testing.md`。
+- 需求与场景：`requirements/REQ-0001..0014`、`design/scenarios/`（`_index.md` 为生成索引）。
+- 工序与决策：`works/2026-10-26-skill-detail-page/brief.md`、`works/2026-10-25-b1-integration/brief.md`、`history/works/2026-10-23-component-baseline/brief.md`、`history/decisions/2026-10-23-skill-system-upgrade.md`。
+- 依赖准入：`design/dependencies.md`（清单 + 程序）；编码防御规则：`design/code-refactoring.md`；测试方法：`design/debugging-and-testing.md`。
 - **变更规则**：改页面边界、数据所有权、CMP 操作或共享契约 → 先按 `arch-design-spec` 定级；P1 需人确认，更新对应模块卡 + 本文 + `check-docs`，再动代码。新增页面必须登记组件卡与验证入口，禁止静默扩页。

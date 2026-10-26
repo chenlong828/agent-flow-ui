@@ -24,7 +24,7 @@ updated: 2026-10-23
 - 公开契约：页面入口 `pages/keys.html`；操作 `CMP-keys#list`、`#create-git`、`#create-llm`、`#verify`、`#bind`、`#delete`；不变量 密钥只显示末 4 位掩码，完整值不在列表/详情回显；git 与 LLM 表单字段分离，不能互相提交；绑定目标只能从已存在的 `MOCK.workspaces` / `MOCK.harnesses` / `MOCK.experts` 中选择；删除必须二次确认；校验状态只取「有效/失效/未校验」三值。
 - 依赖：`DF`（外壳、表格、弹窗、表单、Toast、图标）/ `MOCK`；不依赖其他页面组件（跨页只走 URL）。
 - 变化轴：凭证供应商与 Key 类型（git / LLM 多供应商）最易变，新增类型须同步列表分栏、添加弹窗与绑定用途。
-- 验证入口：`npm start` + `/pages/keys.html`；`node tools/smoke-test.js`（12 页冒烟，含本页）；SCN-0011（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0011`）。
+- 验证入口：`npm start` + `/pages/keys.html`；`node tools/smoke-test.js`（全站冒烟，含本页）；SCN-0011（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0011`）。
 - 预算：`keys.js` 约 15 KB + 本规格约 5 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/keys.html`（绑定目标只读其他夹具集合）。
 - 删除测试：删除后凭证无法登记、校验与绑定，工作区/Harness/专家调用失去凭证来源；但真实鉴权不在原型内，复杂度会集中到各消费页，故保留为独立组件。

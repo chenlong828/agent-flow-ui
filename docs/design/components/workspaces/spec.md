@@ -24,7 +24,7 @@ updated: 2026-10-23
 - 公开契约：页面入口 `pages/workspaces.html` 与 `pages/workspace-detail.html?id=<workspaceId>`；操作 `CMP-workspaces#list`、`#create`（三步向导）、`#detail`、`#check-connection`、`#archive`、`#delete`；不变量 新建固定三步顺序「仓库绑定 → 关联 Key/连接测试 → 目录模板」，步① 的名称/仓库 URL 前缀/分支校验不通过不能前进；连接测试失败只提示、不阻断「完成并初始化」（已知偏差）；详情页只展示已绑定的 Key，不展示未关联凭证；归档只追加 `archives` 记录，不删除工作区；删除必须二次确认。
 - 依赖：`DF`（外壳、向导弹窗、表格、Tabs、Toast）/ `MOCK` / `WSC`（`workspace-common.js` 的目录树、创建时间、跨页联动）；不依赖其他页面组件。
 - 变化轴：仓库/worktree 策略与目录模板最易变，新增策略须同步新建向导、详情页与 `WSC` 展示。
-- 验证入口：`npm start` + `/pages/workspaces.html`、`/pages/workspace-detail.html?id=ws1`；`node tools/smoke-test.js`（12 页冒烟，含两页）；SCN-0010（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0010`）。
+- 验证入口：`npm start` + `/pages/workspaces.html`、`/pages/workspace-detail.html?id=ws1`；`node tools/smoke-test.js`（全站冒烟，含两页）；SCN-0010（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0010`）。
 - 预算：`workspaces.js` 约 13 KB + `workspace-detail.js` 约 8 KB + `workspace-common.js` 约 2.5 KB + 本规格约 7 KB；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/workspaces.html`（详情页用 `?id=` 定位；两页共用 `WSC`）。
 - 删除测试：删除后工作区无法准备、绑定与清理，节点失去唯一共享通道；复杂度会集中到实例页与 Key 页，故保留为独立组件。

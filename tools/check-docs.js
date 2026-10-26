@@ -3,7 +3,7 @@
  * 五态文档一致性检查（零依赖）
  * 用法: node tools/check-docs.js [docsRoot]
  * 校验 frontmatter、状态值域、模块卡必备字段、组件/场景字段、works 工序、
- * REQ/SCN/CMP 引用、场景索引、旧路径残留。
+ * REQ/SCN/CMP/DEP 引用、场景索引、旧路径残留。
  */
 const fs = require('fs');
 const path = require('path');
@@ -178,6 +178,31 @@ for (const p of all) {
   }
 }
 
+/* DEP 引用必须能解析到依赖清单（design/dependencies.md 的 JSON 块） */
+const depFile = path.join(ROOT, 'design', 'dependencies.md');
+const depIds = new Set();
+if (fs.existsSync(depFile)) {
+  const dt = fs.readFileSync(depFile, 'utf8');
+  const dm = dt.match(/```json\n([\s\S]*?)```/);
+  if (!dm) err('design/dependencies.md: 缺 ```json 清单块');
+  else {
+    try {
+      const reg = JSON.parse(dm[1]);
+      for (const d of reg.deps || []) if (d && d.id) depIds.add(d.id);
+    } catch (e) {
+      err(`design/dependencies.md: JSON 清单无法解析（${e.message}）`);
+    }
+  }
+}
+for (const p of all) {
+  const r = rel(p);
+  if (r.split(path.sep)[0] === 'history') continue;
+  const text = fs.readFileSync(p, 'utf8');
+  for (const m of text.matchAll(/DEP-\d{4}/g)) {
+    if (!depIds.has(m[0])) err(`${r}: 引用了未登记的依赖 ${m[0]}`);
+  }
+}
+
 const joined = all.map((p) => fs.readFileSync(p, 'utf8')).join('\n');
 for (const id of new Set(joined.match(/REQ-\d{4}/g) || [])) if (!reqs.has(id)) err(`引用了不存在的需求卡 ${id}`);
 for (const id of new Set(joined.match(/SCN-\d{4}/g) || [])) if (!scenarios.has(id)) err(`引用了不存在的场景卡 ${id}`);
@@ -210,7 +235,7 @@ for (const f of projectFiles) {
 }
 
 console.log(`docs root: ${ROOT}`);
-console.log(`components: ${components.size} | requirements: ${reqs.size} | scenarios: ${scenarios.size}`);
+console.log(`components: ${components.size} | requirements: ${reqs.size} | scenarios: ${scenarios.size} | deps: ${depIds.size}`);
 if (warnings.length) { console.log('\nWARN:'); warnings.forEach((w) => console.log(' -', w)); }
 if (errors.length) {
   console.log(`\nFAIL (${errors.length}):`);

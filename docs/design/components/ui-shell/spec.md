@@ -19,16 +19,16 @@ updated: 2026-10-23
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件（跨页共享外壳）
-- 业务价值：为 12 个页面提供一致的导航、顶栏、面包屑、页头与字体缩放；没有它，每个页面都要重写外壳，用户区、通知角标与全局交互无处统一。
+- 业务价值：为 13 个页面提供一致的导航、顶栏、面包屑、页头与字体缩放；没有它，每个页面都要重写外壳，用户区、通知角标与全局交互无处统一。
 - 负责 / 不负责：负责 `DF.renderShell` 生成的顶栏/左侧导航/面包屑/页头容器、用户区下拉、待确认角标、字体缩放双路径（zoom / transform 兜底）与 `DF` 公共组件原语；不负责任何页面的业务主体、业务数据写入与页面路由（由各 `CMP-*` 页面组件承担）。
 - 数据所有权：读 `MOCK.instances`（仅统计 `status === '等待人工确认'` 作为铃铛角标）；不写任何业务集合；写 localStorage `df-font`（字号 s/m/l/xl）与 `df-collapsed`（导航折叠），均为 UI 偏好，刷新保留；不写 sessionStorage。
-- 公开契约：入口 `DF.renderShell(...)`（12 页共用）；操作 `CMP-ui-shell#renderShell`（外壳渲染）、`#topbar`（环境/通知/用户区）、`#nav`（4 组 9 项 + 折叠）、`#font-scale`（字号切换与跨页持久）、`#bell`（待确认角标与跳转）、`#user-menu`（Key 管理 / 退出登录）；不变量 12 页外壳结构一致（顶栏 + 220px 导航 + 面包屑/页头/`#page-body` 三兄弟）；`DF.menu` 默认左缘语义、`alignRight` 右缘语义不得互换；缩放系数一律走 `DF.zoomK()` / `DF.zoomOnFixed()`，页面不得各自缓存。
+- 公开契约：入口 `DF.renderShell(...)`（13 页共用）；操作 `CMP-ui-shell#renderShell`（外壳渲染）、`#topbar`（环境/通知/用户区）、`#nav`（4 组 9 项 + 折叠）、`#font-scale`（字号切换与跨页持久）、`#bell`（待确认角标与跳转）、`#user-menu`（Key 管理 / 退出登录）；不变量 13 页外壳结构一致（顶栏 + 220px 导航 + 面包屑/页头/`#page-body` 三兄弟）；`DF.menu` 默认左缘语义、`alignRight` 右缘语义不得互换；缩放系数一律走 `DF.zoomK()` / `DF.zoomOnFixed()`，页面不得各自缓存。
 - 依赖：`MOCK`（只读角标）；不依赖任何页面组件；页面通过全局 `DF` 反向依赖本组件，属外壳契约。
-- 变化轴：导航分组/页面增减与顶栏全局操作（环境、通知、用户区）最可能变化，改这里会同时影响 12 页。
+- 变化轴：导航分组/页面增减与顶栏全局操作（环境、通知、用户区）最可能变化，改这里会同时影响 13 页。
 - 验证入口：`node tools/verify-user-menu.js`（SCN-0001，45/45，2026-10-23 复跑）；`node tools/smoke-test.js`（12/12）；Safari 人工走查待验收（R9）。
 - 预算：`assets/js/ui.js` 约 18 KB + 本规格约 8 KB，无专属测试文件；上限 120k token，远低于上限。
 - 单独运行：`npm start` → 任一 `/pages/*.html`（外壳随页面加载）。
-- 删除测试：删除后 12 页同时失去导航、顶栏、用户区与字号能力，复杂度会复制到每个页面，故保留为唯一共享组件。
+- 删除测试：删除后 13 页同时失去导航、顶栏、用户区与字号能力，复杂度会复制到每个页面，故保留为唯一共享组件。
 - 已知偏差：M1 十页已有各自 `REQ`/`SCN`；外壳能力仍只有用户区有 `REQ-0001` / `SCN-0001`，导航/字号/待确认角标无独立需求卡；Safari 人工走查未完成；WebKit 2104 的 html 级 zoom 探测失效，引擎证据只覆盖 transform 兜底路径（R1/R9）。
 
 ## 1 布局结构
@@ -75,7 +75,7 @@ updated: 2026-10-23
 | 工作流 | `design/components/workflow-list/spec.md` | 列表页 |
 | └ 编辑器（二级） | `design/components/workflow-editor/spec.md` | 画布二级页 |
 | 专家管理 | `design/components/experts/spec.md` | 卡片列表 + 抽屉 |
-| Skill 库 | `design/components/skills/spec.md` | 列表 + 抽屉 |
+| Skill 库 | `design/components/skills/spec.md` | 列表 + 专门详情页 |
 | Harness 管理 | `design/components/harnesses/spec.md` | 列表 + 抽屉 |
 | 工具与集成 | `design/components/tools/spec.md` | Tab 列表 + 抽屉 |
 | 运行实例 | `design/components/instances/spec.md` | 列表 + 独立详情页 |
@@ -85,8 +85,8 @@ updated: 2026-10-23
 
 ## 4 详情形态策略（R4 已确认）
 
-- **右侧抽屉**：专家、Skill、Harness、工具、子任务等资产类详情（宽 640~760px，列表上下文不丢失）
-- **独立二级页**：内容重、需要主从结构的页面——工作流编辑器、实例详情、工作区详情
+- **右侧抽屉**：专家、Harness、工具、子任务等资产类详情（宽 640~760px，列表上下文不丢失）；Skill 专门页改为独立二级页
+- **独立二级页**：内容重、需要主从结构的页面——工作流编辑器、实例详情、工作区详情、Skill 专门页
 - **弹窗**：新建/发起运行/删除确认等短表单与确认操作
 
 ## 5 设计约定
@@ -94,7 +94,7 @@ updated: 2026-10-23
 - **语义色**（CSS 变量）：运行中=蓝 `--c-run`、成功=绿 `--c-ok`、失败=红 `--c-fail`、等待人工=橙 `--c-wait`、回退=紫 `--c-rollback`、暂停/停用=灰 `--c-pause`
 - **主色**：科技蓝（导航高亮、主按钮、链接）
 - **字号层级**：页头 20px / 区块标题 15px / 正文 13px / 辅助 12px；表格行高 40px
-- **组件**：全部手写（按钮/标签/表格/卡片/抽屉/弹窗/Tab/表单），SVG 画布与图表；无构建链
+- **组件**：优先手写（按钮/标签/表格/卡片/抽屉/弹窗/Tab/表单），SVG 画布与图表；无构建链；已准入第三方依赖见 `design/dependencies.md`（按 `DEP-xxxx` 引用）
 - **模拟数据**：统一 `js/mock-data.js`，挂载 `window.MOCK`（workflows / experts / skills / harnesses / tools / instances / workspaces / keys / analytics），页面 JS 只读消费，跨页跳转用 `location` 带 query 参数
 
 ## 6 状态与空态
