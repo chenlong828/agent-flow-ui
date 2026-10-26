@@ -11,6 +11,8 @@
   var BASE = '/api/v1';
   var PATH = { harness: '/harnesses', tool: '/tools', skill: '/skills', expert: '/experts' };
   var revisions = Object.create(null);
+  // 编排文档缓存：派生数据，唯一真相仍为 B1；以 ETag 做条件请求复用。
+  var documents = Object.create(null);
 
   function key(kind, id) { return kind + ':' + id; }
 
@@ -72,7 +74,11 @@
   }
 
   function remember(kind, dto) {
-    if (dto && dto.id && dto.revision != null) revisions[key(kind, dto.id)] = dto.revision;
+    if (dto && dto.id && dto.revision != null) {
+      var k = key(kind, dto.id);
+      if (revisions[k] != null && revisions[k] !== dto.revision) delete documents[k];
+      revisions[k] = dto.revision;
+    }
     return dto;
   }
 
@@ -113,8 +119,76 @@
 
   function remove(kind, id, revision) {
     return request('DELETE', PATH[kind] + '/' + encodeURIComponent(id), undefined, revision).then(function (data) {
-      delete revisions[key(kind, id)];
+      var k = key(kind, id);
+      delete revisions[k];
+      delete documents[k];
       return data;
+    });
+  }
+
+  function headerValue(res, name) {
+    if (!res || !res.headers) return null;
+    if (typeof res.headers.get === 'function') return res.headers.get(name);
+    var lower = name.toLowerCase();
+    var keys = Object.keys(res.headers);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === lower) return res.headers[keys[i]];
+    }
+    return null;
+  }
+
+  function settleDocument(kind, id, status, body, etag) {
+    var k = key(kind, id);
+    var cached = documents[k];
+    if (status === 304) {
+      if (!cached) {
+        var miss = new Error('文档未修改但没有可复用的缓存');
+        miss.code = 'document_cache_miss';
+        throw miss;
+      }
+      return { text: cached.text, etag: cached.etag, notModified: true };
+    }
+    if (status >= 400) fail(status, typeof body === 'string' ? parse(body) : body);
+    if (typeof body !== 'string') {
+      var invalid = new Error('文档响应不是文本');
+      invalid.code = 'invalid_document_response';
+      throw invalid;
+    }
+    documents[k] = { etag: etag || null, text: body };
+    return { text: body, etag: etag || null, notModified: false };
+  }
+
+  /**
+   * 取编排文档（API-31）。纯文本原样返回，不在客户端二次拼装。
+   * 首次 200 保存 ETag/文本；再次请求带 If-None-Match，304 复用上次文本。
+   */
+  function document(kind, id) {
+    var path = PATH[kind] + '/' + encodeURIComponent(id) + '/document';
+    var cached = documents[key(kind, id)];
+    var headers = { 'Accept': 'text/markdown' };
+    if (cached && cached.etag) headers['If-None-Match'] = cached.etag;
+
+    if (typeof window.__AGENTFLOW_TRANSPORT__ === 'function') {
+      return Promise.resolve(window.__AGENTFLOW_TRANSPORT__('GET', path, undefined, headers)).then(function (res) {
+        var status = res ? res.status : 200;
+        return settleDocument(kind, id, status, res ? res.body : null, headerValue(res, 'ETag'));
+      });
+    }
+
+    if (typeof fetch !== 'function') {
+      var unsupported = new Error('当前环境不支持 fetch');
+      unsupported.code = 'network_error';
+      return Promise.reject(unsupported);
+    }
+    return fetch(BASE + path, { method: 'GET', headers: headers }).then(function (res) {
+      return res.text().then(function (text) {
+        return settleDocument(kind, id, res.status, res.status === 304 ? '' : text, headerValue(res, 'ETag'));
+      });
+    }).catch(function (error) {
+      if (error && (error.status || error.code)) throw error;
+      var wrapped = new Error('无法连接 B1 后端');
+      wrapped.code = 'network_error';
+      throw wrapped;
     });
   }
 
@@ -130,6 +204,7 @@
     patch: patch,
     setEnabled: setEnabled,
     remove: remove,
+    document: document,
     categories: categories,
     revision: function (kind, id) { return revisions[key(kind, id)]; },
     errorText: function (error) {
@@ -137,7 +212,12 @@
       if (error.status === 404) return '目标不存在或已被删除';
       if (error.status === 409) return error.message || '数据已被其他操作修改，请刷新后重试';
       if (error.status === 428) return '缺少版本信息，请刷新后重试';
-      if (error.status === 400) return error.message || '提交内容不合法';
+      if (error.status === 400) {
+        if (error.code === 'validation_error' && error.details && error.details.field === 'body') {
+          return '契约已升级，请刷新页面';
+        }
+        return error.message || '提交内容不合法';
+      }
       return error.message || '操作失败';
     }
   };

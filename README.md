@@ -21,7 +21,7 @@ node server.js
 - 路径：`/api/v1/*`、`/healthz`
 - 配置：`API_BASE`（默认 `http://127.0.0.1:3100`）、`BFF_TIMEOUT_MS`（默认 10000）、`BFF_MAX_BODY`（默认 1 MiB）
 - 单独运行：`PORT=3001 node bff/standalone.js`
-- 当前状态：BFF 已就绪（`npm run test:bff` 9/9）；Harness / Tool / Skill / Expert 四页已直接消费 B1 DTO（读写 + `If-Match`），真实读/写验证各 4/4；其余 8 页继续 MOCK 并共用「演示环境」标识。
+- 当前状态：BFF 已就绪（`npm run test:bff` 10/10）；Harness / Tool / Skill / Expert 四页已直接消费 B1 DTO（读写 + `If-Match`），Skill 契约 v2 已切 `description` 并支持文档 200/304；真实读/写验证各 4/4；其余 8 页继续 MOCK 并共用「演示环境」标识。
 
 ## 目录结构
 
@@ -64,5 +64,5 @@ node server.js
 
 - B1 四类资产的目标数据源是 `http://127.0.0.1:3100`，经 `CMP-bff` 同源访问；四个资产页已 live-only，直接消费 B1 DTO，后端不可用即报错，不回落 MOCK。其余 8 页仍来自 `assets/js/mock-data.js`（内存态），刷新即复位；不持久化。
 - 页面 JS 一律调用 `DF.*` 公共组件拼装 UI；组件地图、依赖方向与数据所有权见 `docs/design/architecture.md`，每个组件的契约见对应规格的 `## 0 模块卡`。
-- 门禁：`npm test`（语法 + 五态文档 + 场景索引 + BFF 单测）；BFF 单测：`npm run test:bff`；冒烟：`npm run test:smoke`（需 jsdom）；业务场景：`npm run test:scenarios`（jsdom，10 场景 × 3 正 1 反）；真实 B1：`npm run test:b1-pages` / `npm run test:b1-writes`（需 BFF 与 B1 已启动）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
-- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件已补 `REQ-0002..0011` / `SCN-0002..0011`，场景 `verified`（40/40），REQ `delivered`；B1 接入见 `REQ-0012` / `SCN-0012` / `CMP-bff`，`REQ-0012` 已 `delivered`。
+- 门禁：`npm test`（语法 + 五态文档 + 场景索引 + BFF 单测）；BFF 单测：`npm run test:bff`；冒烟：`npm run test:smoke`（需 jsdom）；业务场景：`npm run test:scenarios`（jsdom，11 场景、46 条用例，各场景至少 3 正 1 反）；真实 B1：`npm run test:b1-pages` / `npm run test:b1-writes`（需 BFF 与 B1 已启动）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
+- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件已补 `REQ-0002..0011` / `SCN-0002..0011`，场景 `verified`（M1 全量 46/46），REQ `delivered`；B1 接入见 `REQ-0012` / `SCN-0012` / `CMP-bff`，Skill 契约 v2 见 `REQ-0013` / `SCN-0013`，均已 `delivered`。

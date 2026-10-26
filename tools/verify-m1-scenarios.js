@@ -452,24 +452,27 @@ async function scn0005T3() {
     await wait(20);
     click([...ctx.doc.querySelectorAll('.menu .mi')].find((x) => x.textContent.includes('编辑')));
     await wait(30);
-    setValue(q(ctx.doc, '#sk-d-sum'), '更新后的常驻摘要');
+    setValue(q(ctx.doc, '#sk-d-desc'), '更新后的 Skill 描述');
     click(q(ctx.doc, '#sk-d-save'));
     await wait(40);
     assert.notEqual(target.version, beforeVer, '保存未递增版本');
-    assert.equal(target.summary, '更新后的常驻摘要');
+    assert.equal(target.description, '更新后的 Skill 描述');
+    assert.equal(target.summary, undefined, '仍写入旧字段 summary');
+    assert.equal(target.triggers, undefined, '仍写入旧字段 triggers');
     ctx.win.DF.drawer.close();
     await wait(20);
 
     click(q(ctx.doc, '#sk-new'));
     await wait(30);
     setValue(q(ctx.doc, '#sk-nk-name'), '回归 Skill');
-    setValue(q(ctx.doc, '#sk-nk-sum'), '回归 Skill 的常驻摘要');
+    setValue(q(ctx.doc, '#sk-nk-desc'), '回归 Skill 的适用描述');
     click(q(ctx.doc, '.modal .d-foot .btn.primary'));
     await wait(60);
     assert.equal(ctx.win.MOCK.skills.length, before + 1);
     const s = ctx.win.MOCK.skills.find((x) => x.name === '回归 Skill');
     assert.ok(s, '未写入新 Skill');
     assert.equal(s.version, 'v1.0');
+    assert.equal(s.description, '回归 Skill 的适用描述');
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
@@ -490,6 +493,176 @@ async function scn0005T4() {
     assert.equal(ctx.win.MOCK.skills.length, before);
     assert.match(ctx.doc.body.textContent, /禁止删除/);
     assert.match(ctx.doc.body.textContent, new RegExp('被\\s*' + ctx.win.MOCK.skills.find((s) => s.id === id).usedBy + '\\s*位专家引用'));
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+/* ------------------------------------------------------------------ */
+/* SCN-0013 Skill 契约 v2 展示端适配（description + API-31 全文）      */
+/* ------------------------------------------------------------------ */
+function spyTransport(ctx) {
+  const calls = [];
+  const orig = ctx.win.__AGENTFLOW_TRANSPORT__;
+  ctx.win.__AGENTFLOW_TRANSPORT__ = function (method, path, body, headers) {
+    if (String(path).indexOf('/document') >= 0) {
+      calls.push({ method, path, headers: headers || {} });
+    }
+    return orig(method, path, body, headers);
+  };
+  return calls;
+}
+
+async function openDocument(ctx, id) {
+  click(q(ctx.doc, '[data-view="' + id + '"]'));
+  await wait(50);
+  click(q(ctx.doc, '[data-skview="document"]'));
+  await wait(80);
+}
+
+async function scn0013T1() {
+  const ctx = await load('skills.html');
+  try {
+    const head = q(ctx.doc, '#sk-tblbox thead').textContent;
+    assert.ok(head.includes('描述'), '列表缺描述列');
+    assert.ok(!head.includes('常驻摘要') && !head.includes('触发'), '列表仍显示旧列');
+    const first = ctx.win.MOCK.skills.find((s) => s.id === 'sk-cres');
+    assert.ok(q(ctx.doc, '#sk-tblbox tbody').textContent.includes(first.description), '列表未读 description');
+    setValue(q(ctx.doc, '#sk-q'), '方案');
+    await wait(20);
+    const rows = ctx.doc.querySelectorAll('#sk-tblbox tbody tr');
+    assert.equal(rows.length, 1, '描述检索未命中唯一 Skill');
+    assert.match(rows[0].textContent, /CRES 技能/);
+    assert.match(q(ctx.doc, '#sk-count').textContent, /共\s*1/);
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0013T2() {
+  const ctx = await load('skills.html');
+  try {
+    const before = ctx.win.MOCK.skills.length;
+    click(q(ctx.doc, '#sk-new'));
+    await wait(30);
+    setValue(q(ctx.doc, '#sk-nk-name'), '边界 Skill');
+    click(q(ctx.doc, '.modal .d-foot .btn.primary'));
+    await wait(30);
+    assert.ok(q(ctx.doc, '.modal'), '空描述未拦截');
+    assert.match(ctx.doc.querySelector('#toast-box').textContent, /请填写 Skill 描述/);
+    setValue(q(ctx.doc, '#sk-nk-desc'), '字'.repeat(401));
+    click(q(ctx.doc, '.modal .d-foot .btn.primary'));
+    await wait(30);
+    assert.ok(q(ctx.doc, '.modal'), '401 字未拦截');
+    assert.match(ctx.doc.querySelector('#toast-box').textContent, /1–400/);
+    assert.equal(ctx.win.MOCK.skills.length, before, '非法描述写入了 Skill');
+
+    setValue(q(ctx.doc, '#sk-nk-desc'), '适用：边界描述场景；触发：边界；不适用：无。');
+    click(q(ctx.doc, '.modal .d-foot .btn.primary'));
+    await wait(80);
+    const created = ctx.win.MOCK.skills.find((s) => s.name === '边界 Skill');
+    assert.ok(created, '合法描述未创建');
+    assert.equal(created.description, '适用：边界描述场景；触发：边界；不适用：无。');
+    assert.equal(created.summary, undefined);
+    assert.equal(created.triggers, undefined);
+    assert.equal(created.version, 'v1.0');
+
+    setValue(q(ctx.doc, '#sk-d-desc'), '更新后的 description');
+    click(q(ctx.doc, '#sk-d-save'));
+    await wait(60);
+    assert.equal(created.description, '更新后的 description');
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0013T3() {
+  const ctx = await load('skills.html');
+  try {
+    const calls = spyTransport(ctx);
+    await openDocument(ctx, 'sk-cres');
+    const firstText = q(ctx.doc, '#sk-doc-text').textContent;
+    assert.equal(calls.length, 1, '首次全文请求次数不为 1');
+    assert.equal(calls[0].method, 'GET');
+    assert.equal(calls[0].path, '/skills/sk-cres/document');
+    assert.equal(calls[0].headers['If-None-Match'], undefined, '首次请求不应带 If-None-Match');
+    assert.ok(firstText.startsWith('---\nname: "CRES 技能"'), '全文缺 frontmatter');
+    assert.ok(firstText.indexOf('## 流程总述') < firstText.indexOf('## 执行步骤'), '章节顺序不符');
+    assert.ok(firstText.includes('## 常见踩坑') && firstText.includes('## 参考资料'));
+    assert.match(q(ctx.doc, '.sk-docmeta').textContent, /200/);
+
+    click(q(ctx.doc, '[data-skview="structured"]'));
+    await wait(20);
+    click(q(ctx.doc, '[data-skview="document"]'));
+    await wait(80);
+    assert.equal(calls.length, 2, '二次全文请求未发出');
+    assert.match(calls[1].headers['If-None-Match'], /^"\d+"$/);
+    assert.equal(q(ctx.doc, '#sk-doc-text').textContent, firstText, '304 后文本与首次不一致');
+    assert.match(q(ctx.doc, '.sk-docmeta').textContent, /304/);
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0013T4() {
+  const ctx = await load('skills.html');
+  try {
+    await openDocument(ctx, 'sk-replay');
+    const replay = q(ctx.doc, '#sk-doc-text').textContent;
+    assert.ok(replay.includes('## 参考资料'), '有引用时缺参考资料节');
+    assert.ok(!replay.includes('## 常见踩坑'), '空踩坑仍输出章节');
+    assert.match(replay, /回放数据清洗/);
+    ctx.win.DF.drawer.close();
+    await wait(20);
+    await openDocument(ctx, 'sk-dsl');
+    const dsl = q(ctx.doc, '#sk-doc-text').textContent;
+    assert.ok(dsl.includes('## 常见踩坑'), '有踩坑时缺常见踩坑节');
+    assert.ok(!dsl.includes('## 参考资料'), '空引用仍输出章节');
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0013T5() {
+  const ctx = await load('skills.html');
+  try {
+    const orig = ctx.win.__AGENTFLOW_TRANSPORT__;
+    ctx.win.__AGENTFLOW_TRANSPORT__ = function (method, path, body, headers) {
+      if (method === 'GET' && String(path) === '/skills/sk-cres/document') {
+        return Promise.resolve({ status: 404, body: { error: { code: 'not_found', message: '目标不存在' } } });
+      }
+      return orig(method, path, body, headers);
+    };
+    await openDocument(ctx, 'sk-cres');
+    assert.equal(ctx.doc.querySelector('#sk-doc-text'), null, '404 仍显示全文');
+    assert.match(q(ctx.doc, '#sk-dbody').textContent, /目标不存在或已被删除/);
+    assert.ok(ctx.doc.querySelector('#sk-doc-retry'), '404 缺重试入口');
+    ctx.win.__AGENTFLOW_TRANSPORT__ = orig;
+    click(q(ctx.doc, '#sk-doc-retry'));
+    await wait(80);
+    assert.ok(q(ctx.doc, '#sk-doc-text').textContent.includes('## 流程总述'), '重试未取到全文');
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
+async function scn0013T6() {
+  const ctx = await load('skills.html');
+  try {
+    const orig = ctx.win.__AGENTFLOW_TRANSPORT__;
+    ctx.win.__AGENTFLOW_TRANSPORT__ = function (method, path, body, headers) {
+      if (method === 'PUT' && String(path) === '/skills/sk-cres') {
+        return Promise.resolve({ status: 400, body: { error: { code: 'validation_error', message: '请求体包含未知字段', details: { field: 'body' } } } });
+      }
+      return orig(method, path, body, headers);
+    };
+    click(q(ctx.doc, '[data-more="sk-cres"]'));
+    await wait(20);
+    click([...ctx.doc.querySelectorAll('.menu .mi')].find((x) => x.textContent.includes('编辑')));
+    await wait(50);
+    setValue(q(ctx.doc, '#sk-d-desc'), '旧契约提交');
+    click(q(ctx.doc, '#sk-d-save'));
+    await wait(40);
+    assert.match(ctx.doc.querySelector('#toast-box').textContent, /契约已升级，请刷新页面/);
+    assert.ok(q(ctx.doc, '#sk-d-save').disabled === false, '失败后保存按钮未恢复');
+    ctx.win.__AGENTFLOW_TRANSPORT__ = orig;
+    click(q(ctx.doc, '#sk-d-save'));
+    await wait(50);
+    assert.equal(ctx.win.MOCK.skills.find((s) => s.id === 'sk-cres').description, '旧契约提交');
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
@@ -520,8 +693,12 @@ async function scn0006T2() {
     assert.ok(text.includes(ex.role), '缺角色定位');
     for (const sid of (ex.skills || [])) {
       const sk = ctx.win.MOCK.skills.find((x) => x.id === sid);
-      if (sk) assert.ok(text.includes(sk.name), '缺 Skill ' + sk.name);
+      if (sk) {
+        assert.ok(text.includes(sk.name), '缺 Skill ' + sk.name);
+        assert.ok(text.includes(sk.description), '缺 Skill 描述 ' + sk.name);
+      }
     }
+    assert.ok(!text.includes('undefined'), '专家详情出现 undefined');
     for (const tid of (ex.tools || [])) {
       const tl = ctx.win.MOCK.tools.find((x) => x.id === tid);
       if (tl) assert.ok(text.includes(tl.name), '缺工具 ' + tl.name);
@@ -1032,7 +1209,7 @@ const SCENARIOS = [
     tests: [
       ['SCN-0005-T1', '正', '列表计数同源', scn0005T1],
       ['SCN-0005-T2', '正', '五章渐进披露', scn0005T2],
-      ['SCN-0005-T3', '正', '新建 Skill 写入 v1.0', scn0005T3],
+      ['SCN-0005-T3', '正', 'description 写入与版本递增', scn0005T3],
       ['SCN-0005-T4', '反', '被引用 Skill 禁止删除', scn0005T4]
     ]
   },
@@ -1044,6 +1221,18 @@ const SCENARIOS = [
       ['SCN-0006-T2', '正', '五区详情齐全', scn0006T2],
       ['SCN-0006-T3', '正', '停用写回 enabled=false', scn0006T3],
       ['SCN-0006-T4', '反', '取消停用保持启用', scn0006T4]
+    ]
+  },
+  {
+    id: 'SCN-0013',
+    title: 'Skill 契约 v2 展示端适配',
+    tests: [
+      ['SCN-0013-T1', '正', '列表读 description 且描述可检索', scn0013T1],
+      ['SCN-0013-T2', '正', '新建/编辑 description 1–400 校验与写回', scn0013T2],
+      ['SCN-0013-T3', '正', '全文 200/304 原样展示', scn0013T3],
+      ['SCN-0013-T4', '正', '空踩坑/空引用整节省略，停用技能可读', scn0013T4],
+      ['SCN-0013-T5', '反', '全文 404 显示错误并可重试', scn0013T5],
+      ['SCN-0013-T6', '反', '旧字段 400 提示契约升级且保存可重试', scn0013T6]
     ]
   },
   {

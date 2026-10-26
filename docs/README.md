@@ -7,7 +7,7 @@ docs/
 ├── README.md
 ├── requirements/                  ← 需求：为什么做（一卡一文件）
 │   ├── REQ-0001-user-menu.md
-│   └── REQ-0002..0012-<slug>.md   ← M1 十页 + B1 接入
+│   └── REQ-0002..0013-<slug>.md   ← M1 十页 + B1 接入 + Skill 契约 v2
 ├── plan/                          ← 调度：接下来做什么（三份固定文档）
 │   ├── roadmap.md
 │   ├── risks.md
@@ -16,7 +16,7 @@ docs/
 │   ├── product.md / architecture.md
 │   ├── dev-environment.md / debugging-and-testing.md / code-refactoring.md
 │   ├── components/<id>/spec.md    ← 组件规格（12 个）
-│   └── scenarios/<领域>/<价值流>/<场景>/scenario.md  ← 12 个，索引 _index.md 自动生成
+│   └── scenarios/<领域>/<价值流>/<场景>/scenario.md  ← 13 个，索引 _index.md 自动生成
 ├── works/                         ← 执行：正在做什么（一级只有工序目录）
 └── history/                       ← 记忆：怎么走到这里（冻结只读）
     ├── decisions/                 ← 决策与裁定

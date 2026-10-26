@@ -33,6 +33,15 @@ function json(res, status, body, headers = {}) {
   res.end(payload);
 }
 
+function markdown(res, status, text, headers = {}) {
+  res.writeHead(status, {
+    'Content-Type': 'text/markdown; charset=utf-8',
+    'Cache-Control': 'no-cache',
+    ...headers
+  });
+  res.end(text);
+}
+
 async function setup() {
   const upstream = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -47,6 +56,14 @@ async function setup() {
     if (url.pathname === '/api/v1/redirect') {
       res.writeHead(302, { Location: '/api/v1/echo' });
       return res.end();
+    }
+    if (url.pathname === '/api/v1/skills/s1/document') {
+      const etag = '"7"';
+      if (req.headers['if-none-match'] === etag) {
+        res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' });
+        return res.end();
+      }
+      return markdown(res, 200, '# CRES 技能\n\n## 流程总述\n\n正文\n', { ETag: etag });
     }
     if (url.pathname === '/api/v1/echo') {
       const body = await readBody(req);
@@ -129,6 +146,23 @@ test('后端 409 错误体原样返回', async () => {
   assert.deepEqual(await response.json(), {
     error: { code: 'revision_conflict', message: '版本冲突' }
   });
+});
+
+test('文档端点透传 markdown、ETag 与 If-None-Match 304', async () => {
+  const first = await fetch(ctx.base + '/api/v1/skills/s1/document', {
+    headers: { 'Accept': 'text/markdown' }
+  });
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get('content-type'), 'text/markdown; charset=utf-8');
+  assert.equal(first.headers.get('etag'), '"7"');
+  assert.equal(await first.text(), '# CRES 技能\n\n## 流程总述\n\n正文\n');
+
+  const cached = await fetch(ctx.base + '/api/v1/skills/s1/document', {
+    headers: { 'Accept': 'text/markdown', 'If-None-Match': '"7"' }
+  });
+  assert.equal(cached.status, 304);
+  assert.equal(cached.headers.get('etag'), '"7"');
+  assert.equal(await cached.text(), '');
 });
 
 test('不支持的方法返回 405 且带 Allow', async () => {

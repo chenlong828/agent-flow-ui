@@ -5,6 +5,7 @@
  *
  * 只转发 /api/v1/* 与 /healthz；不改写路径、字段、状态码或错误体。
  * 不做 DTO 映射、revision 缓存、重试、聚合或模拟数据。
+ * 文档端点（text/markdown + ETag）依赖 If-None-Match 与 ETag 透传。
  */
 
 const crypto = require('crypto');
@@ -13,7 +14,7 @@ const DEFAULT_API_BASE = 'http://127.0.0.1:3100';
 const DEFAULT_TIMEOUT_MS = 10000;
 const DEFAULT_MAX_BODY = 1024 * 1024;
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-const REQUEST_HEADERS = ['accept', 'content-type', 'if-match', 'x-actor', 'x-request-id'];
+const REQUEST_HEADERS = ['accept', 'content-type', 'if-match', 'if-none-match', 'x-actor', 'x-request-id'];
 const RESPONSE_HEADERS = ['content-type', 'location', 'x-request-id', 'cache-control', 'etag'];
 
 function createBff(options = {}) {

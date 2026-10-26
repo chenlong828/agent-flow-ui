@@ -421,7 +421,7 @@
         return {
           id: s.id, name: s.name,
           categoryCode: s.categoryCode, categoryLabel: s.categoryLabel,
-          summary: s.summary
+          description: s.description
         };
       }),
       tools: (dto.tools || []).map(function (t) {
@@ -470,7 +470,7 @@
       h += '<div class="ex-skill-item"><span class="ex-idx">' + (i + 1) + '</span>' +
         '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
           '<b style="font-size:13px">' + DF.esc(s.name) + '</b>' + DF.tag(categoryLabel(s), categoryColor(s)) + '</div>' +
-          '<div class="ex-sum" title="' + DF.esc(s.summary || '') + '">' + DF.esc(s.summary || '') + '</div></div>' +
+          '<div class="ex-sum" title="' + DF.esc(s.description || '') + '">' + DF.esc(s.description || '') + '</div></div>' +
         (edit
           ? '<button class="ex-move" data-smove="up" data-sid="' + DF.esc(s.id) + '" title="上移"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
             '<button class="ex-move" data-smove="down" data-sid="' + DF.esc(s.id) + '" title="下移"' + (i === skills.length - 1 ? ' disabled' : '') + '>↓</button>' +
@@ -701,7 +701,7 @@
       return '<label class="df-pick-row"><input type="checkbox" value="' + DF.esc(it.id) + '">' +
         '<span' + (it.mono ? ' class="mono"' : '') + ' style="font-weight:600;font-size:13px">' + DF.esc(it.name) + '</span>' +
         (it.tag ? DF.tag(it.tag, it.tagColor) : '') +
-        '<span class="df-pick-sum" title="' + DF.esc(it.summary || '') + '">' + DF.esc(it.summary || '') + '</span></label>';
+        '<span class="df-pick-sum" title="' + DF.esc(it.description || '') + '">' + DF.esc(it.description || '') + '</span></label>';
     }).join('');
     DF.modal.form({
       title: opt.title,
@@ -739,7 +739,7 @@
         return {
           id: s.id, name: s.name,
           tag: categoryLabel(s), tagColor: categoryColor(s),
-          summary: s.summary || '',
+          description: s.description || '',
           categoryCode: s.categoryCode, categoryLabel: s.categoryLabel
         };
       });
@@ -753,7 +753,7 @@
             cur.draft.skills.push({
               id: it.id, name: it.name,
               categoryCode: it.categoryCode, categoryLabel: it.categoryLabel,
-              summary: it.summary
+              description: it.description
             });
           });
           DF.toast('已添加 ' + picked.length + ' 个 Skill', 'ok');
@@ -778,7 +778,7 @@
         return {
           id: t.id, name: t.name, mono: true,
           tag: kind.label, tagColor: kind.color,
-          summary: t.description || '',
+          description: t.description || '',
           kind: t.kind, status: t.status
         };
       });

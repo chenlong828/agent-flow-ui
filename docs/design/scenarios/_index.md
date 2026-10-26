@@ -3,7 +3,7 @@ layer: design
 module: global
 status: current
 generated: true
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # 场景索引
@@ -24,3 +24,4 @@ updated: 2026-10-25
 | SCN-0010 | SCN-0010 工作区创建、配置与归档 | workspace / workspace-config | verified | `design/scenarios/workspace/workspace-config/configure-workspace/scenario.md` |
 | SCN-0011 | SCN-0011 个人 Key 登记、校验与绑定 | workspace / credential | verified | `design/scenarios/workspace/credential/manage-key/scenario.md` |
 | SCN-0012 | SCN-0012 B1 资产同源接入与四类资产读写 | integration / b1-integration | verified | `design/scenarios/integration/b1-integration/scenario.md` |
+| SCN-0013 | SCN-0013 Skill 契约 v2 展示端适配 | integration / b1-integration | verified | `design/scenarios/integration/b1-integration/skill-contract-v2/scenario.md` |

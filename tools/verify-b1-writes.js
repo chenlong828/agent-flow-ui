@@ -87,8 +87,8 @@ async function fullCrud(kind, name) {
     }, d.revision);
   } else if (kind === 'skills') {
     await write('PUT', '/skills/' + d.id, {
-      name: d.name, categoryCode: d.categoryCode, summary: 'B1 update smoke',
-      tags: d.tags || [], triggers: d.triggers || [], sections: d.sections || {},
+      name: d.name, categoryCode: d.categoryCode, description: 'B1 update smoke',
+      tags: d.tags || [], sections: d.sections || {},
       pitfalls: d.pitfalls || [], refs: (d.refs || []).map((r) => ({ label: r.label, refType: r.refType, path: r.path }))
     }, d.revision);
     await write('PATCH', '/skills/' + d.id + '/enabled', { enabled: false }, d.revision + 1);
@@ -98,6 +98,37 @@ async function fullCrud(kind, name) {
   }
   const after = await detail(kind, item.id);
   assert.ok(after.revision > d.revision, kind + ' revision 未递增');
+  if (kind === 'skills') {
+    assert.equal(after.description, 'B1 update smoke', 'Skill 描述未写回');
+    assert.equal(after.summary, undefined, 'Skill 详情仍返回 summary');
+    assert.equal(after.triggers, undefined, 'Skill 详情仍返回 triggers');
+    const docRes = await fetch(BASE + '/api/v1/skills/' + encodeURIComponent(item.id) + '/document', {
+      headers: { Accept: 'text/markdown' }
+    });
+    const docText = await docRes.text();
+    assert.equal(docRes.status, 200, '文档端点非 200');
+    assert.equal(docRes.headers.get('content-type'), 'text/markdown; charset=utf-8');
+    assert.ok(docText.includes('description: "B1 update smoke"'), '文档未反映最新描述');
+    const etag = docRes.headers.get('etag');
+    assert.match(etag || '', /^"\d+"$/, '文档缺 ETag');
+    const cached = await fetch(BASE + '/api/v1/skills/' + encodeURIComponent(item.id) + '/document', {
+      headers: { Accept: 'text/markdown', 'If-None-Match': etag }
+    });
+    assert.equal(cached.status, 304, 'If-None-Match 未返回 304');
+    const legacy = await api('/skills/' + encodeURIComponent(item.id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'If-Match': '"' + after.revision + '"' },
+      body: JSON.stringify({
+        name: after.name, categoryCode: after.categoryCode, description: after.description,
+        tags: after.tags || [], sections: after.sections || {}, pitfalls: after.pitfalls || [],
+        refs: (after.refs || []).map((r) => ({ label: r.label, refType: r.refType, path: r.path })),
+        summary: 'legacy'
+      })
+    });
+    assert.equal(legacy.status, 400, '旧字段 summary 未返回 400');
+    assert.equal(legacy.data.error.code, 'validation_error');
+    assert.equal(legacy.data.error.details.field, 'body');
+  }
   await write('DELETE', '/' + kind + '/' + item.id, undefined, after.revision);
   assert.equal(await exists(kind, name), false, kind + ' 删除后仍存在');
 }
@@ -201,7 +232,7 @@ async function pageSkill() {
     click(ctx.doc.querySelector('#sk-new'));
     await wait(150);
     setValue(ctx.doc.querySelector('#sk-nk-name'), name);
-    setValue(ctx.doc.querySelector('#sk-nk-sum'), 'B1 写入验证用 Skill');
+    setValue(ctx.doc.querySelector('#sk-nk-desc'), '适用：B1 写入验证；触发：冒烟；不适用：生产。');
     click(ctx.doc.querySelector('.modal .d-foot .btn.primary'));
     await waitName('skills', name, 'Skill');
     await fullCrud('skills', name);
