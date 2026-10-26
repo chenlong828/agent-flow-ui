@@ -27,6 +27,11 @@ async function apiGet(p) {
   return res.json();
 }
 
+async function apiText(p, headers) {
+  const res = await fetch(BASE + p, { headers: Object.assign({ Accept: 'text/markdown' }, headers || {}) });
+  return { res, text: await res.text() };
+}
+
 async function load(page) {
   const errors = [];
   const vc = new VirtualConsole();
@@ -93,7 +98,25 @@ async function tools() {
 }
 
 async function skills() {
-  const total = (await apiGet('/api/v1/skills?limit=200')).total;
+  const page = await apiGet('/api/v1/skills?limit=200');
+  const total = page.total;
+  const first = page.items[0];
+  assert.ok(first && first.description, 'Skill 列表缺 description');
+  assert.equal(first.summary, undefined, 'Skill 列表仍返回 summary');
+  assert.equal(first.triggers, undefined, 'Skill 列表仍返回 triggers');
+
+  const direct = await apiText('/api/v1/skills/' + encodeURIComponent(first.id) + '/document');
+  assert.equal(direct.res.status, 200, '文档端点非 200');
+  assert.equal(direct.res.headers.get('content-type'), 'text/markdown; charset=utf-8');
+  const etag = direct.res.headers.get('etag');
+  assert.match(etag || '', /^"\d+"$/, '文档缺 ETag');
+  assert.ok(direct.text.startsWith('---\n'), '文档缺 frontmatter');
+  const cached = await apiText('/api/v1/skills/' + encodeURIComponent(first.id) + '/document', {
+    'If-None-Match': etag
+  });
+  assert.equal(cached.res.status, 304, 'If-None-Match 未返回 304');
+  assert.equal(cached.text, '', '304 不应有响应体');
+
   const ctx = await load('skills.html');
   try {
     const rows = await waitFor(() => {
@@ -103,9 +126,24 @@ async function skills() {
     assert.equal(rows, total, 'Skill 行数与 B1 总数不一致');
     assert.match(ctx.doc.querySelector('#sk-count').textContent, new RegExp('共\\s*' + total));
     assert.equal(ctx.doc.querySelectorAll('[data-cat]').length >= 4, true, '缺少分类入口');
+    const head = ctx.doc.querySelector('#sk-tblbox thead').textContent;
+    assert.ok(head.includes('描述') && !head.includes('触发'), 'Skill 列表列头仍是旧契约');
+
+    const row = ctx.doc.querySelector('#sk-tblbox [data-view="' + first.id + '"]');
+    assert.ok(row, '找不到首个 Skill 行');
+    row.dispatchEvent(new ctx.win.MouseEvent('click', { bubbles: true, cancelable: true, view: ctx.win }));
+    await waitFor(() => ctx.doc.querySelector('[data-skview="document"]'), '全文 tab');
+    ctx.doc.querySelector('[data-skview="document"]').dispatchEvent(new ctx.win.MouseEvent('click', {
+      bubbles: true, cancelable: true, view: ctx.win
+    }));
+    const shown = await waitFor(() => {
+      const el = ctx.doc.querySelector('#sk-doc-text');
+      return el && el.textContent ? el.textContent : null;
+    }, '全文内容');
+    assert.equal(shown, direct.text, '全文视图与 GET /document 响应不一致');
     assert.deepEqual(ctx.errors, [], 'Skill 页面错误: ' + ctx.errors.join(' | '));
   } finally { ctx.close(); }
-  console.log('✓ skills.html live rows=' + total);
+  console.log('✓ skills.html live rows=' + total + ' · document 200/304');
 }
 
 async function experts() {

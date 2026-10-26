@@ -2,7 +2,7 @@
 layer: plan
 module: global
 status: current
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # 路线图
@@ -16,6 +16,7 @@ updated: 2026-10-25
 | M3 | 开放问题裁定：OQ-1~OQ-6 逐条转需求或决策 | 待排 | `plan/open-questions.md` |
 | M4 | 组件基线与门禁（方案 A）：11 个业务模块卡、architecture 现行真相、check-docs 增强 | 已完成 | `history/works/2026-10-23-component-baseline/` |
 | M5 | B1 四类资产同源接入：`CMP-bff` + 四页 live（读/写/聚合/乐观锁） | 已完成（BFF 9/9、M1 40/40、live 读写 4/4） | `REQ-0012` / `SCN-0012` / `works/2026-10-25-b1-integration/` |
+| M6 | Skill 契约 v2 展示端适配：`description` 合并 + API-31 全文 200/304 | 已完成（BFF 10/10、M1 46/46、live 读写 4/4） | `REQ-0013` / `SCN-0013` / `history/works/2026-10-26-skill-contract-v2/` |
 
 > **M1 追溯与验收（2026-10-23 用户要求）**：10 个页面组件已补 `REQ-0002..0011` + `SCN-0002..0011`，组件 frontmatter 反查、`check-docs` 强制。`tools/verify-m1-scenarios.js` 覆盖 10 场景 × 3 正 1 反，40/40 通过；SCN 转 `verified`、REQ 转 `delivered`，R7/R10 关闭。详见 `history/works/2026-10-23-m1-scenario-verification/result.md`。
 
@@ -27,4 +28,4 @@ updated: 2026-10-25
 
 ## 当前在飞
 
-- `works/2026-10-25-b1-integration/`：P1 `CMP-bff` 已完成（9/9 单测）；P2 `API` 共享模块 + 四页只读、P3 写/聚合/409 待做。
+- 无。

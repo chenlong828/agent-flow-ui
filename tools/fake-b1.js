@@ -87,8 +87,8 @@
   function skillDto(s) {
     return {
       id: s.id, name: s.name, categoryCode: CAT_CODE[s.category] || s.categoryCode || 'coding',
-      categoryLabel: s.category, summary: s.summary, version: s.version, enabled: s.enabled !== false,
-      tags: (s.tags || []).slice(), triggers: (s.triggers || []).slice(),
+      categoryLabel: s.category, description: s.description, version: s.version, enabled: s.enabled !== false,
+      tags: (s.tags || []).slice(),
       sections: s.sections || { overview: '', steps: '', examples: '', scripts: '', verification: '' },
       pitfalls: (s.pitfalls || []).slice(),
       refs: (s.refs || []).map(function (r) { return { label: r.label, refType: r.type || r.refType, path: r.path }; }),
@@ -98,7 +98,7 @@
   }
 
   function skillSummary(s) {
-    return { id: s.id, name: s.name, categoryLabel: s.category, version: s.version, summary: s.summary };
+    return { id: s.id, name: s.name, categoryLabel: s.category, version: s.version, description: s.description };
   }
   function toolSummary(t) {
     return { id: t.id, name: t.name, kind: TOOL_KIND[t.type] || t.kind || 'cli', status: TOOL_STATUS[t.status] || 'unverified' };
@@ -150,12 +150,62 @@
     s.name = body.name;
     s.category = CAT_LABEL[body.categoryCode] || body.categoryCode;
     s.categoryCode = body.categoryCode;
-    s.summary = body.summary; s.tags = (body.tags || []).slice(); s.triggers = (body.triggers || []).slice();
+    s.description = body.description; s.tags = (body.tags || []).slice();
     s.sections = body.sections || s.sections;
     s.pitfalls = (body.pitfalls || []).slice();
     s.refs = (body.refs || []).map(function (r) { return { label: r.label, type: r.refType, path: r.path }; });
     s.version = (s.version || 'v1.0');
     bump('skill', s.id);
+  }
+
+  /* 契约 v2：旧字段直接 400，描述必填且 1–400 字；与 B1 的错误形状一致。 */
+  function skillBodyError(body) {
+    if (body && (body.summary !== undefined || body.triggers !== undefined)) {
+      return { status: 400, body: { error: { code: 'validation_error', message: '请求体包含未知字段', details: { field: 'body' } } } };
+    }
+    var description = body && body.description;
+    if (typeof description !== 'string' || description.trim().length === 0) {
+      return { status: 400, body: { error: { code: 'validation_error', message: 'description 不能为空', details: { field: 'description' } } } };
+    }
+    if (description.trim().length > 400) {
+      return { status: 400, body: { error: { code: 'validation_error', message: 'description 长度不能超过 400', details: { field: 'description' } } } };
+    }
+    return null;
+  }
+
+  var SECTION_LABELS = {
+    overview: '流程总述', steps: '执行步骤', examples: '示例', scripts: '脚本', verification: '完成验证'
+  };
+  var SECTION_KINDS = ['overview', 'steps', 'examples', 'scripts', 'verification'];
+
+  function yamlScalar(value) {
+    return '"' + String(value == null ? '' : value)
+      .replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n') + '"';
+  }
+
+  /* 与 B1 API-31 同构：frontmatter + 五章 + 可选踩坑/参考资料。 */
+  function composeSkillDocument(dto) {
+    var lines = ['---', 'name: ' + yamlScalar(dto.name), 'description: ' + yamlScalar(dto.description),
+      'version: ' + yamlScalar(dto.version), '---', ''];
+    SECTION_KINDS.forEach(function (kind) {
+      lines.push('## ' + SECTION_LABELS[kind], '');
+      var content = String((dto.sections || {})[kind] || '').trim();
+      if (content !== '') lines.push(content, '');
+    });
+    if ((dto.pitfalls || []).length > 0) {
+      lines.push('## 常见踩坑', '');
+      dto.pitfalls.forEach(function (p) { lines.push('- ' + String(p).trim()); });
+      lines.push('');
+    }
+    if ((dto.refs || []).length > 0) {
+      lines.push('## 参考资料', '');
+      dto.refs.forEach(function (r) {
+        var suffix = r.path == null || r.path === '' ? '' : ' — ' + r.path;
+        lines.push('- ' + r.label + '（' + r.refType + '）' + suffix);
+      });
+      lines.push('');
+    }
+    return lines.join('\n').replace(/\n+$/, '') + '\n';
   }
 
   function applyExpert(e, body, create) {
@@ -197,6 +247,10 @@
       return Promise.resolve({ status: 200, body: kind === 'experts' ? expertDto(item, true) : map(item) });
     }
     if (method === 'POST' && parts.length === 1) {
+      if (kind === 'skills') {
+        var bodyErr = skillBodyError(body);
+        if (bodyErr) return Promise.resolve(bodyErr);
+      }
       if (arr.some(function (x) { return x.name === body.name; })) {
         return Promise.resolve({ status: 409, body: { error: { code: 'name_conflict', message: '名称已存在' } } });
       }
@@ -208,7 +262,7 @@
         created = { id: 't-fake-' + (++seq), name: body.name, type: 'CLI', invocation: body.invocation, params: [], harness: body.harnessId, timeoutMs: 30000, status: '未验证', desc: '', refCount: 0, lastDebugM: null, runs: [] };
         applyTool(created, body); arr.push(created);
       } else if (kind === 'skills') {
-        created = { id: 'sk-fake-' + (++seq), name: body.name, category: '编码', summary: body.summary, version: 'v1.0', enabled: true, tags: [], triggers: [], usedBy: 0, updatedM: 0, sections: body.sections, pitfalls: [], refs: [] };
+        created = { id: 'sk-fake-' + (++seq), name: body.name, category: '编码', description: body.description, version: 'v1.0', enabled: true, tags: [], usedBy: 0, updatedM: 0, sections: body.sections, pitfalls: [], refs: [] };
         applySkill(created, body); arr.push(created);
       } else {
         created = { id: 'e-fake-' + (++seq), name: body.name, color: body.color, role: body.role, persona: [], skills: [], tools: [], duty: '', skillOrder: '', verifyOrder: '', notes: '', refs: [], enabled: true };
@@ -220,6 +274,10 @@
     if (!existing) return Promise.resolve(notFound());
     if (method === 'PUT') {
       if (!ifMatch(kindName, id, headers)) return Promise.resolve(conflict());
+      if (kind === 'skills') {
+        var putErr = skillBodyError(body);
+        if (putErr) return Promise.resolve(putErr);
+      }
       if (kind === 'harnesses') applyHarness(existing, body);
       else if (kind === 'tools') applyTool(existing, body);
       else if (kind === 'skills') { applySkill(existing, body); existing.version = nextVersion(existing.version); }
@@ -251,6 +309,16 @@
     return Promise.resolve({ status: 405, body: { error: { code: 'method_not_allowed', message: '不支持' } } });
   }
 
+  function skillDocumentResponse(id, headers) {
+    var s = find(window.MOCK.skills, id);
+    if (!s) return Promise.resolve(notFound());
+    var dto = skillDto(s);
+    var etag = '"' + rev('skill', id) + '"';
+    var inm = headers && (headers['If-None-Match'] || headers['if-none-match']);
+    if (inm === etag) return Promise.resolve({ status: 304, body: null, headers: { ETag: etag } });
+    return Promise.resolve({ status: 200, body: composeSkillDocument(dto), headers: { ETag: etag } });
+  }
+
   window.__AGENTFLOW_TRANSPORT__ = function (method, path, body, headers) {
     var u = path.split('?')[0].replace(/^\/+|\/+$/g, '');
     var parts = u.split('/').filter(Boolean);
@@ -259,6 +327,9 @@
         { code: 'coding', label: '编码', position: 0 }, { code: 'retrieval', label: '检索', position: 1 },
         { code: 'review', label: '审视', position: 2 }, { code: 'testing', label: '测试', position: 3 }
       ] } });
+    }
+    if (parts[0] === 'skills' && parts[2] === 'document' && method === 'GET') {
+      return skillDocumentResponse(parts[1], headers);
     }
     return resource(parts, method, body, headers);
   };

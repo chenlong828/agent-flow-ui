@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # 系统架构（现行真相）
@@ -41,6 +41,7 @@ updated: 2026-10-25
 |---|---|---|---|
 | 外壳/公共组件 | `assets/js/ui.js`（`window.DF`） | `DF.renderShell`、`DF.menu`、`DF.modal.*`、`DF.drawer`、`DF.table/empty/field/kv/statCard/tabsHtml`、`DF.zoomK/zoomOnFixed`、`DF.ls*/ss*`、`DF.download/deep/esc` | 12 页共用；不含业务规则 |
 | 模拟数据 | `assets/js/mock-data.js`（`window.MOCK`） | 集合 + `MOCK.byId/now/m/mts` | 原型夹具；读写都在内存 |
+| 共享数据层 | `assets/js/api.js`（`window.API`） | `list/get/create/update/toggle/remove/document/categories/errorText` | B1 四页共用；revision 缓存 + 文档 ETag/文本缓存；不做 DTO 映射、不回落 MOCK |
 | 工作区共用 | `assets/js/pages/workspace-common.js`（`window.WSC`） | `treeHtml/createdText/readNewWs/saveNewWs/dropNewWs/syncNewWs/pad` | 仅 `CMP-workspaces` 两页使用 |
 | 静态服务 | `server.js` | 静态文件 + `/` 302 | 只服务 `pages/` 与 `assets/`，绑定 `127.0.0.1`；拒绝点文件与越界路径 |
 | 同源网关 | `bff/`（`CMP-bff`） | `/api/v1/*`、`/healthz` 透明转发 | 与 `server.js` 同进程；不做 DTO 映射、revision、重试、聚合；详见 `components/bff/spec.md` |
@@ -52,7 +53,7 @@ updated: 2026-10-25
 |---|---|---|---|---|
 | 页面 JS | `DF` | `DF.renderShell` / 公共组件 | 同步，全局对象 | 12 页统一外壳；禁止绕开 `DF` 自建弹层/表格 |
 | 页面 JS | `MOCK` | 集合读取 + 内存写 | 同步，全局对象 | 只读为主；写只改内存 |
-| 页面 JS（B1 四类资产） | `API` | `/api/v1` DTO | HTTP，同源 | 四页直接用 DTO；不建客户端视图模型；不直连 3100 |
+| 页面 JS（B1 四类资产） | `API` | `/api/v1` DTO + `/skills/{id}/document` | HTTP，同源 | 四页直接用 DTO；文档视图只用 API-31 原文；不建客户端视图模型；不直连 3100 |
 | `CMP-workspaces` 两页 | `WSC` | 目录树/跨页联动 | 同步，全局对象 | 不供其他页面使用 |
 | 页面 ↔ 页面 | — | URL 参数 / sessionStorage 单键 | 跳转或一次性传递 | 禁止互相 `import`/调用 JS |
 | `server.js` | 静态文件 / `CMP-bff` | `/pages/*`、`/assets/*`、`/api/v1/*` | HTTP / 进程内 | 组合根；不承载业务逻辑 |
@@ -84,7 +85,7 @@ updated: 2026-10-25
 | `CMP-workflow-list` | `#list`、`#create`、`#run`、`#copy`、`#delete`、`#exportDsl` |
 | `CMP-workflow-editor` | `#open`、`#drag-node`、`#connect-edge`、`#inspector`、`#validate`、`#exportDsl` |
 | `CMP-instances` | `#list`、`#start-run`、`#pause-resume`、`#terminate`、`#retry-node`、`#approve-reject` |
-| `CMP-skills` | `#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail` |
+| `CMP-skills` | `#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail`、`#document` |
 | `CMP-experts` | `#list`、`#create`、`#edit`、`#toggle`、`#detail`、`#picker` |
 | `CMP-harnesses` | `#list`、`#register`、`#detail`、`#toggle`、`#delete` |
 | `CMP-tools` | `#list`、`#register`、`#edit`、`#refs`、`#delete` |
@@ -99,6 +100,7 @@ updated: 2026-10-25
 - 弹窗 footer 按钮以最近容器为作用域绑定；同一 id 全文档唯一；先 `innerHTML` 后 `appendChild`。
 - 错误与校验在页面入口统一处理，业务数据缺失不得用 `?? 0` / `|| "Unknown"` 掩盖；展示性占位符除外。
 - B1 四类资产的数据契约以 OpenAPI DTO 为准；其余页面以 `MOCK` 集合字段为准。字段不一致时以代码为准并登记到模块卡「已知偏差」。
+- Skill 契约 v2 的 `description` 取代 `summary/triggers`；全文视图只消费 API-31 响应体，不在前端重组 `sections`。`window.API` 的文档缓存按 revision 失效，304 复用上次文本。
 
 ## 5 数据所有权
 
@@ -108,6 +110,7 @@ updated: 2026-10-25
 | `MOCK.instances` | `CMP-instances` | 实例、列表统计、外壳角标 | 内存 | 单写；刷新复位 |
 | `MOCK.workspaces` | `CMP-workspaces` | 列表、编辑器、实例、Key 绑定 | 内存 | 单写；刷新复位 |
 | B1 Harness/Tool/Skill/Expert | 四个资产页 | 四个资产页 | B1 PostgreSQL | B1 事务 + `If-Match`；不写 `MOCK` |
+| B1 Skill 文档文本/ETag | 无（`window.API` 派生缓存） | `CMP-skills` 全文视图 | 内存 | 按 skill revision 失效；304 复用上次文本；刷新复位 |
 | `MOCK.experts/skills/tools/harnesses` | 无（四页已切 B1） | 其余 8 页的演示数据 | 内存 | 只读夹具；刷新复位 |
 | `MOCK.keys` | `CMP-keys` | 工作区绑定、Key 列表 | 内存 | 单写；刷新复位 |
 | `MOCK.analytics` | —（只读） | 效能看板 | 内存 | 只读夹具 |
@@ -136,34 +139,34 @@ updated: 2026-10-25
 | 组件 | check-docs（模块卡 + REQ/SCN） | jsdom 12 页 | 场景 | 人工 Safari |
 |---|---|---|---|---|
 | `CMP-ui-shell` | ✓ | ✓ | `SCN-0001` verified（45/45） | 待验收（R9） |
-| `CMP-workflow-list` | ✓ | ✓ | `SCN-0002` verified（40/40） | — |
-| `CMP-workflow-editor` | ✓ | ✓ | `SCN-0003` verified（40/40） | — |
-| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（40/40） | — |
-| `CMP-skills` | ✓ | ✓ | `SCN-0005` verified（40/40） | — |
-| `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（40/40） | — |
-| `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（40/40） | — |
-| `CMP-tools` | ✓ | ✓ | `SCN-0008` verified（40/40） | — |
-| `CMP-analytics` | ✓ | ✓ | `SCN-0009` verified（40/40） | — |
-| `CMP-workspaces` | ✓ | ✓ | `SCN-0010` verified（40/40） | — |
-| `CMP-keys` | ✓ | ✓ | `SCN-0011` verified（40/40） | — |
-| `CMP-bff` | ✓ | — | `SCN-0012` designed（P1 单测 9/9） | — |
+| `CMP-workflow-list` | ✓ | ✓ | `SCN-0002` verified（46/46） | — |
+| `CMP-workflow-editor` | ✓ | ✓ | `SCN-0003` verified（46/46） | — |
+| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（46/46） | — |
+| `CMP-skills` | ✓ | ✓ | `SCN-0005` + `SCN-0013` verified（46/46） | — |
+| `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（46/46） | — |
+| `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（46/46） | — |
+| `CMP-tools` | ✓ | ✓ | `SCN-0008` verified（46/46） | — |
+| `CMP-analytics` | ✓ | ✓ | `SCN-0009` verified（46/46） | — |
+| `CMP-workspaces` | ✓ | ✓ | `SCN-0010` verified（46/46） | — |
+| `CMP-keys` | ✓ | ✓ | `SCN-0011` verified（46/46） | — |
+| `CMP-bff` | ✓ | — | `SCN-0012` verified（BFF 10/10） | — |
 
 - 语法层：`node --check` 全部页面 JS、`bff/*.js`、`tests/bff/*.js`。
 - 结构层：`node tools/smoke-test.js`（需 jsdom，安装见 `dev-environment.md`）。
 - 引擎层：`node tools/verify-user-menu.js`（需 Playwright WebKit 与运行中的 `:3000`）。
-- 业务场景层：`node tools/verify-m1-scenarios.js`（DOM/jsdom，10 场景 × 3 正 1 反，40/40）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）与 `tools/verify-b1-writes.js`（写 4/4）。
-- BFF 层：`npm run test:bff`（Node `node:test` + stub 上游；9 条契约断言）。
+- 业务场景层：`node tools/verify-m1-scenarios.js`（DOM/jsdom，11 场景，46/46；各场景至少 3 正 1 反）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）与 `tools/verify-b1-writes.js`（写 4/4）。
+- BFF 层：`npm run test:bff`（Node `node:test` + stub 上游；10 条契约断言，含 `If-None-Match`/304）。
 - 人工层：Safari 走查为发布门禁；未完成不宣称“浏览器全兼容”。
-- **M1 十页场景已 verified**：3 正 1 反全部落地并通过（40/40）；冒烟仍只作结构层，不替代业务验收。
+- **M1 十页 + B1/Skill v2 场景已 verified**：46/46 全部通过；冒烟仍只作结构层，不替代业务验收。
 
 ## 8 已知偏差与基线登记
 
-1. **M1 追溯与验收闭环**：10 个页面已补 `REQ-0002..0011` / `SCN-0002..0011`；场景 `verified`，3 正 1 反 40/40 通过，10 张 REQ 转 `delivered`（R7/R10 关闭）。冒烟仍不是业务验收。
+1. **M1 追溯与验收闭环**：10 个页面已补 `REQ-0002..0011` / `SCN-0002..0011`；场景 `verified`，全量 46/46 通过，10 张 REQ 转 `delivered`（R7/R10 关闭）。冒烟仍不是业务验收。
 2. **MOCK 多写/复位**：`workflows` 有两个页面写入口；其余集合单写但都只改内存；刷新复位，无事务/并发控制（R8）。
 3. **Safari 人工未完成**：engine 层只覆盖 WebKit 2104 的 transform 兜底路径；zoom 路径需真实 Safari 确认（R1/R9）。
 4. **页面组件不是独立部署单元**：11 个业务组件 + 1 个基础设施组件（`CMP-bff`）共享 `DF`/`MOCK`（BFF 不共享）；按页面入口划分；不引入模块打包、事务或分层过度设计（KISS）。
 5. **静态服务与 BFF 仅本地**：无鉴权、无 TLS；只服务 `pages/` 与 `assets/`，BFF 只转发 `/api/v1/*` 与 `/healthz`，均绑定 `127.0.0.1`。
-6. **B1 四类资产已接入**：`CMP-bff` 9 条单测通过；四个资产页直接消费 B1 DTO，真实读写由 `tools/verify-b1-pages.js` / `tools/verify-b1-writes.js` 覆盖；其余 8 页仍 MOCK 并共用「演示环境」标识。B2–B4 未接后端。
+6. **B1 四类资产已接入**：`CMP-bff` 10 条单测通过；四个资产页直接消费 B1 DTO（Skill 契约 v2：`description` + 文档 200/304），真实读写由 `tools/verify-b1-pages.js` / `tools/verify-b1-writes.js` 覆盖；其余 8 页仍 MOCK 并共用「演示环境」标识。B2–B4 未接后端。
 
 ## 9 查阅与变更
 

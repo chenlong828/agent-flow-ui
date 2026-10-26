@@ -36,8 +36,11 @@
     listErr: '',
     catErr: ''
   };
-  // 当前抽屉: { id, dto: SkillDetail, edit: Boolean, draft: SkillDetail, err, saving }
+  // 当前抽屉: { id, dto: SkillDetail, edit: Boolean, draft: SkillDetail, err, saving,
+  //             view: 'structured' | 'document', doc: { text, notModified, loading, err } }
   var cur = null;
+  var DESC_MIN = 1;
+  var DESC_MAX = 400;
 
   /* ---------------- 通用小工具 ---------------- */
   function pad2(n) { return n < 10 ? '0' + n : String(n); }
@@ -107,32 +110,20 @@
     return seen.slice(0, 10);
   }
 
-  function capLine(s) {
-    var t = String(s.summary || '').replace(/\s+/g, '');
-    var cut = (t.split(/[。；;]/)[0] || t);
-    if (cut.length > 46) cut = cut.slice(0, 46) + '…';
-    return '可复用能力：' + (cut || (s.name + ' 标准执行流程'));
-  }
-
-  function sceneLine(s) {
-    var t = s.triggers || [];
-    return t.length
-      ? '专家任务上下文出现「' + t.join(' / ') + '」等意图时，路由加载本 Skill'
-      : '由专家按任务语义自动路由（暂未配置触发关键词）';
-  }
-
   function filtered() {
     var kw = state.kw.trim().toLowerCase();
     return state.items.filter(function (s) {
       if (state.cat !== 'all' && s.categoryCode !== state.cat) return false;
       if (state.tags.length && !(s.tags || []).some(function (t) { return state.tags.indexOf(t) >= 0; })) return false;
       if (kw) {
-        var hay = [s.name, s.summary, (s.triggers || []).join(' '), (s.tags || []).join(' ')].join(' ').toLowerCase();
+        var hay = [s.name, s.description, (s.tags || []).join(' ')].join(' ').toLowerCase();
         if (hay.indexOf(kw) < 0) return false;
       }
       return true;
     });
   }
+
+  function descLen(v) { return String(v == null ? '' : v).trim().length; }
 
   /* ---------------- 页面骨架 ---------------- */
   function render() {
@@ -148,7 +139,7 @@
         '<aside class="card sk-side" id="sk-side"></aside>' +
         '<section class="sk-main">' +
           '<div class="toolbar">' +
-            DF.searchBox('sk-q', '搜索名称 / 触发词 / 摘要', state.kw) +
+            DF.searchBox('sk-q', '搜索名称 / 描述 / 标签', state.kw) +
             '<span class="sp"></span><span class="sk-n" id="sk-count"></span>' +
           '</div>' +
           '<div id="sk-tblbox"></div>' +
@@ -251,17 +242,10 @@
 
   /* ---------------- 主列表 ---------------- */
   function rowHtml(s) {
-    var trig = s.triggers || [];
-    var shown = trig.slice(0, 3);
     return '<tr>' +
       '<td><span class="rowlink" data-view="' + DF.esc(s.id) + '">' + DF.esc(s.name) + '</span></td>' +
       '<td>' + DF.tag(s.categoryLabel || catLabelOf(s.categoryCode), catColor(s.categoryCode)) + '</td>' +
-      '<td><div class="ellipsis" style="max-width:280px" title="' + DF.esc(s.summary) + '">' + DF.esc(s.summary) + '</div></td>' +
-      '<td><div class="chips" style="max-width:210px">' +
-        shown.map(function (t) { return '<span class="chip">' + DF.esc(t) + '</span>'; }).join('') +
-        (trig.length > 3 ? '<span class="chip" title="' + DF.esc(trig.slice(3).join('、')) + '">+' + (trig.length - 3) + '</span>' : '') +
-        (!trig.length ? '<span class="sk-n">—</span>' : '') +
-      '</div></td>' +
+      '<td><div class="ellipsis" style="max-width:360px" title="' + DF.esc(s.description || '') + '">' + DF.esc(s.description || '') + '</div></td>' +
       '<td style="text-align:right"><a href="javascript:;" class="sk-uref" data-used="' + DF.esc(s.id) +
         '" title="查看引用计数">' + (s.usedByCount || 0) + '</a></td>' +
       '<td><span class="mono">' + DF.esc(s.version || '—') + '</span></td>' +
@@ -298,7 +282,7 @@
       });
     }
     return DF.table(
-      ['名称', '类别', '常驻摘要', '触发关键词', { t: '被引用', s: 'style="text-align:right"' }, '版本', '更新时间', '状态', { t: '', s: 'style="width:44px"' }],
+      ['名称', '类别', '描述', { t: '被引用', s: 'style="text-align:right"' }, '版本', '更新时间', '状态', { t: '', s: 'style="width:44px"' }],
       rows.map(rowHtml)
     );
   }
@@ -464,32 +448,35 @@
           state.cats.map(function (c) {
             return '<option value="' + DF.esc(c.code) + '">' + DF.esc(c.label) + '</option>';
           }).join('') + '</select>') +
-        DF.field('常驻摘要', '<textarea class="inp" id="sk-nk-sum" rows="3" maxlength="200" placeholder="一句话描述该 Skill 的能力"></textarea>',
-          { required: true, hint: '≤200 字，常驻 Context；创建后可在详情抽屉补全触发词、标签与五章' }),
+        DF.field('描述', '<textarea class="inp" id="sk-nk-desc" rows="3" maxlength="' + DESC_MAX + '" placeholder="适用：…；触发：…；不适用：…"></textarea>' +
+          '<div class="hint"><span id="sk-nk-descn">0</span>/' + DESC_MAX + ' 字 · 适用 / 触发 / 不适用；列表检索与路由的唯一依据</div>',
+          { required: true }),
       okText: '确定',
       onMount: function (b, close, btn) {
         okBtn = btn;
         var nameEl = b.querySelector('#sk-nk-name');
+        var descEl = b.querySelector('#sk-nk-desc');
+        var cnt = b.querySelector('#sk-nk-descn');
         nameEl.focus();
         nameEl.onkeydown = function (e) { if (e.key === 'Enter') okBtn.click(); };
+        descEl.oninput = function () { cnt.textContent = descEl.value.length; };
       },
       onOk: function (b, close) {
         var nameEl = b.querySelector('#sk-nk-name');
-        var sumEl = b.querySelector('#sk-nk-sum');
+        var descEl = b.querySelector('#sk-nk-desc');
         var name = nameEl.value.trim();
-        var summary = sumEl.value.trim();
+        var description = descEl.value.trim();
         if (!name) { DF.toast('请填写 Skill 名称', 'err'); nameEl.focus(); return; }
         if (name.length > 80) { DF.toast('Skill 名称不能超过 80 字', 'err'); nameEl.focus(); return; }
-        if (!summary) { DF.toast('请填写常驻摘要', 'err'); sumEl.focus(); return; }
-        if (summary.length > 200) { DF.toast('常驻摘要不能超过 200 字', 'err'); sumEl.focus(); return; }
+        if (descLen(description) < DESC_MIN) { DF.toast('请填写 Skill 描述', 'err'); descEl.focus(); return; }
+        if (descLen(description) > DESC_MAX) { DF.toast('描述需在 1–400 字之间', 'err'); descEl.focus(); return; }
         var sections = {};
         SECTIONS.forEach(function (x) { sections[x[0]] = ''; });
         var body = {
           name: name,
           categoryCode: b.querySelector('#sk-nk-cat').value,
-          summary: summary,
+          description: description,
           tags: [],
-          triggers: [],
           sections: sections,
           pitfalls: [],
           refs: []
@@ -521,7 +508,8 @@
         DF.icon('check', 14) + '保存</button>' : '',
       onClose: function () { cur = null; },
       onMount: function (body, close) {
-        cur = { id: id, dto: null, edit: !!edit, draft: null, err: '', saving: false };
+        cur = { id: id, dto: null, edit: !!edit, draft: null, err: '', saving: false,
+          view: 'structured', doc: null };
         var head = body.parentElement.querySelector('.d-head');
         var btn = document.createElement('button');
         btn.className = 'btn sm sk-mode';
@@ -592,9 +580,92 @@
       syncHeadFoot();
       return;
     }
-    box.innerHTML = drawerHtml(cur.edit ? cur.draft : cur.dto, cur.edit);
+    if (!cur.edit && cur.view === 'document') {
+      box.innerHTML = DF.tabsHtml([
+        { k: 'structured', label: '结构化' },
+        { k: 'document', label: '全文' }
+      ], cur.view, 'data-skview') + docViewHtml();
+      bindViewTabs();
+      bindDocView();
+      syncHeadFoot();
+      return;
+    }
+    box.innerHTML =
+      (cur.edit ? '' : DF.tabsHtml([
+        { k: 'structured', label: '结构化' },
+        { k: 'document', label: '全文' }
+      ], cur.view, 'data-skview')) +
+      drawerHtml(cur.edit ? cur.draft : cur.dto, cur.edit);
     bindDrawer();
+    if (!cur.edit) bindViewTabs();
     syncHeadFoot();
+  }
+
+  /* ---------------- 全文视图（API-31，纯文本） ---------------- */
+  function bindViewTabs() {
+    var box = document.getElementById('sk-dbody');
+    if (!box) return;
+    box.querySelectorAll('[data-skview]').forEach(function (el) {
+      el.onclick = function () {
+        if (!cur) return;
+        var next = el.getAttribute('data-skview');
+        if (cur.view === next) return;
+        cur.view = next;
+        paintDrawer();
+        if (next === 'document') loadDocument();
+      };
+    });
+  }
+
+  function loadDocument() {
+    if (!cur || !cur.dto) return;
+    var id = cur.id;
+    if (!cur.doc) cur.doc = { text: '', notModified: false, loading: false, err: '' };
+    cur.doc.loading = true;
+    cur.doc.err = '';
+    paintDrawer();
+    API.document('skill', id).then(function (res) {
+      if (!cur || cur.id !== id) return;
+      cur.doc.text = res.text;
+      cur.doc.notModified = !!res.notModified;
+      cur.doc.loading = false;
+      cur.doc.err = '';
+      paintDrawer();
+    }).catch(function (err) {
+      if (!cur || cur.id !== id) return;
+      cur.doc.loading = false;
+      cur.doc.err = API.errorText(err);
+      if (err && err.status === 404) cur.doc.text = '';
+      paintDrawer();
+    });
+  }
+
+  function docViewHtml() {
+    var d = cur.doc || { text: '', notModified: false, loading: false, err: '' };
+    var head = '<div class="sk-docbar"><b>编排文档</b>' +
+      '<span class="sk-n mono">GET /skills/{id}/document · text/markdown</span></div>';
+    if (d.loading && !d.text) {
+      return head + '<div class="sub" style="padding:16px 2px">正在加载编排文档…</div>';
+    }
+    var err = d.err
+      ? '<div class="notice" style="margin-bottom:10px">' + DF.icon('warn', 14) +
+        '<span>' + DF.esc(d.err) + ' <a href="javascript:;" id="sk-doc-retry">重试</a></span></div>'
+      : '';
+    var meta = d.loading ? '正在校验更新…' : (d.notModified ? '304 · 已复用上次文本' : '200 · 已更新');
+    var body = d.text
+      ? '<div class="sk-docmeta">' + meta + '</div><pre class="sk-doc" id="sk-doc-text">' + DF.esc(d.text) + '</pre>'
+      : '';
+    if (!d.text && !d.err) {
+      body = '<div class="sub" style="padding:16px 2px">文档为空</div>';
+    }
+    return head + err + body;
+  }
+
+  function bindDocView() {
+    var box = document.getElementById('sk-dbody');
+    if (!box) return;
+    var retry = box.querySelector('#sk-doc-retry');
+    if (retry) retry.onclick = loadDocument;
   }
 
   /* ---------------- 抽屉内容 ---------------- */
@@ -613,11 +684,10 @@
   }
 
   function drawerHtml(s, edit) {
-    var trig = s.triggers || [];
     var tags = s.tags || [];
     var pf = s.pitfalls || [];
     var refs = s.refs || [];
-    var sum = String(s.summary || '');
+    var desc = String(s.description || '');
     var secBlock = function (k, label, idx) {
       var val = String((s.sections || {})[k] || '');
       var inner = edit
@@ -627,27 +697,18 @@
         '<span class="sk-load">按需加载</span></summary><div class="sk-sec">' + inner + '</div></details>';
     };
     return (
-      /* ① 描述与路由 */
-      '<div class="section-title">① 描述与路由<span class="line"></span></div>' +
-      '<div class="sk-lbl">常驻摘要</div>' +
+      /* ① 描述 */
+      '<div class="section-title">① 描述<span class="line"></span></div>' +
+      '<div class="sk-lbl">描述（适用 / 触发 / 不适用）</div>' +
       (edit
-        ? '<textarea class="inp" id="sk-d-sum" rows="3" maxlength="200">' + DF.esc(sum) + '</textarea>' +
-          '<div class="hint"><span id="sk-d-sumn">' + sum.length + '</span>/200 字 · 常驻 Context，随专家常驻加载</div>'
-        : '<div class="sk-ptext">' + DF.esc(sum) + '</div>') +
+        ? '<textarea class="inp" id="sk-d-desc" rows="3" maxlength="' + DESC_MAX + '">' + DF.esc(desc) + '</textarea>' +
+          '<div class="hint"><span id="sk-d-descn">' + desc.length + '</span>/' + DESC_MAX + ' 字 · 列表检索与路由的唯一依据</div>'
+        : '<div class="sk-ptext">' + DF.esc(desc) + '</div>') +
       '<div class="sk-kv"><span class="sk-k">类别</span><span>' +
         (edit
           ? '<select class="inp" id="sk-d-cat" style="max-width:240px">' + catOptionsHtml(s.categoryCode) + '</select>'
           : DF.tag(s.categoryLabel || catLabelOf(s.categoryCode), catColor(s.categoryCode))) +
       '</span></div>' +
-      '<div class="sk-kv"><span class="sk-k">能力清单</span><span>' + DF.esc(capLine(s)) + '</span></div>' +
-      '<div class="sk-kv"><span class="sk-k">触发场景</span><span>' + DF.esc(sceneLine(s)) + '</span></div>' +
-      '<div class="sk-lbl">触发关键词</div>' +
-      '<div class="chips">' +
-        (trig.length ? trig.map(function (t, i) {
-          return '<span class="chip">' + DF.esc(t) + (edit ? '<span class="sk-x" data-dtrig="' + i + '" title="删除">×</span>' : '') + '</span>';
-        }).join('') : '<span class="sk-n">暂无</span>') +
-      '</div>' +
-      (edit ? '<input class="inp sk-chipin" id="sk-d-trigin" placeholder="输入关键词后回车添加">' : '') +
       '<div class="sk-lbl">标签</div>' +
       '<div class="chips">' +
         (tags.length ? tags.map(function (t, i) {
@@ -659,7 +720,7 @@
       /* ② 工作内容（渐进式披露） */
       '<div class="section-title">② 工作内容（渐进式披露）<span class="line"></span></div>' +
       '<div class="notice">' + DF.icon('book', 14) +
-        '<span>渐进式披露：常驻摘要常驻 Context，以下章节按需加载，不占用常驻窗口</span></div>' +
+        '<span>以下五章、踩坑与引用组成编排文档；全文视图按 API-31 原样展示，前端不再拼接</span></div>' +
       '<div class="tree">' + SECTIONS.map(function (x, i) { return secBlock(x[0], x[1], i); }).join('') + '</div>' +
 
       /* ③ 踩坑记录与禁令 */
@@ -693,8 +754,8 @@
     if (!cur || !cur.edit || !cur.draft) return;
     var box = document.getElementById('sk-dbody');
     if (!box) return;
-    var sum = box.querySelector('#sk-d-sum');
-    if (sum) cur.draft.summary = sum.value;
+    var desc = box.querySelector('#sk-d-desc');
+    if (desc) cur.draft.description = desc.value;
     var cat = box.querySelector('#sk-d-cat');
     if (cat) cur.draft.categoryCode = cat.value;
     box.querySelectorAll('textarea[data-sec]').forEach(function (t) {
@@ -706,18 +767,11 @@
     if (!cur || !cur.edit || !cur.draft) return;
     var box = document.getElementById('sk-dbody');
     if (!box) return;
-    var sum = box.querySelector('#sk-d-sum');
-    if (sum) {
-      var cnt = box.querySelector('#sk-d-sumn');
-      sum.oninput = function () { if (cnt) cnt.textContent = sum.value.length; };
+    var desc = box.querySelector('#sk-d-desc');
+    if (desc) {
+      var cnt = box.querySelector('#sk-d-descn');
+      desc.oninput = function () { if (cnt) cnt.textContent = desc.value.length; };
     }
-    box.querySelectorAll('[data-dtrig]').forEach(function (el) {
-      el.onclick = function () {
-        harvest();
-        cur.draft.triggers.splice(+el.getAttribute('data-dtrig'), 1);
-        paintDrawer();
-      };
-    });
     box.querySelectorAll('[data-dtag]').forEach(function (el) {
       el.onclick = function () {
         harvest();
@@ -732,17 +786,6 @@
         paintDrawer();
       };
     });
-    var tin = box.querySelector('#sk-d-trigin');
-    if (tin) tin.onkeydown = function (e) {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      harvest();
-      var v = tin.value.trim();
-      if (!v) return;
-      if ((cur.draft.triggers || []).indexOf(v) >= 0) { DF.toast('关键词已存在', 'warn'); return; }
-      cur.draft.triggers.push(v);
-      paintDrawer();
-    };
     var tagin = box.querySelector('#sk-d-tagin');
     if (tagin) tagin.onkeydown = function (e) {
       if (e.key !== 'Enter') return;
@@ -771,10 +814,10 @@
     harvest();
     var d = cur.draft;
     var name = String(d.name || '').trim();
-    var summary = String(d.summary || '').trim();
+    var description = String(d.description || '').trim();
     if (!name) { DF.toast('请填写 Skill 名称', 'err'); return; }
-    if (!summary) { DF.toast('请填写常驻摘要', 'err'); return; }
-    if (summary.length > 200) { DF.toast('常驻摘要不能超过 200 字', 'err'); return; }
+    if (descLen(description) < DESC_MIN) { DF.toast('请填写 Skill 描述', 'err'); return; }
+    if (descLen(description) > DESC_MAX) { DF.toast('描述需在 1–400 字之间', 'err'); return; }
     if (!d.categoryCode) { DF.toast('请选择 Skill 类别', 'err'); return; }
     var sections = {};
     SECTIONS.forEach(function (x) {
@@ -783,9 +826,8 @@
     var body = {
       name: name,
       categoryCode: d.categoryCode,
-      summary: summary,
+      description: description,
       tags: (d.tags || []).slice(),
-      triggers: (d.triggers || []).slice(),
       sections: sections,
       pitfalls: (d.pitfalls || []).slice(),
       refs: (d.refs || []).map(function (r) {
@@ -805,6 +847,7 @@
       cur.dto = dto;
       cur.draft = DF.deep(dto);
       cur.edit = false;
+      cur.doc = null;
       paintDrawer();
       DF.toast('已保存 · 当前版本 ' + dto.version, 'ok');
     }).catch(function (err) {
