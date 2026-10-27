@@ -144,7 +144,7 @@ updated: 2026-10-26
 | `CMP-workflow-list` | ✓ | ✓ | `SCN-0002` verified（46/46） | — |
 | `CMP-workflow-editor` | ✓ | ✓ | `SCN-0003` verified（46/46） | — |
 | `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（46/46） | — |
-| `CMP-skills` | ✓ | ✓ | `SCN-0005` + `SCN-0013` + `SCN-0014` + `SCN-0015` verified（M1 场景 55/55；专门页引擎 15/15） | — |
+| `CMP-skills` | ✓ | ✓ | `SCN-0005` + `SCN-0013` + `SCN-0014` + `SCN-0015` verified（M1 场景 56/56；专门页引擎 15/15） | — |
 | `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（46/46） | — |
 | `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（46/46） | — |
 | `CMP-tools` | ✓ | ✓ | `SCN-0008` verified（46/46） | — |
@@ -156,10 +156,10 @@ updated: 2026-10-26
 - 语法层：`node --check` 全部页面 JS、`bff/*.js`、`tests/bff/*.js`。
 - 结构层：`node tools/smoke-test.js`（需 jsdom，安装见 `dev-environment.md`）。
 - 引擎层：`node tools/verify-user-menu.js`（需 Playwright WebKit 与运行中的 `:3000`）。
-- 业务场景层：`node tools/verify-m1-scenarios.js`（DOM/jsdom，13 场景，55/55；各场景至少 3 正 1 反）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）与 `tools/verify-b1-writes.js`（写 4/4）。
+- 业务场景层：`node tools/verify-m1-scenarios.js`（DOM/jsdom，13 场景，56/56；各场景至少 3 正 1 反）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）与 `tools/verify-b1-writes.js`（写 4/4）。
 - BFF 层：`npm run test:bff`（Node `node:test` + stub 上游；10 条契约断言，含 `If-None-Match`/304）。
 - 人工层：Safari 走查为发布门禁；未完成不宣称“浏览器全兼容”。
-- **M1 十页 + B1/Skill v2/Skill 专门页场景已 verified**：M1 55/55 通过；专门页另加引擎层 15/15。
+- **M1 十页 + B1/Skill v2/Skill 专门页场景已 verified**：M1 56/56 通过；专门页另加引擎层 15/15。
 
 ## 8 已知偏差与基线登记
 

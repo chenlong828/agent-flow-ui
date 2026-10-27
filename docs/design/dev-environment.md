@@ -80,7 +80,7 @@ updated: 2026-10-26
   ```bash
   npm_config_cache=/tmp/agentflow-npm-cache npm install --no-save --package-lock=false jsdom
   ```
-  2026-10-26 实测 `jsdom@30.1.3` 可跑通 55/55。
+  2026-10-26 实测 `jsdom@30.1.3` 可跑通 56/56。
 - 运行：`npm run test:scenarios`；单场景 `node tools/verify-m1-scenarios.js SCN-0007`。
 - Milkdown 渲染层：`npm run test:skill-render`，用 jsdom + vendor bundle 验证只读渲染、语法高亮与原始 HTML 不执行。
 - 引擎层（Playwright WebKit，需 `:3000` 静态服务 + B1）：

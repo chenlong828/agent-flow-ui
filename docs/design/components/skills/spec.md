@@ -5,7 +5,7 @@ component: CMP-skills
 requirement: REQ-0005
 scenario: SCN-0005
 status: active
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Skill 库
@@ -21,7 +21,7 @@ updated: 2026-10-26
 - 业务价值：为专家与流程设计者提供可复用能力单元的沉淀、检索与组合入口；没有它，专家只能把能力内联写进指令，无法复用、版本化与审计。
 - 负责 / 不负责：负责 Skill 列表（分类 + 标签 + 搜索 + 计数）、启停、删除、引用计数弹窗；负责专门页 `pages/skill-detail.html` 的查看/编辑/新建与文档 Tab 只读渲染（Milkdown + Prism 语法高亮）；不负责专家侧组合与挂载（`CMP-experts`）、工作流节点引用配置（`CMP-workflow-editor`）、外壳/菜单/弹窗原语（`CMP-ui-shell`）。
 - 数据所有权：页面状态直接保存 B1 `SkillListItem` / `SkillDetail` / `SkillCategory` DTO；列表 `GET /skills`、详情 `GET /skills/{id}`、创建 `POST`、更新 `PUT`、启停 `PATCH /enabled`、删除 `DELETE`、分类 `GET /skill-categories`、文档 `GET /skills/{id}/document` 均经 `window.API`。不读 `MOCK`，不建第二套视图模型；编辑草稿只是 `SkillDetail` 的深拷贝，取消即丢弃；版本号由服务端生成，页面不本地递增。`window.API` 单独缓存文档文本与 ETag，不缓存详情 DTO；revision 变化时同时丢弃文档缓存。
-- 公开契约：页面入口 `pages/skills.html`、`pages/skill-detail.html?id=&mode=`；操作 `CMP-skills#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#document`；不变量 ①分类只使用 API 返回的 `code/label`，`data-cat` 使用 code（全部=`all`）；②创建/更新 body 为 `name/categoryCode/description/tags/sections/pitfalls/refs`，不带 `version/enabled`；`description` 必填 1–400 字，页面 trim 后提交；③专门页默认显示结构化五章，编辑态固定结构化表单；④引用只显示 `usedByCount`，B1 不提供引用方明细；⑤删除被引用 Skill 由 B1 返回 409 `referenced`，页面提示引用数并保留数据；⑥启停/删除带 revision，`If-Match` 由 API 层生成；⑦文档 Tab 只消费 API-31 响应体，不在前端拼装，304 复用上次文本，渲染失败显式报错。
+- 公开契约：页面入口 `pages/skills.html`、`pages/skill-detail.html?id=&mode=`；操作 `CMP-skills#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#document`；不变量 ①分类只使用 API 返回的 `code/label`，`data-cat` 使用 code（全部=`all`）；②创建/更新 body 为 `name/categoryCode/description/tags/sections/pitfalls/refs`，不带 `version/enabled`；`description` 必填 1–400 字，页面 trim 后提交；③专门页默认显示结构化五章，编辑/新建态默认结构化表单，可切「预览」Tab 查看草稿 Markdown；④引用只显示 `usedByCount`，B1 不提供引用方明细；⑤删除被引用 Skill 由 B1 返回 409 `referenced`，页面提示引用数并保留数据；⑥启停/删除带 revision，`If-Match` 由 API 层生成；⑦文档 Tab 只消费 API-31 响应体，不在前端拼装，304 复用上次文本，渲染失败显式报错。
 - 依赖：`DF`（`renderShell`、`table`、`empty`、`field`、`tabsHtml`、`modal`、`menu`、`toast`、`tag`、`esc`、`icon`）/ `window.API` / `window.SKILL_MD` / `DEP-0001`；不依赖 `MOCK` 或其他页面组件。
 - 变化轴：五章节内容、文档渲染策略（语法高亮语言集、主题样式、是否增加下载/复制）。
 - 验证入口：`npm start` + `/pages/skills.html`、`/pages/skill-detail.html?id=sk-cres`；`node tools/verify-m1-scenarios.js SCN-0005|SCN-0013|SCN-0014|SCN-0015`；`npm run test:skill-render`；`npm run test:skill-engine`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`。
@@ -66,8 +66,8 @@ updated: 2026-10-26
 | 状态 | 内容 | 交互 |
 |---|---|---|
 | 查看 | 结构化五章（默认）、踩坑、参考引用、版本；顶部 Tab 可切「结构化 / 文档」 | 编辑按钮进入编辑态 |
-| 编辑 | 名称、类别、`description`、标签、五章 `sections`、踩坑 | 保存 `PUT /skills/{id}` 带 `If-Match`；取消丢弃草稿 |
-| 新建 | 名称、类别、`description`、标签、五章 `sections`、踩坑 | 保存 `POST /skills`，成功后进入该 id 的编辑态 |
+| 编辑 | 名称、类别、`description`、标签、五章 `sections`、踩坑；顶部 Tab 可切「结构化 / 预览」 | 保存 `PUT /skills/{id}` 带 `If-Match`；取消丢弃草稿 |
+| 新建 | 名称、类别、`description`、标签、五章 `sections`、踩坑；顶部 Tab 可切「结构化 / 预览」 | 保存 `POST /skills`，成功后进入该 id 的编辑态 |
 
 ### 4.1 文档 Tab（API-31 + Milkdown）
 
@@ -76,6 +76,12 @@ updated: 2026-10-26
 - 代码块启用 `@milkdown/plugin-prism` 语法高亮。
 - 元信息显示 `200 · 已更新` / `304 · 已复用上次文本` / `正在校验更新…`；304 保留上次文本。
 - 404、网络失败、渲染器初始化失败都显式报错并提供重试；停用 Skill 仍可读取（B1 返回 200）。
+
+### 4.2 编辑态预览 Tab（草稿 Markdown）
+
+- 编辑/新建态顶部 Tab 可切「结构化 / 预览」；预览只读渲染当前草稿生成的 Markdown，不调用 API-31。
+- Markdown 由草稿字段本地拼装：frontmatter `name/description/version` + 五章 `sections` + 可选 `常见踩坑`、`参考资料`；空可选节整节省略。
+- 渲染仍走 `window.SKILL_MD.render(target, text)`；渲染失败显式报错并可重试，不回落 `<pre>`。
 
 ## 5 新建与保存
 
