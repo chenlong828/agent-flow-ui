@@ -21,8 +21,9 @@
     catsErr: '',
     loading: false,
     err: '',
-    tab: 'structured',   // structured | document
+    tab: 'structured',   // structured | document | preview
     doc: null,           // {loading, err, text, notModified, rendered, renderErr, rendering}
+    preview: null,       // {text, rendered, renderErr, rendering}
     saving: false
   };
 
@@ -152,6 +153,7 @@
       state.mode = 'edit';
       state.draft = DF.deep(state.skill);
       state.doc = null;
+      state.preview = null;
       state.tab = 'structured';
       render();
     };
@@ -161,6 +163,7 @@
       state.mode = 'view';
       state.draft = null;
       state.doc = null;
+      state.preview = null;
       state.tab = 'structured';
       render();
     };
@@ -183,7 +186,7 @@
       return;
     }
     if (state.mode === 'view') renderView();
-    else renderForm();
+    else renderEdit();
   }
 
   function errorHtml(title, msg, retryId) {
@@ -345,10 +348,117 @@
     });
   }
 
-  /* ---------------- 编辑 / 新建表单 ---------------- */
-  function renderForm() {
+  /* ---------------- 编辑 / 新建 ---------------- */
+  function draftMarkdown(d) {
+    var lines = [];
+    var name = (d && d.name) || '';
+    var desc = (d && d.description) || '';
+    var version = (d && d.version) || '';
+    if (name || desc || version) {
+      lines.push('---');
+      if (name) lines.push('name: "' + name + '"');
+      if (desc) lines.push('description: "' + desc + '"');
+      if (version) lines.push('version: "' + version + '"');
+      lines.push('---', '');
+    }
+    SK.SECTIONS.forEach(function (sec) {
+      lines.push('## ' + sec[1], '');
+      lines.push(String((d && d.sections && d.sections[sec[0]]) || ''), '');
+    });
+    var pf = (d && d.pitfalls) || [];
+    if (pf.length) {
+      lines.push('## 常见踩坑', '');
+      pf.forEach(function (p) { lines.push('- ' + p); });
+      lines.push('');
+    }
+    var refs = (d && d.refs) || [];
+    if (refs.length) {
+      lines.push('## 参考资料', '');
+      refs.forEach(function (r) {
+        var bits = [];
+        if (r && r.label) bits.push(r.label);
+        if (r && r.refType) bits.push('(' + r.refType + ')');
+        if (r && r.path) bits.push('— ' + r.path);
+        lines.push('- ' + bits.join(' '));
+      });
+      lines.push('');
+    }
+    return lines.join('\n').replace(/\n+$/, '') + '\n';
+  }
+
+  function renderEdit() {
     var body = document.getElementById('page-body');
     if (!body) return;
+    body.innerHTML =
+      '<div class="skd-layout">' +
+        DF.tabsHtml([
+          { k: 'structured', label: '结构化' },
+          { k: 'preview', label: '预览' }
+        ], state.tab, 'data-tab', 'id="sk-tab"') +
+        '<div id="sk-viewbox"></div>' +
+      '</div>';
+    body.querySelectorAll('#sk-tab [data-tab]').forEach(function (el) {
+      el.onclick = function () {
+        var next = el.getAttribute('data-tab');
+        if (next === state.tab) return;
+        state.tab = next;
+        if (state.tab === 'preview') renderPreviewTab();
+        else renderForm();
+      };
+    });
+    if (state.tab === 'preview') renderPreviewTab();
+    else renderForm();
+  }
+
+  function renderPreviewTab() {
+    var body = document.getElementById('page-body');
+    if (!body) return;
+    var text = draftMarkdown(state.draft);
+    state.preview = { text: text, rendered: false, renderErr: '', rendering: false };
+    document.getElementById('sk-viewbox').innerHTML =
+      '<div class="skd-card">' +
+        '<div class="skd-docbar"><div><div class="skd-docmeta">草稿预览 · 未保存</div><div id="sk-preview-err"></div></div></div>' +
+        '<div id="sk-preview-root" class="skd-docroot"></div>' +
+      '</div>';
+    renderMarkdownPreview();
+  }
+
+  function renderPreviewError(msg) {
+    var el = document.getElementById('sk-preview-err');
+    if (el) el.innerHTML =
+      '<div class="notice" style="margin-top:6px">' + DF.icon('warn', 14) +
+      '<span>' + DF.esc(msg) + ' <a href="javascript:;" id="sk-preview-retry">重试</a></span></div>';
+    var retry = document.getElementById('sk-preview-retry');
+    if (retry) retry.onclick = renderPreviewTab;
+  }
+
+  function renderMarkdownPreview() {
+    var p = state.preview;
+    if (!p || !p.text || p.rendered || p.rendering) return;
+    var target = document.getElementById('sk-preview-root');
+    if (!target) return;
+    if (typeof window.SKILL_MD !== 'object' || typeof window.SKILL_MD.render !== 'function') {
+      renderPreviewError('Markdown 渲染器不可用');
+      return;
+    }
+    p.rendering = true;
+    p.renderErr = '';
+    window.SKILL_MD.render(target, p.text).then(function () {
+      if (state.preview !== p) return;
+      p.rendering = false;
+      p.rendered = true;
+    }).catch(function (err) {
+      if (state.preview !== p) return;
+      p.rendering = false;
+      p.rendered = false;
+      renderPreviewError('Markdown 渲染失败：' + (err && err.message ? err.message : '未知错误'));
+    });
+  }
+
+  /* ---------------- 编辑 / 新建表单 ---------------- */
+  function renderForm() {
+    var viewbox = document.getElementById('sk-viewbox');
+    if (!viewbox) return;
     var d = state.draft;
     if (!d) return;
     var isEdit = state.mode === 'edit';
@@ -361,9 +471,8 @@
       return '<details' + (i === 0 ? ' open' : '') + '><summary>' + DF.esc(label) + '</summary>' +
         '<div class="skd-sec"><textarea class="inp" data-sec="' + k + '" rows="5">' + DF.esc(val) + '</textarea></div></details>';
     }).join('');
-    body.innerHTML =
-      '<div class="skd-layout">' +
-        '<div class="skd-card">' +
+    viewbox.innerHTML =
+      '<div class="skd-card">' +
           DF.field('名称', '<input class="inp" id="sk-name" maxlength="80" value="' + DF.esc(d.name || '') + '" placeholder="如：CRES 技能">', { required: true }) +
           DF.field('类别', '<select class="inp" id="sk-cat">' +
             (state.cats.length ? catOptionsHtml(d.categoryCode) : '') +
@@ -396,8 +505,7 @@
                   (r.path ? '<span class="mono skd-refpath">' + DF.esc(r.path) + '</span>' : '') + '</div>';
               }).join('') : '<div class="sub" style="padding:2px 0">暂无参考引用</div>')
             : '') +
-        '</div>' +
-      '</div>';
+        '</div>';
     bindForm();
   }
 
@@ -500,6 +608,7 @@
       state.skill = dto;
       state.draft = null;
       state.doc = null;
+      state.preview = null;
       if (state.mode === 'new') {
         state.id = dto.id;
         state.mode = 'edit';

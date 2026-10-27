@@ -723,6 +723,20 @@ async function scn0014T4() {
   } finally { ctx2.close(); }
 }
 
+async function scn0014T5() {
+  const ctx = await openSkillDetail('sk-cres', 'edit');
+  try {
+    const calls = stubMarkdownRenderer(ctx);
+    setValue(q(ctx.doc, '#sk-desc'), '预览草稿描述');
+    click(q(ctx.doc, '[data-tab="preview"]'));
+    await wait(20);
+    assert.ok(ctx.doc.querySelector('.sk-md-stub'), '预览未渲染 Markdown');
+    assert.ok(calls[0].text.includes('预览草稿描述'), '预览未使用最新草稿');
+    assert.match(q(ctx.doc, '.skd-docmeta').textContent, /草稿预览/);
+    assertNoPageErrors(ctx);
+  } finally { ctx.close(); }
+}
+
 /* ------------------------------------------------------------------ */
 /* SCN-0015 Milkdown 渲染 Skill 文档                                  */
 /* ------------------------------------------------------------------ */
@@ -1366,7 +1380,8 @@ const SCENARIOS = [
       ['SCN-0014-T1', '正', '专门页面默认结构化五章且无抽屉', scn0014T1],
       ['SCN-0014-T2', '正', '专门页编辑保存版本递增并回到查看态', scn0014T2],
       ['SCN-0014-T3', '正', '专门页新建成功进入编辑态', scn0014T3],
-      ['SCN-0014-T4', '反', '缺 id/无效 id 显式报错', scn0014T4]
+      ['SCN-0014-T4', '反', '缺 id/无效 id 显式报错', scn0014T4],
+      ['SCN-0014-T5', '正', '编辑态预览 Tab 渲染最新草稿 Markdown', scn0014T5]
     ]
   },
   {
