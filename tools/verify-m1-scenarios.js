@@ -733,6 +733,12 @@ async function scn0014T5() {
     assert.ok(ctx.doc.querySelector('.sk-md-stub'), '预览未渲染 Markdown');
     assert.ok(calls[0].text.includes('预览草稿描述'), '预览未使用最新草稿');
     assert.match(q(ctx.doc, '.skd-docmeta').textContent, /草稿预览/);
+    assert.ok(q(ctx.doc, '[data-tab="preview"]').classList.contains('active'), '切到预览后预览 Tab 未高亮');
+    assert.ok(!q(ctx.doc, '[data-tab="structured"]').classList.contains('active'), '切到预览后结构化 Tab 仍高亮');
+    click(q(ctx.doc, '[data-tab="structured"]'));
+    await wait(20);
+    assert.ok(q(ctx.doc, '[data-tab="structured"]').classList.contains('active'), '切回结构化后结构化 Tab 未高亮');
+    assert.ok(!q(ctx.doc, '[data-tab="preview"]').classList.contains('active'), '切回结构化后预览 Tab 仍高亮');
     assertNoPageErrors(ctx);
   } finally { ctx.close(); }
 }
