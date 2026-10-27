@@ -41,4 +41,4 @@ updated: 2026-10-27
 | SCN-0014-T2 | 正 | 编辑保存后 `version/updatedAt` 来自响应 DTO，页面回到查看态且仍无 `summary/triggers` | `tools/verify-m1-scenarios.js#SCN-0014-T2` |
 | SCN-0014-T3 | 正 | 新建态提交后进入新建 Skill 的编辑态，列表重新进入后能看到新条目 | `tools/verify-m1-scenarios.js#SCN-0014-T3` |
 | SCN-0014-T4 | 反 | 缺 id/无效 id/404 显示显式错误与重试入口，不回落 MOCK、不渲染空页 | `tools/verify-m1-scenarios.js#SCN-0014-T4`、`tools/verify-skill-page-engine.js#C` |
-| SCN-0014-T5 | 正 | 编辑态「预览」Tab 用最新草稿 Markdown 只读渲染，不调用 API-31 | `tools/verify-m1-scenarios.js#SCN-0014-T5` |
+| SCN-0014-T5 | 正 | 编辑态「预览」Tab 用最新草稿 Markdown 只读渲染，Tab 高亮随切换更新，不调用 API-31 | `tools/verify-m1-scenarios.js#SCN-0014-T5` |

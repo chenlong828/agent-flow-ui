@@ -402,6 +402,9 @@
         var next = el.getAttribute('data-tab');
         if (next === state.tab) return;
         state.tab = next;
+        body.querySelectorAll('#sk-tab [data-tab]').forEach(function (tab) {
+          tab.classList.toggle('active', tab.getAttribute('data-tab') === state.tab);
+        });
         if (state.tab === 'preview') renderPreviewTab();
         else renderForm();
       };
