@@ -5,7 +5,7 @@ component: CMP-tools
 requirement: REQ-0008
 scenario: SCN-0008
 status: active
-updated: 2026-10-25
+updated: 2026-10-28
 ---
 
 # 工具与集成
@@ -20,11 +20,14 @@ updated: 2026-10-25
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为专家与流程设计者提供确定性工具（MCP/CLI/脚本）的注册与治理入口；没有它，工具只能散落在专家提示词里，无法复用、查看被引用情况。
 - 负责 / 不负责：负责工具列表（类型/状态/搜索筛选）、注册/编辑弹窗（参数定义、超时、所属 Harness）、引用计数查看、删除；不负责工具真实执行运行时、Harness 注册与健康（`CMP-harnesses`）、专家/工作流节点对工具的绑定（各自组件）、CI/CD 集成（本版占位）。
+- 内部逻辑：筛选 value 用 DTO 枚举；创建/更新固定 body；状态只按 B1 返回，不提供调试；引用只读 `usedByCount`；删除被引用 409。
 - 数据所有权：页面状态直接保存 B1 `ToolListItem` / `ToolDetail` DTO；列表 `GET /tools`、详情 `GET /tools/{id}`、创建 `POST`、更新 `PUT`、删除 `DELETE` 均经 `window.API`；所属 Harness 下拉只读 `GET /harnesses`。不读 `MOCK`，不建第二套视图模型；写成功后重新拉列表或更新 DTO。
 - 公开契约：页面入口 `pages/tools.html`；操作 `CMP-tools#list`、`#register`、`#edit`、`#refs`、`#delete`；不变量 ①列表筛选的 value 使用 DTO 枚举 `mcp/cli/script` 与 `unverified/available/unavailable`，中文只在显示时映射；②创建/更新 body 为 `name/kind/invocation/description/harnessId/timeoutMs/params[{key,type,description}]`；③状态只按 B1 返回值展示，B1 没有调试端点，页面不提供调试、不把状态改为 `available`；④引用只显示 `usedByCount`，B1 不提供引用方明细；⑤删除被引用工具由 B1 返回 409 `referenced`，页面提示并保留数据。
 - 依赖：`DF`（外壳、Tabs、表格、弹窗、Toast、图标）/ `window.API`；不依赖 `MOCK` 或其他页面组件。
+- 冷热属性：冷（管理面；工具真实执行不在本组件）。
 - 变化轴：工具调用协议与参数 schema（MCP 端点 / CLI 命令模板 / 脚本）最易变。
 - 验证入口：`npm start` + `/pages/tools.html`；`node tools/verify-m1-scenarios.js SCN-0008`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`。
+- 验证计划：注册/筛选/引用/删除→SCN-0008 T1-T4；结构→`smoke-test`；真实 B1→`test:b1-pages/writes`。
 - 预算：`tools.js` 约 22 KB + 本规格约 4 KB；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/tools.html`（所属 Harness 下拉读真实 Harness 列表）。
 - 删除测试：删除后专家/节点失去可引用的确定性工具来源，复杂度会集中到专家与编辑器，故保留为独立组件。

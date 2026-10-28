@@ -43,8 +43,9 @@ docs/
 
 ## 维护纪律（速记）
 
-- 新文档先问「属于哪一态」，按路径放置并写 frontmatter；layer 与目录矛盾、status 越出本层值域、module 与组件目录不符，发现即修；改完跑 `npm run check:docs`（零依赖，校验路径、值域、模块卡必备字段、works brief/result、`CMP-`/`SCN-`/`REQ-`/`DEP-` 引用、旧路径残留）；
-- 组件规格必须在 `## 1` 前有 `## 0 模块卡`，13 个字段齐全（见 `history/works/2026-10-23-component-baseline/brief.md` 模板）；frontmatter 的 `requirement` / `scenario` 必须分别解析到存在的 REQ/SCN；
+- 新文档先问「属于哪一态」，按路径放置并写 frontmatter；layer 与目录矛盾、status 越出本层值域、module 与组件目录不符，发现即修；改完跑 `npm run check:docs`（零依赖，校验路径、值域、16 项模块卡字段、works brief/result 与 closed 归档、active 在 roadmap、verified 场景不再标 pending、`CMP-`/`SCN-`/`REQ-`/`DEP-` 引用、旧路径残留）；
+- 日常快速门禁 `npm run test:gate`；提交前 `npm test`（含 jsdom 56 条业务场景，需先装 jsdom）；
+- 组件规格必须在 `## 1` 前有 `## 0 模块卡`，16 个字段齐全（模板见 `.agents/skills/arch-design-spec/SKILL.md` 的「模块卡」）；frontmatter 的 `requirement` / `scenario` 必须分别解析到存在的 REQ/SCN；
 - 场景索引 `design/scenarios/_index.md` 是生成物，用 `npm run docs:index` 重生成，`npm run docs:index:check` 校验无 diff，不手改；
 - 一处一事：同一事实只有一个权威文档，其他地方引用不复制；
 - 需求进 `requirements/`，每张卡必须引 `SCN-xxxx`；工序 brief 必须引 `REQ-xxxx`，一个 REQ 同时只挂一个在飞工序；

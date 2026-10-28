@@ -10,6 +10,8 @@ const path = require('path');
 
 const ROOT = path.resolve(process.argv[2] || 'docs');
 const PROJECT = path.resolve(ROOT, '..');
+const now = new Date();
+const TODAY = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 const DOMAIN = {
   requirements: new Set(['draft', 'accepted', 'delivered', 'superseded', 'dropped']),
   plan: new Set(['draft', 'current']),
@@ -18,9 +20,9 @@ const DOMAIN = {
   history: new Set(['frozen']),
 };
 const CARD_FIELDS = [
-  '状态：', '单元 / 层：', '业务价值：', '负责 / 不负责：', '数据所有权：',
-  '公开契约：', '依赖：', '变化轴：', '验证入口：', '预算：', '单独运行：',
-  '删除测试：', '已知偏差：',
+  '状态：', '单元 / 层：', '业务价值：', '负责 / 不负责：', '内部逻辑：',
+  '数据所有权：', '公开契约：', '依赖：', '冷热属性：', '变化轴：', '验证入口：',
+  '验证计划：', '预算：', '单独运行：', '删除测试：', '已知偏差：',
 ];
 
 function walk(dir) {
@@ -69,6 +71,7 @@ for (const p of all) {
   if (!DOMAIN[layer].has(f.status)) err(`${r}: status=${f.status} 不在 ${layer} 值域`);
   for (const k of ['layer', 'module', 'status', 'updated']) if (!f[k]) err(`${r}: 缺 ${k}`);
   if (f.updated && !/^\d{4}-\d{2}-\d{2}$/.test(f.updated)) err(`${r}: updated 不是 YYYY-MM-DD`);
+  else if (f.updated && f.updated > TODAY) err(`${r}: updated=${f.updated} 晚于今天 ${TODAY}`);
 
   if (parts[0] === 'design' && parts[1] === 'components' && parts.length >= 4) {
     const slug = parts[2];
@@ -104,6 +107,9 @@ for (const p of all) {
 
   if (parts[0] === 'requirements' && /^REQ-\d{4}-/.test(path.basename(r))) {
     reqs.add(`REQ-${path.basename(r).split('-')[1]}`);
+    if (f.status === 'superseded' && !/^REQ-\d{4}$/.test(f.superseded_by || '')) {
+      err(`${r}: superseded 需求缺 superseded_by: REQ-xxxx`);
+    }
     reqCards.push({ r, text, status: f.status });
   }
 }
@@ -129,8 +135,27 @@ for (const q of reqCards) {
   }
 }
 
-/* works：每个工序必须有 brief；closed 必须有 result；brief 必须引 REQ 或注明旁路 */
+/* 已 verified 的场景不得在现行文档里仍标 pending / 待实现 */
+const scenarioStatus = new Map(scenarioRefs.map((s) => [s.id, s.status]));
+for (const p of all) {
+  const r = rel(p);
+  if (r.split(path.sep)[0] === 'history') continue;
+  const text = fs.readFileSync(p, 'utf8');
+  for (const line of text.split('\n')) {
+    if (!/(implementation pending|pending|待实现|待补)/i.test(line)) continue;
+    for (const m of line.matchAll(/SCN-\d{4}/g)) {
+      if (scenarioStatus.get(m[0]) === 'verified') {
+        err(`${r}: ${m[0]} 已是 verified，但文中仍标 pending/待实现`);
+      }
+    }
+  }
+}
+
+/* works：每个工序必须有 brief；closed 必须归档；active 必须出现在 roadmap「当前在飞」 */
 const worksRoot = path.join(ROOT, 'works');
+const roadmapPath = path.join(ROOT, 'plan', 'roadmap.md');
+const roadmapText = fs.existsSync(roadmapPath) ? fs.readFileSync(roadmapPath, 'utf8') : '';
+const inFlight = (roadmapText.match(/## 当前在飞\n([\s\S]*?)(?=\n## |$)/) || [null, ''])[1] || '';
 if (fs.existsSync(worksRoot)) {
   for (const ent of fs.readdirSync(worksRoot, { withFileTypes: true })) {
     if (!ent.isDirectory()) continue;
@@ -141,8 +166,12 @@ if (fs.existsSync(worksRoot)) {
     const briefText = fs.readFileSync(brief, 'utf8');
     const bf = frontmatter(briefText);
     if (!bf) err(`works/${ent.name}/brief.md: 缺 frontmatter`);
-    if (briefText.includes('status: closed') && !fs.existsSync(result)) {
-      err(`works/${ent.name}: closed 工序缺 result.md`);
+    if (bf && bf.status === 'closed') {
+      if (!fs.existsSync(result)) err(`works/${ent.name}: closed 工序缺 result.md`);
+      err(`works/${ent.name}: closed 工序必须归档到 history/works/（改 layer: history / status: frozen）`);
+    }
+    if (bf && bf.status === 'active' && !inFlight.includes(`works/${ent.name}`)) {
+      err(`works/${ent.name}: active 工序未出现在 roadmap「当前在飞」`);
     }
     if (!/REQ-\d{4}/.test(briefText) && !briefText.includes('旁路')) {
       err(`works/${ent.name}/brief.md: 需引 REQ-xxxx 或注明「旁路」`);

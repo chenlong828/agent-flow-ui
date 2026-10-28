@@ -29,7 +29,7 @@ description: 要新建或改动文档树内的任何文件（需求卡、组件�
 - 一个需求一个文件：`REQ-0001-<slug>.md`；编号稳定不复用。
 - 只放卡，不放方案；怎么拆需求、怎么找场景归 req-scenario-spec。
 - 状态：`draft / accepted / delivered / superseded / dropped`。
-- `delivered` 留在原地（回答“为什么有它”）；`dropped`、`superseded` 移入 `history/requirements/`。
+- `delivered` 留在原地（回答“为什么有它”）；`superseded` 也留在原地，必须带 `superseded_by: REQ-xxxx`，让引用仍可解析（移动会让现行引用断链）；`dropped` 仅在确认无现行引用时移入 `history/requirements/`。
 - 需求卡不写优先级与排期；排期唯一在 `plan/roadmap.md`。
 
 ## design/：真相
@@ -70,7 +70,7 @@ description: 要新建或改动文档树内的任何文件（需求卡、组件�
 
 - `decisions/`：整篇决策；轻量决策放 `decisions/adr/`。
 - `works/`：已归档工序。
-- `requirements/`：被取代或放弃的需求卡。
+- `requirements/`：仅归档已确认无现行引用的 `dropped` 需求卡；`superseded` 留在 `requirements/` 原地，用 `superseded_by` 表达取代关系。
 - `scenarios/`、`components/`：废弃场景与退役组件。
 - `pitfalls.md`：坑档案（现象、存续条件、对策落点）。
 

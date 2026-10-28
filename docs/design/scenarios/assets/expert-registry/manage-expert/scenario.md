@@ -4,7 +4,7 @@ module: experts
 status: verified
 flow: manage-expert
 scenario: SCN-0006
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # SCN-0006 专家注册与组合配置
@@ -31,7 +31,7 @@ updated: 2026-10-26
 
 ## 测试
 
-执行层：DOM（jsdom）+ `tools/fake-b1.js` 内存传输；真实读取/写入另由 `tools/verify-b1-pages.js`、`tools/verify-b1-writes.js` 覆盖。最近一次执行：2026-10-26，M1 46/46 通过。
+执行层：DOM（jsdom）+ `tools/fake-b1.js` 内存传输；真实读取/写入另由 `tools/verify-b1-pages.js`、`tools/verify-b1-writes.js` 覆盖。最近一次执行：2026-10-28，M1 40/40 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|

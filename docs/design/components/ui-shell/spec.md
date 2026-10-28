@@ -5,7 +5,7 @@ component: CMP-ui-shell
 requirement: REQ-0001
 scenario: SCN-0001
 status: active
-updated: 2026-10-23
+updated: 2026-10-28
 ---
 
 # 全局布局与设计约定
@@ -21,11 +21,14 @@ updated: 2026-10-23
 - 单元 / 层：组件 / L2 页面组件（跨页共享外壳）
 - 业务价值：为 13 个页面提供一致的导航、顶栏、面包屑、页头与字体缩放；没有它，每个页面都要重写外壳，用户区、通知角标与全局交互无处统一。
 - 负责 / 不负责：负责 `DF.renderShell` 生成的顶栏/左侧导航/面包屑/页头容器、用户区下拉、待确认角标、字体缩放双路径（zoom / transform 兜底）与 `DF` 公共组件原语；不负责任何页面的业务主体、业务数据写入与页面路由（由各 `CMP-*` 页面组件承担）。
+- 内部逻辑：13 页统一 `renderShell` 生成顶栏/导航/面包屑/页头；`DF.menu` 左缘与 `alignRight` 右缘语义固定；字号优先 `zoom`、探测失败走 `transform` 兜底；铃铛角标只统计 `MOCK.instances` 中「等待人工确认」。
 - 数据所有权：读 `MOCK.instances`（仅统计 `status === '等待人工确认'` 作为铃铛角标）；不写任何业务集合；写 localStorage `df-font`（字号 s/m/l/xl）与 `df-collapsed`（导航折叠），均为 UI 偏好，刷新保留；不写 sessionStorage。
 - 公开契约：入口 `DF.renderShell(...)`（13 页共用）；操作 `CMP-ui-shell#renderShell`（外壳渲染）、`#topbar`（环境/通知/用户区）、`#nav`（4 组 9 项 + 折叠）、`#font-scale`（字号切换与跨页持久）、`#bell`（待确认角标与跳转）、`#user-menu`（Key 管理 / 退出登录）；不变量 13 页外壳结构一致（顶栏 + 220px 导航 + 面包屑/页头/`#page-body` 三兄弟）；`DF.menu` 默认左缘语义、`alignRight` 右缘语义不得互换；缩放系数一律走 `DF.zoomK()` / `DF.zoomOnFixed()`，页面不得各自缓存。
 - 依赖：`MOCK`（只读角标）；不依赖任何页面组件；页面通过全局 `DF` 反向依赖本组件，属外壳契约。
+- 冷热属性：冷（页面加载时同步渲染，无 SLA 与延迟预算）；不经过 `CMP-bff` 热路径。
 - 变化轴：导航分组/页面增减与顶栏全局操作（环境、通知、用户区）最可能变化，改这里会同时影响 13 页。
 - 验证入口：`node tools/verify-user-menu.js`（SCN-0001，45/45，2026-10-23 复跑）；`node tools/smoke-test.js`（12/12）；Safari 人工走查待验收（R9）。
+- 验证计划：外壳结构与 13 页一致性→`smoke-test`；用户菜单/缩放/遮挡→`verify-user-menu` SCN-0001 4 条 45 断言；Safari 手工走查仍为发布门禁（R9）。
 - 预算：`assets/js/ui.js` 约 18 KB + 本规格约 8 KB，无专属测试文件；上限 120k token，远低于上限。
 - 单独运行：`npm start` → 任一 `/pages/*.html`（外壳随页面加载）。
 - 删除测试：删除后 13 页同时失去导航、顶栏、用户区与字号能力，复杂度会复制到每个页面，故保留为唯一共享组件。

@@ -1,7 +1,7 @@
 ---
-layer: works
+layer: history
 module: skills
-status: closed
+status: frozen
 updated: 2026-10-26
 ---
 

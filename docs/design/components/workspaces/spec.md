@@ -5,7 +5,7 @@ component: CMP-workspaces
 requirement: REQ-0010
 scenario: SCN-0010
 status: active
-updated: 2026-10-23
+updated: 2026-10-28
 ---
 
 # 工作区配置
@@ -20,11 +20,14 @@ updated: 2026-10-23
 - 单元 / 层：组件 / L2 页面组件（列表 + 详情两个页面入口）
 - 业务价值：为流程设计者提供工作区的仓库绑定、worktree 策略、目录模板、凭证关联与归档清理；没有它，节点之间唯一的共享信息通道（Workspace）无法准备，Agent 只能各自为战。
 - 负责 / 不负责：负责工作区列表（状态/分支/最近使用）、三步新建向导、详情页（仓库与分支、worktree 隔离策略、目录模板、关联 Key、连通性校验、归档/清理）、删除确认；不负责真实 git 操作与远端克隆、Key 的定义与校验（`CMP-keys`）、节点运行期对工作区的读写（编排引擎/`CMP-instances`）、外壳（`CMP-ui-shell`）。
+- 内部逻辑：三步顺序固定，步① 校验不过不能前进；连接失败只提示不阻断；详情只展示已绑定 Key；归档只追加；删除二次确认；`df-new-workspace` 一次性。
 - 数据所有权：读 `MOCK.workspaces`、`MOCK.keys`（关联凭证）；写 `MOCK.workspaces`（新建 `push`、删除 `splice`、归档 `archives.unshift`、详情字段编辑，仅内存态，刷新复位）；sessionStorage `df-new-workspace` 由 `WSC` 在列表与详情间一次性传递；无第二写入口说明：`MOCK.workspaces` 仅本组件写，`workflow-editor` / `instance-detail` / `keys` 等只读。
 - 公开契约：页面入口 `pages/workspaces.html` 与 `pages/workspace-detail.html?id=<workspaceId>`；操作 `CMP-workspaces#list`、`#create`（三步向导）、`#detail`、`#check-connection`、`#archive`、`#delete`；不变量 新建固定三步顺序「仓库绑定 → 关联 Key/连接测试 → 目录模板」，步① 的名称/仓库 URL 前缀/分支校验不通过不能前进；连接测试失败只提示、不阻断「完成并初始化」（已知偏差）；详情页只展示已绑定的 Key，不展示未关联凭证；归档只追加 `archives` 记录，不删除工作区；删除必须二次确认。
 - 依赖：`DF`（外壳、向导弹窗、表格、Tabs、Toast）/ `MOCK` / `WSC`（`workspace-common.js` 的目录树、创建时间、跨页联动）；不依赖其他页面组件。
+- 冷热属性：冷（管理面；git/连通性为模拟）。
 - 变化轴：仓库/worktree 策略与目录模板最易变，新增策略须同步新建向导、详情页与 `WSC` 展示。
 - 验证入口：`npm start` + `/pages/workspaces.html`、`/pages/workspace-detail.html?id=ws1`；`node tools/smoke-test.js`（全站冒烟，含两页）；SCN-0010（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0010`）。
+- 验证计划：列表/向导/创建/删除归档→SCN-0010 T1-T4；结构→`smoke-test`；两页共用 `WSC`，改动需双页回归。
 - 预算：`workspaces.js` 约 13 KB + `workspace-detail.js` 约 8 KB + `workspace-common.js` 约 2.5 KB + 本规格约 7 KB；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/workspaces.html`（详情页用 `?id=` 定位；两页共用 `WSC`）。
 - 删除测试：删除后工作区无法准备、绑定与清理，节点失去唯一共享通道；复杂度会集中到实例页与 Key 页，故保留为独立组件。

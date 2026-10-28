@@ -51,11 +51,23 @@ function buildIndex() {
         status: f.status || 'draft',
         path: rel,
         updated: f.updated || '1970-01-01',
+        cases: (text.match(/^\| SCN-\d{4}-T\d+ \|/gm) || []).length,
+        ids: text.match(/^\| (SCN-\d{4}-T\d+) \|/gm) || [],
       };
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 
   const updated = rows.reduce((max, r) => (r.updated > max ? r.updated : max), '1970-01-01');
+  const docIds = new Set();
+  for (const r of rows) for (const line of r.ids) {
+    const m = line.match(/SCN-\d{4}-T\d+/);
+    if (m) docIds.add(m[0]);
+  }
+  const runnerPath = path.join(__dirname, '..', 'tools', 'verify-m1-scenarios.js');
+  const runnerIds = new Set(
+    fs.existsSync(runnerPath) ? (fs.readFileSync(runnerPath, 'utf8').match(/SCN-\d{4}-T\d+/g) || []) : []
+  );
+  const external = [...docIds].filter((id) => !runnerIds.has(id));
   const table = rows.length
     ? [
         '| 场景 | 标题 | 领域 / 价值流 | 状态 | 路径 |',
@@ -63,6 +75,12 @@ function buildIndex() {
         ...rows.map((r) => `| ${r.id} | ${r.title} | ${r.flow} | ${r.status} | \`${r.path}\` |`),
       ].join('\n')
     : '（暂无场景）';
+  const stats = [
+    `- 场景：${rows.length}`,
+    `- 文档用例：${docIds.size}`,
+    `- jsdom runner：${runnerIds.size}`,
+    `- 其他执行层：${external.length}（引擎 / BFF / 真实 B1）`,
+  ].join('\n');
 
   return `---
 layer: design
@@ -75,6 +93,12 @@ updated: ${updated}
 # 场景索引
 
 > 生成物，请勿手改。运行 \`npm run docs:index\` 重新生成；\`npm run docs:index:check\` 校验无 diff。
+
+## 统计
+
+${stats}
+
+## 清单
 
 ${table}
 `;

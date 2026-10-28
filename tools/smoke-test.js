@@ -6,7 +6,12 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { JSDOM, VirtualConsole } = require('jsdom');
+let jsdom;
+try { jsdom = require('jsdom'); } catch (e) {
+  console.error('缺少 jsdom：请先执行 `npm_config_cache=/tmp/agentflow-npm-cache npm install --no-save --package-lock=false jsdom`（见 docs/design/dev-environment.md）。');
+  process.exit(1);
+}
+const { JSDOM, VirtualConsole } = jsdom;
 
 const ROOT = path.join(__dirname, '..');
 const PAGES = fs.readdirSync(path.join(ROOT, 'pages')).filter(f => f.endsWith('.html')).sort();

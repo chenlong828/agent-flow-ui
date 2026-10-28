@@ -29,7 +29,7 @@ node server.js
 ├─ server.js              零依赖静态服务器 + /api/v1、/healthz 同源挂载
 ├─ bff/                   CMP-bff：透明转发、超时/body 上限/502
 ├─ tests/bff/             BFF 契约单测（node --test）
-├─ package.json           npm start / test / test:bff / check:docs / docs:index
+├─ package.json           npm start / test / test:gate / test:bff / check:docs / check:deps / check:architecture / check:scenario-trace / docs:index
 ├─ assets/
 │  ├─ css/main.css        设计系统：布局/组件/语义色/画布样式（全局唯一）
 │  └─ js/
@@ -64,5 +64,5 @@ node server.js
 
 - B1 四类资产的目标数据源是 `http://127.0.0.1:3100`，经 `CMP-bff` 同源访问；四个资产页已 live-only，直接消费 B1 DTO，后端不可用即报错，不回落 MOCK。其余 8 页仍来自 `assets/js/mock-data.js`（内存态），刷新即复位；不持久化。
 - 页面 JS 一律调用 `DF.*` 公共组件拼装 UI；组件地图、依赖方向与数据所有权见 `docs/design/architecture.md`，每个组件的契约见对应规格的 `## 0 模块卡`。
-- 门禁：`npm test`（语法 + 五态文档 + 场景索引 + BFF 单测）；BFF 单测：`npm run test:bff`；冒烟：`npm run test:smoke`（需 jsdom）；业务场景：`npm run test:scenarios`（jsdom，11 场景、46 条用例，各场景至少 3 正 1 反）；真实 B1：`npm run test:b1-pages` / `npm run test:b1-writes`（需 BFF 与 B1 已启动）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
-- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件已补 `REQ-0002..0011` / `SCN-0002..0011`，场景 `verified`（M1 全量 46/46），REQ `delivered`；B1 接入见 `REQ-0012` / `SCN-0012` / `CMP-bff`，Skill 契约 v2 见 `REQ-0013` / `SCN-0013`，均已 `delivered`。
+- 门禁：`npm test`（语法 + 五态文档 + 场景索引 + 依赖 + 架构 + 场景追溯 + BFF 单测 + jsdom 业务场景）；`npm run test:gate` 为不含 jsdom 的快速门禁；BFF 单测：`npm run test:bff`；冒烟：`npm run test:smoke`（需 jsdom）；业务场景：`npm run test:scenarios`（jsdom；场景/用例统计与分层见 `docs/design/scenarios/_index.md`，外部执行层为 SCN-0001 引擎与 SCN-0012 BFF/真实 B1）；真实 B1：`npm run test:b1-pages` / `npm run test:b1-writes`（需 BFF 与 B1 已启动）；引擎：`npm run test:engine`（需 Playwright WebKit 与运行中的 `:3000`）。安装与命令见 `docs/design/dev-environment.md`。
+- 文档入口与阅读顺序见 `docs/README.md`；M1 的 10 个页面组件已补 `REQ-0002..0011` / `SCN-0002..0011`，场景 `verified`（M1 40/40；全量 jsdom 通过，数量见 `docs/design/scenarios/_index.md`），REQ `delivered`；B1 接入见 `REQ-0012` / `SCN-0012` / `CMP-bff`，Skill 契约 v2 见 `REQ-0013` / `SCN-0013`，Skill 专门页见 `REQ-0014` / `SCN-0014` / `SCN-0015`，均已 `delivered`。
