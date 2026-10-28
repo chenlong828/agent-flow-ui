@@ -3,12 +3,21 @@ layer: design
 module: global
 status: current
 generated: true
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # 场景索引
 
 > 生成物，请勿手改。运行 `npm run docs:index` 重新生成；`npm run docs:index:check` 校验无 diff。
+
+## 统计
+
+- 场景：15
+- 文档用例：65
+- jsdom runner：56
+- 其他执行层：9（引擎 / BFF / 真实 B1）
+
+## 清单
 
 | 场景 | 标题 | 领域 / 价值流 | 状态 | 路径 |
 |---|---|---|---|---|

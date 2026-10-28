@@ -5,7 +5,7 @@ component: CMP-harnesses
 requirement: REQ-0007
 scenario: SCN-0007
 status: active
-updated: 2026-10-25
+updated: 2026-10-28
 ---
 
 # Harness 管理
@@ -20,11 +20,14 @@ updated: 2026-10-25
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为平台运维者提供执行设施（Agent 实际运行处）的注册、健康与配额管理；没有它，节点「按标签自动」调度无池可调，工作流只能绑死在单一设施上。
 - 负责 / 不负责：负责 Harness 列表（统计卡 + 表格）、详情抽屉、注册弹窗、抽屉编辑保存、启停与删除；不负责节点图的 Harness 选择与标签匹配（`CMP-workflow-editor`）、运行任务的实际调度（`CMP-instances`）、工具绑定（`CMP-tools`）、密钥绑定（`CMP-keys`）、外壳与公共组件（`CMP-ui-shell`）。
+- 内部逻辑：在线=`enabled && health==='online'`、离线=`health==='offline'`、停用=`!enabled`；创建必填六字段且并发为正整数；更新不提交 enabled；删除二次确认带 revision；被引用 409。
 - 数据所有权：页面状态直接保存 B1 `HarnessListItem` / `HarnessDetail` DTO；列表 `GET /harnesses`、详情 `GET /harnesses/{id}`、创建 `POST`、更新 `PUT`、启停 `PATCH /enabled`、删除 `DELETE` 均经 `window.API`；不读 `MOCK`，不建第二套视图模型。写成功后用响应 DTO 更新本地列表；`If-Match` 由 API 层从 revision 派生。B1 没有当前任务数、任务列表与心跳历史，页面不展示这些运行时字段。
 - 公开契约：页面入口 `pages/harnesses.html`；操作 `CMP-harnesses#list`、`#register`、`#detail`、`#edit`、`#toggle`、`#delete`；不变量 ①统计卡与表格行同源：在线=`enabled && health==='online'`，离线=`health==='offline'`，停用=`!enabled`，总数取 `page.total`；②创建必填 `name/kind/address/accessMode/concurrencyMax/queuePolicy`，并发上限为正整数；③更新 `PUT` 全量字段但不提交 `enabled`，启停单独 `PATCH`，删除经二次确认并带 revision；被引用设施的删除由 B1 返回 409 `referenced`，页面提示后保留数据。
 - 依赖：`DF`（`renderShell`、`drawer.open`、`modal.form/confirm`、`table/empty/statRow/statCard`、`tag/dot/icon/esc`、`relTime`、`toast`）/ `window.API`；不依赖 `MOCK` 或其他页面组件。
+- 冷热属性：冷（管理面；健康状态由 B1 返回，不做本地探测）。
 - 变化轴：B1 健康/心跳字段与引用规则（当前 `health`、`lastHeartbeatAt`、`toolCount` 由 DTO 提供）。
 - 验证入口：`npm start` + `/pages/harnesses.html`；`node tools/verify-m1-scenarios.js SCN-0007`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`。
+- 验证计划：表格/注册/停用/取消→SCN-0007 T1-T4；结构→`smoke-test`；真实 B1→`test:b1-pages/writes`。
 - 预算：`harnesses.js` 约 23 KB + 本规格约 4 KB；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/harnesses.html`。
 - 删除测试：删除后执行设施无法注册、查看、启停与删除，调度池失去管理入口，故保留为独立组件。

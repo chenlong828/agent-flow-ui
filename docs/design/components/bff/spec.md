@@ -5,7 +5,7 @@ component: CMP-bff
 requirement: REQ-0012
 scenario: SCN-0012
 status: active
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # 同源 BFF
@@ -20,11 +20,14 @@ updated: 2026-10-26
 - 单元 / 层：基础设施组件 / L0 技术边界
 - 业务价值：为浏览器提供同源 B1 API 入口，消除 CORS 与跨源部署差异；它的价值是隔离与部署稳定性，不承载任何业务能力。
 - 负责 / 不负责：负责把 `/api/v1/*` 与 `/healthz` 透明转发到 `API_BASE`，透传方法、查询串、请求体、`If-Match`、`If-None-Match`、`X-Actor`、`X-Request-Id`、状态码、错误体、`ETag` 与 `Location`；负责超时、body 上限、上游不可用的 JSON 错误。不负责 DTO 映射、枚举翻译、revision 缓存、重试、专家装配、列表富化、鉴权、TLS、模拟数据，也不负责静态页面渲染。
+- 内部逻辑：只转发 `/api/v1/*` 与 `/healthz`；方法白名单；透传指定请求/响应头；body ≤1 MiB、timeout 10s；自身错误 502/504/413/405；不重试/映射/缓存。
 - 数据所有权：无业务数据；不缓存响应、不落库、不保存 revision；上游是唯一数据源。
 - 公开契约：`GET|POST|PUT|PATCH|DELETE /api/v1/*` 与 `GET /healthz`；只转发白名单路径；请求/响应原样透传；代理自身错误为 `{error:{code,message,details?}}`，HTTP 502/504/413/405。
 - 依赖：仅 Node 内置 `http`/`https`/`crypto`；由 `server.js` 组合根挂载；不得 import `DF`/`MOCK`/页面模块/后端源码。
+- 冷热属性：热（所有 B1 页面请求经此，同步，失败对用户可见）。
 - 变化轴：`API_BASE`、超时、body 上限；后续若加登录/限流/审计，只加在转发边界，不改 DTO。
 - 验证入口：`npm run test:bff`（stub 上游，10/10 通过）；`npm run test:b1-pages` / `npm run test:b1-writes`（真实 B1，需先启动 BFF 与后端）；`node bff/standalone.js`；`curl http://127.0.0.1:3000/healthz` 与 `/api/v1/skills`。
+- 验证计划：透传/409/文档 304/405/413/504/502/白名单→`test:bff` 10 条；真实 B1→`test:b1-pages/writes`；四页场景 SCN-0012。
 - 预算：源码 + 测试约 20 KB；组件上限 120k token，远低于上限。
 - 单独运行：`PORT=3001 node bff/standalone.js`（只起 BFF，便于组件验证；生产由 `node server.js` 同进程挂载）。
 - 删除测试：删除后浏览器跨源访问 B1 失败，四个资产页无法读写；静态页面仍可用。它的价值是部署隔离，不是业务能力；若后端直接提供同源入口，可整体删除。

@@ -5,7 +5,7 @@ component: CMP-instances
 requirement: REQ-0004
 scenario: SCN-0004
 status: active
-updated: 2026-10-23
+updated: 2026-10-28
 ---
 
 # 运行实例（列表 + 详情）
@@ -20,11 +20,14 @@ updated: 2026-10-23
 - 单元 / 层：组件 / L2 页面组件（列表 + 详情两个页面入口）
 - 业务价值：为运行观察者与操作者提供实例进度、节点轨迹、等待人工确认与异常控制；没有它，工作流只能被定义，无法被观察、干预或留痕。
 - 负责 / 不负责：负责实例列表（状态 Tab/统计/进度/耗时）、详情页（流程轨迹、节点输入输出与留痕、fan-out 聚合与抽样明细）、发起运行/暂停恢复/终止/节点重试/从节点重跑/人工批准驳回；不负责工作流定义与画布编辑（`CMP-workflow-editor`）、专家/Harness/工作区等资产定义（各自组件）、外壳（`CMP-ui-shell`）。
+- 内部逻辑：状态只取七值；「已结束」是成功/失败/已终止的聚合 Tab；终止不可逆、暂停可恢复；人工批准/驳回互斥且驳回带意见；fan-out 聚合与子任务同源；节点停止后不推进。
 - 数据所有权：读 `MOCK.instances`、`MOCK.workflows`、`MOCK.workspaces`、`MOCK.experts`、`MOCK.harnesses`；写 `MOCK.instances`（发起运行 `unshift`、节点状态迁移、暂停/恢复/终止、重试计数、人工批准/驳回，仅内存态，刷新复位）；sessionStorage `df-new-instance` 用于列表页向详情页一次性传递新建实例；无第二写入口说明：实例集合仅本组件写，其余页面只读。
 - 公开契约：页面入口 `pages/instances.html` 与 `pages/instance-detail.html?id=<instanceId>`；操作 `CMP-instances#list`、`#start-run`、`#pause-resume`、`#terminate`、`#retry-node`、`#approve-reject`；不变量 实例状态只取「运行中/等待人工确认/回退重跑中/已暂停/成功/失败/已终止」；列表的「已结束」是成功/失败/已终止的聚合 Tab，不是独立状态；终止为不可逆终态，暂停可恢复；等待人工时批准与驳回互斥，驳回必须携带意见；fan-out 聚合统计（成功/失败/运行中/重试中）与子任务明细同源；节点停止后不得继续推进。
 - 依赖：`DF`（外壳、弹窗、表格、Tabs、Toast、时间格式化）/ `MOCK`；不依赖其他页面组件（跨页只走 URL 与 `df-new-instance`）。
+- 冷热属性：冷（原型内存态）；接真实运行时后列表/详情/控制命令均按热路径处理。
 - 变化轴：实例/节点状态机与控制语义（暂停、终止、重试、重跑、人工驳回）最易变，新增状态须同步列表、详情、控制按钮与留痕。
 - 验证入口：`npm start` + `/pages/instances.html`、`/pages/instance-detail.html?id=INS-2041`；`node tools/smoke-test.js`（全站冒烟，含两页）；SCN-0004（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0004`）。
+- 验证计划：列表/详情/暂停/终止→SCN-0004 T1-T4；结构→`smoke-test`；真实调度/拖拽暂无引擎断言。
 - 预算：`instances.js` 约 7 KB + `instance-detail.js` 约 18 KB + 本规格约 9 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/instances.html`（详情页用 `?id=` 定位，缺省回落到夹具实例）。
 - 删除测试：删除后实例不可观察、不可控制、不可审批，工作流只剩定义；复杂度会集中到工作流列表/编辑器，故保留为独立组件。

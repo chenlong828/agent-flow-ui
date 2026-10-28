@@ -5,7 +5,7 @@ component: CMP-skills
 requirement: REQ-0005
 scenario: SCN-0005
 status: active
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Skill 库
@@ -14,18 +14,21 @@ updated: 2026-10-27
 
 ## 0 模块卡
 
-> 追溯：`REQ-0005` / `SCN-0005`（verified）+ `REQ-0013` / `SCN-0013`（verified）+ `REQ-0014` / `SCN-0014`、`SCN-0015`（implementation pending）。
+> 追溯：`REQ-0005` / `SCN-0005`（verified）+ `REQ-0013` / `SCN-0013`（verified）+ `REQ-0014` / `SCN-0014`、`SCN-0015`（verified）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为专家与流程设计者提供可复用能力单元的沉淀、检索与组合入口；没有它，专家只能把能力内联写进指令，无法复用、版本化与审计。
 - 负责 / 不负责：负责 Skill 列表（分类 + 标签 + 搜索 + 计数）、启停、删除、引用计数弹窗；负责专门页 `pages/skill-detail.html` 的查看/编辑/新建与文档 Tab 只读渲染（Milkdown + Prism 语法高亮）；不负责专家侧组合与挂载（`CMP-experts`）、工作流节点引用配置（`CMP-workflow-editor`）、外壳/菜单/弹窗原语（`CMP-ui-shell`）。
+- 内部逻辑：分类计数与列表同源；`description` 1–400；保存 body 固定字段且不带 `version/enabled`；version 服务端递增；文档 304 复用上次文本；删除被引用由 B1 409。
 - 数据所有权：页面状态直接保存 B1 `SkillListItem` / `SkillDetail` / `SkillCategory` DTO；列表 `GET /skills`、详情 `GET /skills/{id}`、创建 `POST`、更新 `PUT`、启停 `PATCH /enabled`、删除 `DELETE`、分类 `GET /skill-categories`、文档 `GET /skills/{id}/document` 均经 `window.API`。不读 `MOCK`，不建第二套视图模型；编辑草稿只是 `SkillDetail` 的深拷贝，取消即丢弃；版本号由服务端生成，页面不本地递增。`window.API` 单独缓存文档文本与 ETag，不缓存详情 DTO；revision 变化时同时丢弃文档缓存。
 - 公开契约：页面入口 `pages/skills.html`、`pages/skill-detail.html?id=&mode=`；操作 `CMP-skills#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#document`；不变量 ①分类只使用 API 返回的 `code/label`，`data-cat` 使用 code（全部=`all`）；②创建/更新 body 为 `name/categoryCode/description/tags/sections/pitfalls/refs`，不带 `version/enabled`；`description` 必填 1–400 字，页面 trim 后提交；③专门页默认显示结构化五章，编辑/新建态默认结构化表单，可切「预览」Tab 查看草稿 Markdown；④引用只显示 `usedByCount`，B1 不提供引用方明细；⑤删除被引用 Skill 由 B1 返回 409 `referenced`，页面提示引用数并保留数据；⑥启停/删除带 revision，`If-Match` 由 API 层生成；⑦文档 Tab 只消费 API-31 响应体，不在前端拼装，304 复用上次文本，渲染失败显式报错。
 - 依赖：`DF`（`renderShell`、`table`、`empty`、`field`、`tabsHtml`、`modal`、`menu`、`toast`、`tag`、`esc`、`icon`）/ `window.API` / `window.SKILL_MD` / `DEP-0001`；不依赖 `MOCK` 或其他页面组件。
+- 冷热属性：冷（管理面用户触发）；文档渲染按需加载 `DEP-0001`，不占首屏。
 - 变化轴：五章节内容、文档渲染策略（语法高亮语言集、主题样式、是否增加下载/复制）。
 - 验证入口：`npm start` + `/pages/skills.html`、`/pages/skill-detail.html?id=sk-cres`；`node tools/verify-m1-scenarios.js SCN-0005|SCN-0013|SCN-0014|SCN-0015`；`npm run test:skill-render`；`npm run test:skill-engine`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`。
-- 预算：`skills.js` 约 12 KB + `skill-detail.js` 约 12 KB + `skill-common.js` 约 2 KB + 本规格约 8 KB；`DEP-0001` 148.3 KB gzip 按需加载，远低于 500 KB 上限。
+- 验证计划：列表/渐进披露/保存/删除→SCN-0005 T1-T4；契约 v2→SCN-0013 T1-T6；专门页→SCN-0014 T1-T5；渲染→SCN-0015 T1-T5 + `test:skill-render`；引擎→`test:skill-engine`；真实 B1→`test:b1-pages/writes`。
+- 预算：`skills.js` 约 12 KB + `skill-detail.js` 约 12 KB + `skill-common.js` 约 2 KB + 本规格约 8 KB；`DEP-0001` 148.3 KiB gzip 按需加载，低于 500 KiB 观测阈值。
 - 单独运行：`npm start` → `/pages/skills.html` 或 `/pages/skill-detail.html?id=sk-cres`。
 - 删除测试：删除后专家与工作流节点失去可引用的能力单元，复杂度会集中到 `CMP-experts` 与编辑器，故保留为独立组件。
 - 已知偏差：B1 不提供版本历史与引用方明细，详情只显示当前 `version` + `updatedAt`；`refs` 使用 `refType`（不是 `type`）；`usedByCount` 只做计数；Milkdown 只在查看态文档 Tab 使用，不作为编辑器或结构化表单。M1 SCN-0005/0013/0014/0015 使用 `tools/fake-b1.js` 内存传输，真实读写由 `verify-b1-pages.js` / `verify-b1-writes.js` 覆盖；`SCN-0014` / `SCN-0015` 已由真实引擎 `verify-skill-page-engine.js` 验证。

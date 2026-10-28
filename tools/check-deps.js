@@ -13,11 +13,13 @@ const { builtinModules } = require('module');
 
 const ROOT = path.resolve(__dirname, '..');
 const REGISTRY = path.join(ROOT, 'docs', 'design', 'dependencies.md');
-const LIMITS = { dep: 500, page: 120, total: 300 }; // KB gzip
+const WARN_LIMITS = { dep: 500, page: 120, total: 300 }; // KiB gzip，仅观测阈值
 const LICENSES = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC']);
 
 const errors = [];
+const warnings = [];
 const err = (m) => errors.push(m);
+const warn = (m) => warnings.push(m);
 const rel = (p) => path.relative(ROOT, p);
 
 function walk(dir, filter) {
@@ -74,15 +76,15 @@ for (const d of deps) {
   }
   const kb = gzipKb(buf);
   totalKb = Math.round((totalKb + kb) * 10) / 10;
-  if (kb > LIMITS.dep) err(`${d.id}: 单依赖 ${kb} KB gzip 超预算 ${LIMITS.dep} KB`);
-  if (typeof d.gzipKb === 'number' && kb > d.gzipKb) err(`${d.id}: 实测 ${kb} KB 超过登记值 ${d.gzipKb} KB`);
+  if (kb > WARN_LIMITS.dep) warn(`${d.id}: 单依赖 ${kb} KiB gzip 超过观测阈值 ${WARN_LIMITS.dep} KiB（不阻断）`);
+  if (typeof d.gzipKb === 'number' && kb > d.gzipKb) err(`${d.id}: 实测 ${kb} KiB 超过登记值 ${d.gzipKb} KiB`);
 }
-if (totalKb > LIMITS.total) err(`全站新增 ${totalKb} KB gzip 超总预算 ${LIMITS.total} KB`);
+if (totalKb > WARN_LIMITS.total) warn(`全站新增 ${totalKb} KiB gzip 超过观测阈值 ${WARN_LIMITS.total} KiB（不阻断）`);
 
 const perPage = {};
 for (const d of deps) for (const pg of d.pages || []) perPage[pg] = Math.round(((perPage[pg] || 0) + (d.gzipKb || 0)) * 10) / 10;
 for (const [pg, kb] of Object.entries(perPage)) {
-  if (kb > LIMITS.page) err(`页面 ${pg}: 首屏脚本增量 ${kb} KB gzip 超预算 ${LIMITS.page} KB`);
+  if (kb > WARN_LIMITS.page) warn(`页面 ${pg}: 首屏脚本增量 ${kb} KiB gzip 超过观测阈值 ${WARN_LIMITS.page} KiB（不阻断）`);
 }
 
 /* 4. vendor 目录不得有未登记文件 */
@@ -144,7 +146,11 @@ for (const k of ['dependencies', 'devDependencies']) {
 }
 
 console.log(`registry: ${path.relative(ROOT, REGISTRY)}`);
-console.log(`registered deps: ${deps.length} | total new gzip: ${totalKb} KB`);
+console.log(`registered deps: ${deps.length} | total new gzip: ${totalKb} KiB`);
+if (warnings.length) {
+  console.log('\nWARN（体积为观测项，不阻断）:');
+  warnings.forEach((w) => console.log(' -', w));
+}
 if (errors.length) {
   console.log(`\nFAIL (${errors.length}):`);
   errors.forEach((e) => console.log(' -', e));

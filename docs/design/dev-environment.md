@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # 开发环境配置（本机实况）
@@ -37,7 +37,7 @@ updated: 2026-10-26
 
 - 测试与构建期依赖装在项目目录之外（保持仓库自包含；运行时依赖走 vendor 准入）：历史用 `/tmp/dsh`，2026-10-23 复跑用 `/tmp/afdev-deps`。临时目录可能被清理，清理后按 3.2 重装。
 - 浏览器构建存放目录：`/tmp/dsh/pw-browsers`，运行时通过环境变量 `PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers` 指定。
-- 场景测试脚本已入库：`tools/verify-user-menu.js`（SCN-0001，引擎层）、`tools/verify-m1-scenarios.js`（SCN-0002..0011 + SCN-0013 + SCN-0014 + SCN-0015，DOM/jsdom，13 场景、55 条用例）；结构层 `tools/smoke-test.js`（jsdom）；真实 B1：`tools/verify-b1-pages.js` / `tools/verify-b1-writes.js`。历史脚本随工序归档在 `history/works/`，不再作现行入口。
+- 场景测试脚本已入库：`tools/verify-user-menu.js`（SCN-0001，引擎层）、`tools/verify-m1-scenarios.js`（SCN-0002..0011 + SCN-0013 + SCN-0014 + SCN-0015，DOM/jsdom，13 场景、56 条用例）；结构层 `tools/smoke-test.js`（jsdom）；真实 B1：`tools/verify-b1-pages.js` / `tools/verify-b1-writes.js`。历史脚本随工序归档在 `history/works/`，不再作现行入口。
 
 ### 3.2 安装步骤（按顺序执行）
 
@@ -80,7 +80,7 @@ updated: 2026-10-26
   ```bash
   npm_config_cache=/tmp/agentflow-npm-cache npm install --no-save --package-lock=false jsdom
   ```
-  2026-10-26 实测 `jsdom@30.1.3` 可跑通 56/56。
+  2026-10-28 实测 `jsdom@30.1.3` 可跑通 56/56。
 - 运行：`npm run test:scenarios`；单场景 `node tools/verify-m1-scenarios.js SCN-0007`。
 - Milkdown 渲染层：`npm run test:skill-render`，用 jsdom + vendor bundle 验证只读渲染、语法高亮与原始 HTML 不执行。
 - 引擎层（Playwright WebKit，需 `:3000` 静态服务 + B1）：
@@ -90,7 +90,7 @@ updated: 2026-10-26
   ```
   也可用 `npm run test:skill-engine`，再按上面环境变量补 Playwright 依赖。
 - runner 在 `127.0.0.1:0` 自起临时静态 HTTP，结束后关闭；不依赖 `:3000`，也不要求先启动 `server.js`。必须走 HTTP 而不是 `file://`：页面用 `sessionStorage` 传递 `df-new-workspace`，不透明源下会直接抛错。
-- `npm test` 不包含此脚本，保持工具链零外部包；jsdom 缺失时脚本会给出安装提示。
+- `npm test` 包含此脚本（需 jsdom）；`npm run test:gate` 是不含 jsdom 的快速子集（文档/依赖/架构/追溯/BFF）。jsdom 缺失时脚本会给出安装提示。
 
 ### 3.5 真实 B1 页面 runner（jsdom + 运行中的 BFF）
 

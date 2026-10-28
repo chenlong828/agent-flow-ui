@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # 系统架构（现行真相）
@@ -14,7 +14,7 @@ updated: 2026-10-26
 - 形态：agent-flow 前端（13 个 HTML 页面 + 同源 BFF）；原生 HTML/CSS/JS 为主，无构建步骤；第三方运行时依赖默认零，例外须经准入（`design/dependencies.md`）并自托管到 `assets/vendor/`，禁止 CDN 外链。
 - 数据：Harness / Tool / Skill / Expert 四页直接消费 B1 DTO（经 `CMP-bff` 同源访问），写操作走 B1 并带 `If-Match`；B2–B4 页面仍由 `assets/js/mock-data.js` 的 `window.MOCK` 提供，写操作只改内存。前端不直接持有数据库或鉴权态。
 - 服务：`server.js`（Node 原生 `http`）是组合根，做静态托管、`/` 302 与 `CMP-bff` 挂载；`CMP-bff` 只透明转发 `/api/v1/*` 与 `/healthz`，不承载业务逻辑。
-- 验证：`tools/check-docs.js`（五态文档）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（jsdom 13 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）；人工 Safari 走查为发布门禁。
+- 验证：`tools/check-docs.js`（五态文档）、`tools/check-deps.js`（依赖准入）、`tools/check-architecture.js`（6 项边界）、`tools/check-scenario-trace.js`（核对场景卡 / jsdom runner / 外部执行层；统计以 `design/scenarios/_index.md` 为准）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（jsdom 13 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）；`npm test` 串联全部零依赖门禁与 jsdom 业务场景；人工 Safari 走查为发布门禁。
 - 明确不做：真实工作流执行引擎、Agent 运行时、CI/CD 触发、权限体系、密钥加密存储、移动端适配、前端持久化；BFF 不做 CORS、鉴权、TLS、DTO 映射、revision 缓存或聚合。
 
 ## 2 组件地图
@@ -70,6 +70,8 @@ updated: 2026-10-26
 - 四页 live 后不得自动回落 MOCK；失败必须显式报错。
 - 同层页面不横调；共享能力下沉到 `DF`/`WSC`，跨页流程上提到 URL 约定。
 - 页面 JS 不得引用未登记 `DEP-xxxx` 的第三方脚本/模块，不得出现 `http(s)://` 或协议相对外链；`package.json` 的 `dependencies` / `devDependencies` 保持为空（构建链另案 P1）。
+
+> 可机械判定的部分：`tools/check-architecture.js` 覆盖边 1/3/4/5，并机械检查边 6 的共享模块路径；边 7 由 `tools/check-deps.js` 覆盖。边 2（`DF`/`MOCK` 是否承载业务规则）与边 6 的任意横向耦合仍需人工评审。
 
 ## 4 契约与入口
 
@@ -141,16 +143,16 @@ updated: 2026-10-26
 | 组件 | check-docs（模块卡 + REQ/SCN） | jsdom 13 页 | 场景 | 人工 Safari |
 |---|---|---|---|---|
 | `CMP-ui-shell` | ✓ | ✓ | `SCN-0001` verified（45/45） | 待验收（R9） |
-| `CMP-workflow-list` | ✓ | ✓ | `SCN-0002` verified（46/46） | — |
-| `CMP-workflow-editor` | ✓ | ✓ | `SCN-0003` verified（46/46） | — |
-| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（46/46） | — |
-| `CMP-skills` | ✓ | ✓ | `SCN-0005` + `SCN-0013` + `SCN-0014` + `SCN-0015` verified（M1 场景 56/56；专门页引擎 15/15） | — |
-| `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（46/46） | — |
-| `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（46/46） | — |
-| `CMP-tools` | ✓ | ✓ | `SCN-0008` verified（46/46） | — |
-| `CMP-analytics` | ✓ | ✓ | `SCN-0009` verified（46/46） | — |
-| `CMP-workspaces` | ✓ | ✓ | `SCN-0010` verified（46/46） | — |
-| `CMP-keys` | ✓ | ✓ | `SCN-0011` verified（46/46） | — |
+| `CMP-workflow-list` | ✓ | ✓ | `SCN-0002` verified（4/4） | — |
+| `CMP-workflow-editor` | ✓ | ✓ | `SCN-0003` verified（4/4） | — |
+| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（4/4） | — |
+| `CMP-skills` | ✓ | ✓ | `SCN-0005` 4/4 + `SCN-0013` 6/6 + `SCN-0014` 5/5 + `SCN-0015` 5/5；专门页引擎 15/15 | — |
+| `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（4/4） | — |
+| `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（4/4） | — |
+| `CMP-tools` | ✓ | ✓ | `SCN-0008` verified（4/4） | — |
+| `CMP-analytics` | ✓ | ✓ | `SCN-0009` verified（4/4） | — |
+| `CMP-workspaces` | ✓ | ✓ | `SCN-0010` verified（4/4） | — |
+| `CMP-keys` | ✓ | ✓ | `SCN-0011` verified（4/4） | — |
 | `CMP-bff` | ✓ | — | `SCN-0012` verified（BFF 10/10） | — |
 
 - 语法层：`node --check` 全部页面 JS、`bff/*.js`、`tests/bff/*.js`。
@@ -159,11 +161,11 @@ updated: 2026-10-26
 - 业务场景层：`node tools/verify-m1-scenarios.js`（DOM/jsdom，13 场景，56/56；各场景至少 3 正 1 反）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）与 `tools/verify-b1-writes.js`（写 4/4）。
 - BFF 层：`npm run test:bff`（Node `node:test` + stub 上游；10 条契约断言，含 `If-None-Match`/304）。
 - 人工层：Safari 走查为发布门禁；未完成不宣称“浏览器全兼容”。
-- **M1 十页 + B1/Skill v2/Skill 专门页场景已 verified**：M1 56/56 通过；专门页另加引擎层 15/15。
+- **M1 十页 + B1/Skill v2/Skill 专门页场景已 verified**：M1 40/40；全量 jsdom 通过（数量见 `design/scenarios/_index.md`）；专门页另加引擎层 15/15。
 
 ## 8 已知偏差与基线登记
 
-1. **M1 追溯与验收闭环**：10 个页面已补 `REQ-0002..0011` / `SCN-0002..0011`；场景 `verified`，全量 46/46 通过，10 张 REQ 转 `delivered`（R7/R10 关闭）。冒烟仍不是业务验收。
+1. **M1 追溯与验收闭环**：10 个页面已补 `REQ-0002..0011` / `SCN-0002..0011`；场景 `verified`，M1 40/40 通过，10 张 REQ 转 `delivered`（R7/R10 关闭）。冒烟仍不是业务验收。
 2. **MOCK 多写/复位**：`workflows` 有两个页面写入口；其余集合单写但都只改内存；刷新复位，无事务/并发控制（R8）。
 3. **Safari 人工未完成**：engine 层只覆盖 WebKit 2104 的 transform 兜底路径；zoom 路径需真实 Safari 确认（R1/R9）。
 4. **页面组件不是独立部署单元**：11 个业务组件 + 1 个基础设施组件（`CMP-bff`）共享 `DF`/`MOCK`（BFF 不共享）；按页面入口划分；不引入模块打包、事务或分层过度设计（KISS）。
@@ -175,6 +177,6 @@ updated: 2026-10-26
 
 - 组件边界与契约：`design/components/<id>/spec.md` §0；组件 frontmatter 的 `requirement` / `scenario` 是 REQ/SCN 反查入口。
 - 需求与场景：`requirements/REQ-0001..0014`、`design/scenarios/`（`_index.md` 为生成索引）。
-- 工序与决策：`works/2026-10-26-skill-detail-page/brief.md`、`works/2026-10-25-b1-integration/brief.md`、`history/works/2026-10-23-component-baseline/brief.md`、`history/decisions/2026-10-23-skill-system-upgrade.md`。
+- 工序与决策：`history/works/2026-10-26-skill-detail-page/brief.md`、`history/works/2026-10-25-b1-integration/brief.md`、`history/works/2026-10-23-component-baseline/brief.md`、`history/decisions/2026-10-23-skill-system-upgrade.md`。
 - 依赖准入：`design/dependencies.md`（清单 + 程序）；编码防御规则：`design/code-refactoring.md`；测试方法：`design/debugging-and-testing.md`。
 - **变更规则**：改页面边界、数据所有权、CMP 操作或共享契约 → 先按 `arch-design-spec` 定级；P1 需人确认，更新对应模块卡 + 本文 + `check-docs`，再动代码。新增页面必须登记组件卡与验证入口，禁止静默扩页。
