@@ -1,7 +1,7 @@
 ---
-layer: design
+layer: history
 module: workflow-editor
-status: verified
+status: frozen
 flow: edit-workflow
 scenario: SCN-0003
 updated: 2026-10-23
@@ -31,7 +31,7 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
+执行层：Playwright WebKit+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-30，已由 SCN-0018/0019 取代；历史断言不再进入现行 runner。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
