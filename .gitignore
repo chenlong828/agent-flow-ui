@@ -16,7 +16,5 @@ npm-debug.log*
 .vscode/
 *.swp
 
-# 涉密材料：专利交底书与资料，仅本地保留，不进入公开仓库
-patents/
-reference/
-docs/history/works/2026-10-14-patent-disclosure/
+# 本地资料：不随仓库分发（涉密与个人材料统一放这里）
+/.local-only/
