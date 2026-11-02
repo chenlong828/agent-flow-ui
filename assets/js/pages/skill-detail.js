@@ -1,36 +1,46 @@
 /**
  * AgentFlow 原型 · Skill 专门页面（查看 / 编辑 / 新建）
- * 依赖: window.API（B1 DTO 客户端）、window.DF（ui.js）、window.SK（skill-common.js）、
- *       window.SKILL_MD（skill-detail-markdown.js）
+ * 依赖: API（B1 DTO 客户端）、DF（ui.js）、SK（skill-common.js）、
+ *       SKILL_MD（编辑器适配层）
  *
  * 约定：
- * - 查看态默认显示结构化五章；「文档」Tab 只在查看态出现，使用 Milkdown 只读渲染 API-31 文本；
- * - 编辑/新建只走结构化表单，保存带 `If-Match`，不使用 Markdown 源码编辑；
+ * - 查看态：元数据条 + 正文只读渲染 + 文件清单 + 下载；
+ * - 编辑/新建：一律走服务端草稿（建草稿 → 改正文/附件 → save 带 If-Match），SKILL.md 只读；
+ * - 正文 16 KiB 上限，编辑态实时计数，超限阻断保存并提示放 references/；
  * - 不读 MOCK，不建第二套视图模型；加载/渲染失败显式报错，可重试。
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { API } from '../api.js';
+import { SK } from './skill-common.js';
+import { SKILL_MD } from './skill-detail-markdown.js';
+
 
   var state = {
     mode: 'view',        // view | edit | new
     id: null,
     skill: null,
     draft: null,
+    files: [],
     cats: [],
     catsLoading: false,
     catsErr: '',
     loading: false,
     err: '',
-    tab: 'structured',   // structured | document | preview
-    doc: null,           // {loading, err, text, notModified, rendered, renderErr, rendering}
-    preview: null,       // {text, rendered, renderErr, rendering}
-    saving: false
+    saving: false,
+    dirty: false,
+    body: '',
+    form: { name: '', categoryCode: '', description: '', tags: [] },
+    editor: null,
+    editorToken: 0,
+    bodyErr: '',
+    filesErr: '',
+    uploadDir: 'scripts'
   };
 
   function catOptionsHtml(code) {
-    var list = state.cats;
     var has = false;
-    var html = list.map(function (c) {
+    var html = state.cats.map(function (c) {
       if (c.code === code) has = true;
       return '<option value="' + DF.esc(c.code) + '"' + (c.code === code ? ' selected' : '') + '>' +
         DF.esc(c.label) + '</option>';
@@ -45,6 +55,15 @@
   function catColorOf(code) { return SK.catColor(state.cats, code); }
   function descLen(v) { return SK.descLen(v); }
 
+  function bytes() {
+    var version = state.skill ? state.skill.version : 'v1.0';
+    return SK.markdownBytes({
+      name: state.form.name,
+      description: state.form.description,
+      version: version
+    }, state.body);
+  }
+
   /* ---------------- 启动 ---------------- */
   function init() {
     var id = DF.qs('id');
@@ -52,29 +71,20 @@
     if (mode === 'new') {
       state.mode = 'new';
       state.id = null;
-      state.skill = null;
-      state.draft = {
-        name: '',
-        categoryCode: '',
-        description: '',
-        tags: [],
-        sections: { overview: '', steps: '', examples: '', scripts: '', verification: '' },
-        pitfalls: []
-      };
-      loadCats().then(function () { render(); });
+      state.body = SK.defaultBody();
+      loadCats();
+      createDraft();
       render();
       return;
     }
-    if (mode === 'edit') {
-      state.mode = 'edit';
-      loadCats();
-    } else state.mode = 'view';
     if (!id) {
       state.err = '缺少 Skill id';
       render();
       return;
     }
     state.id = id;
+    state.mode = mode === 'edit' ? 'edit' : 'view';
+    if (state.mode === 'edit') loadCats();
     loadDetail();
   }
 
@@ -85,7 +95,6 @@
     return API.categories().then(function (cats) {
       state.cats = SK.sortCats(cats);
       state.catsLoading = false;
-      state.catsErr = '';
       render();
     }).catch(function (err) {
       state.catsLoading = false;
@@ -100,15 +109,38 @@
     render();
     API.get('skill', state.id).then(function (dto) {
       state.loading = false;
-      state.err = '';
       state.skill = dto;
-      if (state.mode === 'edit') state.draft = DF.deep(dto);
+      state.files = (dto.files || []).slice();
+      if (state.mode === 'edit') {
+        state.body = String(dto.body == null ? '' : dto.body);
+        state.form = {
+          name: dto.name || '',
+          categoryCode: dto.categoryCode || '',
+          description: dto.description || '',
+          tags: (dto.tags || []).slice()
+        };
+        state.files = (dto.files || []).slice();
+        createDraft();
+      }
       render();
     }).catch(function (err) {
       state.loading = false;
       state.err = API.errorText(err);
       state.skill = null;
-      state.draft = null;
+      render();
+    });
+  }
+
+  function createDraft() {
+    state.draft = null;
+    state.filesErr = '';
+    API.draftCreate(state.id || null).then(function (draft) {
+      state.draft = draft;
+      state.files = (draft.files || []).slice();
+      if (state.mode === 'new' && !state.body) state.body = SK.defaultBody();
+      render();
+    }).catch(function (err) {
+      state.filesErr = API.errorText(err);
       render();
     });
   }
@@ -126,11 +158,13 @@
 
   function shellActions() {
     if (state.mode === 'view') {
-      return '<button class="btn primary" id="sk-edit">' + DF.icon('edit', 14) + '编辑</button>';
+      return (state.skill ? '<button class="btn" id="sk-download">' + DF.icon('download', 14) + '下载</button>' : '') +
+        '<button class="btn primary" id="sk-edit">' + DF.icon('edit', 14) + '编辑</button>';
     }
     var saveLabel = state.mode === 'new' ? '创建' : '保存';
     var busy = state.saving ? ' disabled' : '';
-    return '<button class="btn" id="sk-cancel">取消</button>' +
+    return '<span class="skd-dirty" id="sk-dirty"' + (state.dirty ? '' : ' hidden') + '>未保存</span>' +
+      '<button class="btn" id="sk-cancel">取消</button>' +
       '<button class="btn primary" id="sk-save"' + busy + '>' + DF.icon('check', 14) + saveLabel + '</button>';
   }
 
@@ -149,26 +183,87 @@
       actions: shellActions()
     });
     var editBtn = document.getElementById('sk-edit');
-    if (editBtn) editBtn.onclick = function () {
-      state.mode = 'edit';
-      state.draft = DF.deep(state.skill);
-      state.doc = null;
-      state.preview = null;
-      state.tab = 'structured';
-      render();
-    };
+    if (editBtn) editBtn.onclick = enterEdit;
+    var downloadBtn = document.getElementById('sk-download');
+    if (downloadBtn) downloadBtn.onclick = function () { API.download('skill', state.id); };
     var cancelBtn = document.getElementById('sk-cancel');
-    if (cancelBtn) cancelBtn.onclick = function () {
-      if (state.mode === 'new') { location.href = 'skills.html'; return; }
-      state.mode = 'view';
-      state.draft = null;
-      state.doc = null;
-      state.preview = null;
-      state.tab = 'structured';
-      render();
-    };
+    if (cancelBtn) cancelBtn.onclick = cancel;
     var saveBtn = document.getElementById('sk-save');
     if (saveBtn) saveBtn.onclick = save;
+  }
+
+  function enterEdit() {
+    state.mode = 'edit';
+    state.dirty = false;
+    // 查看态没有加载过分类；缺了会导致类别下拉为空、校验永远失败
+    if (!state.cats.length && !state.catsLoading) loadCats();
+    state.body = String((state.skill && state.skill.body) || '');
+    state.form = {
+      name: state.skill.name || '',
+      categoryCode: state.skill.categoryCode || '',
+      description: state.skill.description || '',
+      tags: (state.skill.tags || []).slice()
+    };
+    createDraft();
+    render();
+  }
+
+  function cancel() {
+    if (state.dirty) {
+      DF.modal.confirm({
+        title: '放弃编辑', danger: true, okText: '放弃修改',
+        message: '未保存的修改将丢失，确定取消？'
+      }).then(function (ok) { if (ok) doCancel(); });
+      return;
+    }
+    doCancel();
+  }
+
+  function doCancel() {
+    var draft = state.draft;
+    state.draft = null;
+    state.mode = 'view';
+    state.body = '';
+    state.dirty = false;
+    destroyEditor();
+    setEditChrome(false);
+    if (draft) API.draftCancel(draft.id).catch(function () {});
+    if (!state.skill) { location.href = 'skills.html'; return; }
+    render();
+  }
+
+  function markDirty() {
+    state.dirty = true;
+    var el = document.getElementById('sk-dirty');
+    if (el) el.hidden = false;
+  }
+
+  function resetDirty() {
+    state.dirty = false;
+    var el = document.getElementById('sk-dirty');
+    if (el) el.hidden = true;
+  }
+
+  function setEditChrome(on) {
+    if (!document.body) return;
+    document.body.classList.toggle('sk-edit-mode', !!on);
+  }
+
+  function bindMediaFallback(root) {
+    if (!root || root.__skMediaBound) return;
+    root.__skMediaBound = true;
+    root.addEventListener('error', function (e) {
+      var t = e.target;
+      if (!t || t.tagName !== 'IMG') return;
+      t.classList.add('sk-img-broken');
+      if (!t.getAttribute('alt')) t.setAttribute('alt', '图片加载失败');
+      t.setAttribute('title', '图片加载失败：' + (t.getAttribute('src') || ''));
+    }, true);
+  }
+
+  function destroyEditor() {
+    state.editorToken++;
+    if (state.editor) { SKILL_MD.destroy(state.editor); state.editor = null; }
   }
 
   function render() {
@@ -180,8 +275,9 @@
   function renderBody() {
     var body = document.getElementById('page-body');
     if (!body) return;
-    if (state.err) { body.innerHTML = errorHtml('Skill 详情加载失败', state.err, 'sk-retry'); bindErrorRetry(); return; }
-    if (state.loading || state.mode !== 'new' && !state.skill) {
+    if (state.err) { setEditChrome(false); body.innerHTML = errorHtml('Skill 详情加载失败', state.err); bindErrorRetry(); return; }
+    if (state.loading) {
+      setEditChrome(false);
       body.innerHTML = '<div class="sub" style="padding:24px 2px">正在加载 Skill 详情…</div>';
       return;
     }
@@ -189,12 +285,12 @@
     else renderEdit();
   }
 
-  function errorHtml(title, msg, retryId) {
+  function errorHtml(title, msg) {
     return DF.empty({
       icon: 'warn',
       html: '<div>' + DF.esc(title) + '</div>' +
         '<div class="sub" style="margin-top:6px">' + DF.esc(msg || '') + '</div>',
-      action: { id: retryId, label: '重试', icon: 'refresh', primary: true, style: 'margin-top:12px' }
+      action: { id: 'sk-retry', label: '重试', icon: 'refresh', primary: true, style: 'margin-top:12px' }
     });
   }
 
@@ -205,425 +301,335 @@
 
   /* ---------------- 查看态 ---------------- */
   function renderView() {
-    var body = document.getElementById('page-body');
-    if (!body) return;
-    body.innerHTML =
-      '<div class="skd-layout">' +
-        DF.tabsHtml([
-          { k: 'structured', label: '结构化' },
-          { k: 'document', label: '文档' }
-        ], state.tab, 'data-tab', 'id="sk-tab"') +
-        '<div id="sk-viewbox"></div>' +
-      '</div>';
-    body.querySelectorAll('#sk-tab [data-tab]').forEach(function (el) {
-      el.onclick = function () {
-        var next = el.getAttribute('data-tab');
-        if (next === state.tab) return;
-        state.tab = next;
-        if (state.tab === 'document') loadDocument();
-        else renderBody();
-      };
-    });
-    if (state.tab === 'document') renderDocumentView();
-    else renderStructuredView();
-  }
-
-  function renderStructuredView() {
     var s = state.skill;
     if (!s) return;
-    var tags = s.tags || [];
-    var pf = s.pitfalls || [];
-    var refs = s.refs || [];
-    var secBlock = function (k, label, idx) {
-      var val = String((s.sections || {})[k] || '');
-      var inner = val ? '<div class="skd-pre">' + DF.esc(val) + '</div>' : '<div class="sub" style="padding:2px 0">暂无内容</div>';
-      return '<details' + (idx === 0 ? ' open' : '') + '><summary>' + DF.esc(label) + '</summary>' +
-        '<div class="skd-sec">' + inner + '</div></details>';
-    };
-    var html =
+    setEditChrome(false);
+    resetDirty();
+    destroyEditor();
+    var body = document.getElementById('page-body');
+    body.innerHTML =
       '<div class="skd-card">' +
         '<div class="skd-kv"><span class="skd-k">描述</span><span>' + DF.esc(s.description || '') + '</span></div>' +
         '<div class="skd-kv"><span class="skd-k">类别</span><span>' +
           DF.tag(s.categoryLabel || catLabelOf(s.categoryCode), catColorOf(s.categoryCode)) + '</span></div>' +
         '<div class="skd-kv"><span class="skd-k">标签</span><span>' +
-          (tags.length ? tags.map(function (t) { return '<span class="chip">' + DF.esc(t) + '</span>'; }).join('')
+          ((s.tags || []).length ? s.tags.map(function (t) { return '<span class="chip">' + DF.esc(t) + '</span>'; }).join('')
             : '<span class="sub">暂无</span>') + '</span></div>' +
-        '<div class="section-title">工作内容（渐进式披露）<span class="line"></span></div>' +
-        '<div class="tree">' + SK.SECTIONS.map(function (x, i) { return secBlock(x[0], x[1], i); }).join('') + '</div>' +
-        '<div class="section-title">踩坑记录与禁令<span class="line"></span></div>' +
-        (pf.length ? pf.map(function (p) {
-          return '<div class="notice">' + DF.icon('warn', 14) + '<span style="flex:1">' + DF.esc(p) + '</span></div>';
-        }).join('') : '<div class="sub" style="padding:2px 0">暂无踩坑记录</div>') +
-        '<div class="section-title">参考引用<span class="line"></span></div>' +
-        (refs.length ? refs.map(function (r) {
-          return '<div class="skd-ref">' + DF.tag(r.refType || 'ref', SK.REF_COLORS[r.refType] || 'gray') +
-            '<span>' + DF.esc(r.label) + '</span>' +
-            (r.path ? '<span class="mono skd-refpath">' + DF.esc(r.path) + '</span>' : '') + '</div>';
-        }).join('') : '<div class="sub" style="padding:2px 0">暂无参考引用</div>') +
-        '<div class="section-title">版本<span class="line"></span></div>' +
-        '<div class="skd-kv"><span class="skd-k">版本</span><span class="mono">' + DF.esc(s.version || '—') + '</span></div>' +
+        '<div class="skd-kv"><span class="skd-k">版本</span><span class="mono">' + DF.esc(s.version || '—') +
+          '</span></div>' +
         '<div class="skd-kv"><span class="skd-k">更新时间</span><span>' + DF.esc(SK.fmtDateTime(s.updatedAt)) + '</span></div>' +
-      '</div>';
-    document.getElementById('sk-viewbox').innerHTML = html;
+        '<div class="skd-kv"><span class="skd-k">被引用</span><span>' + DF.esc(String(s.usedByCount == null ? 0 : s.usedByCount)) + ' 位专家</span></div>' +
+      '</div>' +
+      '<div class="section-title">正文<span class="line"></span></div>' +
+      '<div class="skd-card"><div id="sk-body" class="skd-docroot sk-md-body"></div><div id="sk-body-msg"></div></div>' +
+      '<div class="section-title">附件<span class="line"></span></div>' +
+      '<div class="skd-card" id="sk-files"></div>';
+    renderFiles();
+    mountBodyView();
   }
 
-  function renderDocumentView() {
-    var d = state.doc || { loading: true };
-    var meta = d.loading ? '正在校验更新…'
-      : (d.notModified ? '304 · 已复用上次文本' : '200 · 已更新');
-    var err = d.err
-      ? '<div class="notice" style="margin-top:6px">' + DF.icon('warn', 14) +
-        '<span>' + DF.esc(d.err) + ' <a href="javascript:;" id="sk-doc-retry">重试</a></span></div>'
-      : (d.renderErr
-        ? '<div class="notice" style="margin-top:6px">' + DF.icon('warn', 14) +
-          '<span>' + DF.esc(d.renderErr) + ' <a href="javascript:;" id="sk-doc-retry">重试</a></span></div>'
-        : '');
-    var inner = d.loading
-      ? '<div class="skd-empty">正在加载文档…</div>'
-      : (d.empty ? '<div class="skd-empty">文档为空</div>' : '<div id="sk-doc-root" class="skd-docroot"></div>');
-    document.getElementById('sk-viewbox').innerHTML =
-      '<div class="skd-card">' +
-        '<div class="skd-docbar"><div><div class="skd-docmeta">' + DF.esc(meta) + '</div>' + err + '</div></div>' +
-        inner +
-      '</div>';
-    var retry = document.getElementById('sk-doc-retry');
-    if (retry) retry.onclick = loadDocument;
-    if (!d.loading && !d.err && !d.empty && d.text) renderMarkdown();
-  }
-
-  function loadDocument() {
-    if (!state.id) return;
-    state.doc = { loading: true, err: '', text: '', notModified: false, rendered: false, renderErr: '', rendering: false };
-    renderBody();
-    API.document('skill', state.id).then(function (res) {
-      state.doc = {
-        loading: false,
-        err: '',
-        text: res.text || '',
-        notModified: !!res.notModified,
-        etag: res.etag || null,
-        empty: !res.text || !String(res.text).trim(),
-        rendered: false,
-        renderErr: '',
-        rendering: false
-      };
-      renderBody();
+  function mountBodyView() {
+    var root = document.getElementById('sk-body');
+    if (!root) return;
+    var token = ++state.editorToken;
+    var msg = document.getElementById('sk-body-msg');
+    if (msg) msg.innerHTML = '';
+    bindMediaFallback(root);
+    var text = String(state.skill.body == null ? '' : state.skill.body);
+    if (!text.trim()) { root.innerHTML = '<div class="sub" style="padding:4px 0">正文为空</div>'; return; }
+    SKILL_MD.mount(root, { markdown: text, editable: false }).then(function (handle) {
+      if (token !== state.editorToken) { SKILL_MD.destroy(handle); return; }
+      state.editor = handle;
     }).catch(function (err) {
-      state.doc = {
-        loading: false,
-        err: API.errorText(err),
-        text: '',
-        notModified: false,
-        rendered: false,
-        renderErr: '',
-        rendering: false
-      };
-      renderBody();
+      if (token !== state.editorToken) return;
+      if (msg) msg.innerHTML = '<div class="notice" style="margin-top:6px">' + DF.icon('warn', 14) +
+        '<span>' + DF.esc('正文渲染失败：' + (err && err.message ? err.message : '未知错误')) +
+        ' <a href="javascript:;" id="sk-body-retry">重试</a></span></div>';
+      var retry = document.getElementById('sk-body-retry');
+      if (retry) retry.onclick = mountBodyView;
     });
   }
 
-  function renderMarkdown() {
-    var d = state.doc;
-    if (!d || !d.text || d.rendered || d.rendering) return;
-    var target = document.getElementById('sk-doc-root');
-    if (!target) return;
-    if (typeof window.SKILL_MD !== 'object' || typeof window.SKILL_MD.render !== 'function') {
-      d.renderErr = 'Markdown 渲染器不可用';
-      d.rendering = false;
-      renderBody();
-      return;
-    }
-    d.rendering = true;
-    d.renderErr = '';
-    window.SKILL_MD.render(target, d.text).then(function () {
-      if (state.doc !== d) return; // 期间文档已被替换
-      d.rendering = false;
-      d.rendered = true;
-    }).catch(function (err) {
-      if (state.doc !== d) return;
-      d.rendering = false;
-      d.rendered = false;
-      d.renderErr = 'Markdown 渲染失败：' + (err && err.message ? err.message : '未知错误');
-      renderBody();
+  function renderFiles() {
+    var box = document.getElementById('sk-files');
+    if (!box) return;
+    var files = state.files || [];
+    if (!files.length) { box.innerHTML = '<div class="sub" style="padding:2px 0">暂无附件</div>'; return; }
+    box.innerHTML = files.map(function (f) {
+      var editableFile = state.mode !== 'view' && !f.readOnly;
+      return '<div class="sk-file" data-path="' + DF.esc(f.path) + '" style="display:flex;align-items:center;gap:8px;padding:4px 0">' +
+        '<span class="mono" style="flex:1">' + DF.esc(f.path) + '</span>' +
+        '<span class="sub">' + DF.esc(SK.fmtSize(f.size)) + '</span>' +
+        (f.readOnly ? '<span class="sub">只读</span>' : '') +
+        (editableFile
+          ? '<a href="javascript:;" class="sk-rename" data-path="' + DF.esc(f.path) + '">改名</a>' +
+            '<a href="javascript:;" class="sk-del" data-path="' + DF.esc(f.path) + '">删除</a>'
+          : '') +
+        '</div>';
+    }).join('');
+    box.querySelectorAll('.sk-del').forEach(function (el) {
+      el.onclick = function () { removeFile(el.getAttribute('data-path')); };
     });
+    box.querySelectorAll('.sk-rename').forEach(function (el) {
+      el.onclick = function () { startRename(el.getAttribute('data-path')); };
+    });
+  }
+
+  function removeFile(path) {
+    if (!state.draft) return;
+    API.draftDeleteFile(state.draft.id, path).then(function () {
+      return API.draftGet(state.draft.id);
+    }).then(function (d) {
+      state.draft = d; state.files = d.files || []; renderFiles();
+      markDirty();
+      DF.toast('已删除 ' + path, 'ok');
+    }).catch(function (err) { DF.toast(API.errorText(err), 'err'); });
+  }
+
+  function startRename(path) {
+    var row = document.querySelector('.sk-file[data-path="' + path.replace(/"/g, '\\"') + '"]');
+    if (!row) return;
+    row.innerHTML = '<input class="inp inp-sm" id="sk-rename-in" style="flex:1" value="' + DF.esc(path) + '">' +
+      '<button class="btn btn-sm" id="sk-rename-ok">确定</button>' +
+      '<button class="btn btn-sm" id="sk-rename-no">取消</button>';
+    var input = document.getElementById('sk-rename-in');
+    document.getElementById('sk-rename-ok').onclick = function () {
+      var next = input.value.trim();
+      if (!next || next === path) { renderFiles(); return; }
+      API.draftRename(state.draft.id, path, next).then(function () {
+        return API.draftGet(state.draft.id);
+      }).then(function (d) {
+        state.draft = d; state.files = d.files || []; renderFiles();
+        markDirty();
+        DF.toast('已改名', 'ok');
+      }).catch(function (err) { DF.toast(API.errorText(err), 'err'); });
+    };
+    document.getElementById('sk-rename-no').onclick = renderFiles;
   }
 
   /* ---------------- 编辑 / 新建 ---------------- */
-  function draftMarkdown(d) {
-    var lines = [];
-    var name = (d && d.name) || '';
-    var desc = (d && d.description) || '';
-    var version = (d && d.version) || '';
-    if (name || desc || version) {
-      lines.push('---');
-      if (name) lines.push('name: "' + name + '"');
-      if (desc) lines.push('description: "' + desc + '"');
-      if (version) lines.push('version: "' + version + '"');
-      lines.push('---', '');
-    }
-    SK.SECTIONS.forEach(function (sec) {
-      lines.push('## ' + sec[1], '');
-      lines.push(String((d && d.sections && d.sections[sec[0]]) || ''), '');
-    });
-    var pf = (d && d.pitfalls) || [];
-    if (pf.length) {
-      lines.push('## 常见踩坑', '');
-      pf.forEach(function (p) { lines.push('- ' + p); });
-      lines.push('');
-    }
-    var refs = (d && d.refs) || [];
-    if (refs.length) {
-      lines.push('## 参考资料', '');
-      refs.forEach(function (r) {
-        var bits = [];
-        if (r && r.label) bits.push(r.label);
-        if (r && r.refType) bits.push('(' + r.refType + ')');
-        if (r && r.path) bits.push('— ' + r.path);
-        lines.push('- ' + bits.join(' '));
-      });
-      lines.push('');
-    }
-    return lines.join('\n').replace(/\n+$/, '') + '\n';
-  }
-
   function renderEdit() {
     var body = document.getElementById('page-body');
     if (!body) return;
-    body.innerHTML =
-      '<div class="skd-layout">' +
-        DF.tabsHtml([
-          { k: 'structured', label: '结构化' },
-          { k: 'preview', label: '预览' }
-        ], state.tab, 'data-tab', 'id="sk-tab"') +
-        '<div id="sk-viewbox"></div>' +
-      '</div>';
-    body.querySelectorAll('#sk-tab [data-tab]').forEach(function (el) {
-      el.onclick = function () {
-        var next = el.getAttribute('data-tab');
-        if (next === state.tab) return;
-        state.tab = next;
-        body.querySelectorAll('#sk-tab [data-tab]').forEach(function (tab) {
-          tab.classList.toggle('active', tab.getAttribute('data-tab') === state.tab);
+    setEditChrome(true);
+    if (!state.draft) {
+      if (state.filesErr) {
+        body.innerHTML = DF.empty({
+          icon: 'warn',
+          html: '<div>草稿创建失败</div><div class="sub" style="margin-top:6px">' + DF.esc(state.filesErr) + '</div>',
+          action: { id: 'sk-draft-retry', label: '重试', icon: 'refresh', primary: true, style: 'margin-top:12px' }
         });
-        if (state.tab === 'preview') renderPreviewTab();
-        else renderForm();
-      };
-    });
-    if (state.tab === 'preview') renderPreviewTab();
-    else renderForm();
-  }
-
-  function renderPreviewTab() {
-    var body = document.getElementById('page-body');
-    if (!body) return;
-    var text = draftMarkdown(state.draft);
-    state.preview = { text: text, rendered: false, renderErr: '', rendering: false };
-    document.getElementById('sk-viewbox').innerHTML =
-      '<div class="skd-card">' +
-        '<div class="skd-docbar"><div><div class="skd-docmeta">草稿预览 · 未保存</div><div id="sk-preview-err"></div></div></div>' +
-        '<div id="sk-preview-root" class="skd-docroot"></div>' +
-      '</div>';
-    renderMarkdownPreview();
-  }
-
-  function renderPreviewError(msg) {
-    var el = document.getElementById('sk-preview-err');
-    if (el) el.innerHTML =
-      '<div class="notice" style="margin-top:6px">' + DF.icon('warn', 14) +
-      '<span>' + DF.esc(msg) + ' <a href="javascript:;" id="sk-preview-retry">重试</a></span></div>';
-    var retry = document.getElementById('sk-preview-retry');
-    if (retry) retry.onclick = renderPreviewTab;
-  }
-
-  function renderMarkdownPreview() {
-    var p = state.preview;
-    if (!p || !p.text || p.rendered || p.rendering) return;
-    var target = document.getElementById('sk-preview-root');
-    if (!target) return;
-    if (typeof window.SKILL_MD !== 'object' || typeof window.SKILL_MD.render !== 'function') {
-      renderPreviewError('Markdown 渲染器不可用');
+        var retry = document.getElementById('sk-draft-retry');
+        if (retry) retry.onclick = createDraft;
+        return;
+      }
+      body.innerHTML = '<div class="sub" style="padding:24px 2px">正在创建草稿…</div>';
       return;
     }
-    p.rendering = true;
-    p.renderErr = '';
-    window.SKILL_MD.render(target, p.text).then(function () {
-      if (state.preview !== p) return;
-      p.rendering = false;
-      p.rendered = true;
-    }).catch(function (err) {
-      if (state.preview !== p) return;
-      p.rendering = false;
-      p.rendered = false;
-      renderPreviewError('Markdown 渲染失败：' + (err && err.message ? err.message : '未知错误'));
-    });
-  }
-
-  /* ---------------- 编辑 / 新建表单 ---------------- */
-  function renderForm() {
-    var viewbox = document.getElementById('sk-viewbox');
-    if (!viewbox) return;
-    var d = state.draft;
-    if (!d) return;
-    var isEdit = state.mode === 'edit';
+    var d = state.form;
     var tags = d.tags || [];
-    var pf = d.pitfalls || [];
-    var refs = (isEdit && state.skill && state.skill.refs) || [];
-    var sections = SK.SECTIONS.map(function (x, i) {
-      var k = x[0], label = x[1];
-      var val = String((d.sections || {})[k] || '');
-      return '<details' + (i === 0 ? ' open' : '') + '><summary>' + DF.esc(label) + '</summary>' +
-        '<div class="skd-sec"><textarea class="inp" data-sec="' + k + '" rows="5">' + DF.esc(val) + '</textarea></div></details>';
-    }).join('');
-    viewbox.innerHTML =
+    var total = bytes();
+    body.innerHTML =
       '<div class="skd-card">' +
-          DF.field('名称', '<input class="inp" id="sk-name" maxlength="80" value="' + DF.esc(d.name || '') + '" placeholder="如：CRES 技能">', { required: true }) +
-          DF.field('类别', '<select class="inp" id="sk-cat">' +
-            (state.cats.length ? catOptionsHtml(d.categoryCode) : '') +
-            '</select>' +
-            (state.catsErr ? '<div class="hint">分类加载失败：' + DF.esc(state.catsErr) + ' <a href="javascript:;" id="sk-cat-retry">重试</a></div>' : ''),
-            { required: true }) +
-          DF.field('描述', '<textarea class="inp" id="sk-desc" rows="3" maxlength="' + SK.DESC_MAX + '" placeholder="适用：…；触发：…；不适用：…">' + DF.esc(d.description || '') + '</textarea>' +
-            '<div class="hint"><span id="sk-descn">' + descLen(d.description) + '</span>/' + SK.DESC_MAX + ' 字 · 适用 / 触发 / 不适用；列表检索与路由的唯一依据</div>',
-            { required: true }) +
-          '<div class="section-title">标签<span class="line"></span></div>' +
-          '<div class="chips">' +
-            (tags.length ? tags.map(function (t, i) {
-              return '<span class="chip">' + DF.esc(t) + '<span class="skd-x" data-dtag="' + i + '" title="删除">×</span></span>';
-            }).join('') : '<span class="sub">暂无标签</span>') +
-          '</div>' +
-          '<input class="inp skd-chipin" id="sk-tagin" placeholder="输入标签后回车添加">' +
-          '<div class="section-title">工作内容<span class="line"></span></div>' +
-          '<div class="tree">' + sections + '</div>' +
-          '<div class="section-title">踩坑记录与禁令<span class="line"></span></div>' +
-          (pf.length ? pf.map(function (p, i) {
-            return '<div class="notice">' + DF.icon('warn', 14) + '<span style="flex:1">' + DF.esc(p) + '</span>' +
-              '<span class="skd-x" data-dpf="' + i + '" title="删除">×</span></div>';
-          }).join('') : '<div class="sub" style="padding:2px 0">暂无踩坑记录</div>') +
-          '<input class="inp skd-chipin" id="sk-pfin" placeholder="输入踩坑/禁令后回车添加（新条目置顶展示）">' +
-          (isEdit
-            ? '<div class="section-title">参考引用<span class="line"></span></div>' +
-              (refs.length ? refs.map(function (r) {
-                return '<div class="skd-ref">' + DF.tag(r.refType || 'ref', SK.REF_COLORS[r.refType] || 'gray') +
-                  '<span>' + DF.esc(r.label) + '</span>' +
-                  (r.path ? '<span class="mono skd-refpath">' + DF.esc(r.path) + '</span>' : '') + '</div>';
-              }).join('') : '<div class="sub" style="padding:2px 0">暂无参考引用</div>')
-            : '') +
-        '</div>';
+        DF.field('名称', '<input class="inp" id="sk-name" maxlength="80" value="' + DF.esc(d.name) + '" placeholder="如：CRES 技能">', { required: true }) +
+        DF.field('类别', '<select class="inp" id="sk-cat">' +
+          (state.cats.length ? catOptionsHtml(d.categoryCode) : '') +
+          '</select>' +
+          (state.catsErr ? '<div class="hint">分类加载失败：' + DF.esc(state.catsErr) + ' <a href="javascript:;" id="sk-cat-retry">重试</a></div>' : ''),
+          { required: true }) +
+        DF.field('描述', '<textarea class="inp" id="sk-desc" rows="3" maxlength="' + SK.DESC_MAX + '" placeholder="适用：…；触发：…；不适用：…">' + DF.esc(d.description) + '</textarea>' +
+          '<div class="hint"><span id="sk-descn">' + descLen(d.description) + '</span>/' + SK.DESC_MAX + ' 字 · 列表检索与路由的唯一依据</div>',
+          { required: true }) +
+        '<div class="section-title">标签<span class="line"></span></div>' +
+        '<div class="chips" id="sk-tags">' +
+          (tags.length ? tags.map(function (t, i) {
+            return '<span class="chip">' + DF.esc(t) + '<span class="skd-x" data-dtag="' + i + '" title="删除">×</span></span>';
+          }).join('') : '<span class="sub">暂无标签</span>') +
+        '</div>' +
+        '<input class="inp skd-chipin" id="sk-tag-in" placeholder="输入标签后回车添加">' +
+      '</div>' +
+      '<div class="section-title">正文<span class="line"></span>' +
+        '<span class="sub" id="sk-bytes" style="margin-left:auto">' + total + ' / ' + SK.BODY_LIMIT + ' 字节</span></div>' +
+      '<div class="skd-card"><div id="sk-editor" class="skd-docroot sk-md-body"></div><div id="sk-body-err"></div>' +
+        '<div class="hint" id="sk-bytes-hint"></div></div>' +
+      '<div class="section-title">附件<span class="line"></span></div>' +
+      '<div class="skd-card skd-attach" id="sk-attach">' +
+        '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
+          '<select class="inp inp-sm" id="sk-dir" style="width:auto">' +
+            '<option value="scripts"' + (state.uploadDir === 'scripts' ? ' selected' : '') + '>scripts/</option>' +
+            '<option value="references"' + (state.uploadDir === 'references' ? ' selected' : '') + '>references/</option>' +
+          '</select>' +
+          '<input type="file" id="sk-upload" multiple style="display:none">' +
+          '<button class="btn btn-sm" id="sk-add-file">上传附件</button>' +
+          '<span class="sub">只允许 scripts/、references/；同名覆盖</span>' +
+        '</div>' +
+        '<div id="sk-files"></div>' +
+      '</div>';
+    renderFiles();
     bindForm();
+    mountEditor();
+    updateBytes();
   }
 
   function bindForm() {
-    var d = state.draft;
-    if (!d) return;
+    var d = state.form;
     var nameEl = document.getElementById('sk-name');
     var catEl = document.getElementById('sk-cat');
     var descEl = document.getElementById('sk-desc');
     var descn = document.getElementById('sk-descn');
-    var tagin = document.getElementById('sk-tagin');
-    var pfin = document.getElementById('sk-pfin');
-    if (nameEl) nameEl.oninput = function () { d.name = nameEl.value; };
-    if (catEl) catEl.onchange = function () { d.categoryCode = catEl.value; };
+    if (nameEl) nameEl.oninput = function () { d.name = nameEl.value; updateBytes(); markDirty(); };
+    if (catEl) catEl.onchange = function () { d.categoryCode = catEl.value; markDirty(); };
     if (descEl) descEl.oninput = function () {
       d.description = descEl.value;
       if (descn) descn.textContent = descLen(d.description);
+      updateBytes();
+      markDirty();
     };
-    if (tagin) tagin.onkeydown = function (e) {
+    var tagIn = document.getElementById('sk-tag-in');
+    if (tagIn) tagIn.onkeydown = function (e) {
       if (e.key !== 'Enter') return;
-      var val = tagin.value.trim();
+      var val = tagIn.value.trim();
       if (!val) return;
-      if (!(d.tags || []).some(function (x) { return x === val; })) {
-        d.tags = (d.tags || []).concat([val]);
-        renderBody();
+      if (!d.tags.some(function (x) { return x === val; })) {
+        d.tags = d.tags.concat([val]);
+        tagIn.value = '';
+        markDirty();
+        renderEdit();
       }
-      tagin.value = '';
-      tagin.focus();
     };
-    if (pfin) pfin.onkeydown = function (e) {
-      if (e.key !== 'Enter') return;
-      var val = pfin.value.trim();
-      if (!val) return;
-      d.pitfalls = [val].concat(d.pitfalls || []);
-      renderBody();
-      pfin.value = '';
-      pfin.focus();
-    };
-    document.querySelectorAll('[data-sec]').forEach(function (el) {
-      var key = el.getAttribute('data-sec');
-      el.oninput = function () {
-        d.sections = d.sections || {};
-        d.sections[key] = el.value;
-      };
-    });
     document.querySelectorAll('[data-dtag]').forEach(function (el) {
       el.onclick = function () {
         var i = Number(el.getAttribute('data-dtag'));
-        d.tags = (d.tags || []).filter(function (x, idx) { return idx !== i; });
-        renderBody();
-      };
-    });
-    document.querySelectorAll('[data-dpf]').forEach(function (el) {
-      el.onclick = function () {
-        var i = Number(el.getAttribute('data-dpf'));
-        d.pitfalls = (d.pitfalls || []).filter(function (x, idx) { return idx !== i; });
-        renderBody();
+        d.tags = d.tags.filter(function (x, idx) { return idx !== i; });
+        markDirty();
+        renderEdit();
       };
     });
     var catRetry = document.getElementById('sk-cat-retry');
     if (catRetry) catRetry.onclick = loadCats;
+    var dir = document.getElementById('sk-dir');
+    if (dir) dir.onchange = function () { state.uploadDir = dir.value; };
+    var upload = document.getElementById('sk-upload');
+    var addBtn = document.getElementById('sk-add-file');
+    if (addBtn) addBtn.onclick = function () { upload.click(); };
+    if (upload) upload.onchange = function () { uploadFiles(upload.files); };
+    var attach = document.getElementById('sk-attach');
+    if (attach) {
+      ['dragenter', 'dragover'].forEach(function (ev) {
+        attach.addEventListener(ev, function (e) { e.preventDefault(); attach.classList.add('drag-over'); });
+      });
+      attach.addEventListener('dragleave', function () { attach.classList.remove('drag-over'); });
+      attach.addEventListener('drop', function (e) {
+        e.preventDefault();
+        attach.classList.remove('drag-over');
+        if (e.dataTransfer && e.dataTransfer.files) uploadFiles(e.dataTransfer.files);
+      });
+    }
+  }
+
+  function mountEditor() {
+    var root = document.getElementById('sk-editor');
+    if (!root || !state.draft) return;
+    if (state.editor) { SKILL_MD.destroy(state.editor); state.editor = null; }
+    bindMediaFallback(root);
+    var token = ++state.editorToken;
+    SKILL_MD.mount(root, {
+      markdown: state.body,
+      editable: true,
+      onChange: function (md) {
+        if (md === state.body) return;
+        state.body = md;
+        updateBytes();
+        markDirty();
+      }
+    }).then(function (handle) {
+      if (token !== state.editorToken) { SKILL_MD.destroy(handle); return; }
+      state.editor = handle;
+    }).catch(function (err) {
+      if (token !== state.editorToken) return;
+      var box = document.getElementById('sk-body-err');
+      if (box) box.innerHTML = '<div class="notice" style="margin-top:6px">' + DF.icon('warn', 14) +
+        '<span>' + DF.esc('编辑器初始化失败：' + (err && err.message ? err.message : '未知错误')) +
+        ' <a href="javascript:;" id="sk-editor-retry">重试</a></span></div>';
+      var retry = document.getElementById('sk-editor-retry');
+      if (retry) retry.onclick = mountEditor;
+    });
+  }
+
+  function updateBytes() {
+    var total = bytes();
+    var el = document.getElementById('sk-bytes');
+    var hint = document.getElementById('sk-bytes-hint');
+    var saveBtn = document.getElementById('sk-save');
+    if (el) el.textContent = total + ' / ' + SK.BODY_LIMIT + ' 字节';
+    var over = total > SK.BODY_LIMIT;
+    if (hint) hint.textContent = over
+      ? '正文超过 16 KiB：请把长内容放进 references/，正文只留入口与索引。'
+      : '上限 16 KiB（含 frontmatter）；超出内容请放 references/ 渐进披露。';
+    if (saveBtn) saveBtn.disabled = over || state.saving;
+  }
+
+  function uploadFiles(fileList) {
+    if (!state.draft || !fileList || !fileList.length) return;
+    var dir = state.uploadDir;
+    var list = Array.prototype.slice.call(fileList);
+    var chain = Promise.resolve();
+    list.forEach(function (file) {
+      chain = chain.then(function () {
+        return API.draftUpload(state.draft.id, dir + '/' + file.name, file);
+      });
+    });
+    chain.then(function () { return API.draftGet(state.draft.id); }).then(function (d) {
+      state.draft = d;
+      state.files = d.files || [];
+      renderEdit();
+      markDirty();
+      DF.toast('已上传 ' + list.length + ' 个附件', 'ok');
+    }).catch(function (err) {
+      DF.toast(API.errorText(err), 'err');
+    });
   }
 
   function validate() {
-    var d = state.draft;
-    if (!d.name || !d.name.trim()) { DF.toast('请填写 Skill 名称', 'err'); return false; }
-    if (d.name.trim().length > 80) { DF.toast('Skill 名称不能超过 80 字', 'err'); return false; }
+    var d = state.form;
+    if (!d.name.trim()) { DF.toast('请填写 Skill 名称', 'err'); return false; }
     if (descLen(d.description) < SK.DESC_MIN) { DF.toast('请填写 Skill 描述', 'err'); return false; }
     if (descLen(d.description) > SK.DESC_MAX) { DF.toast('描述需在 1–400 字之间', 'err'); return false; }
     if (!d.categoryCode || !state.cats.some(function (c) { return c.code === d.categoryCode; })) {
       DF.toast('请选择 Skill 类别', 'err');
       return false;
     }
+    if (bytes() > SK.BODY_LIMIT) {
+      DF.toast('正文超过 16 KiB，请把长内容放进 references/', 'err');
+      return false;
+    }
     return true;
   }
 
   function save() {
-    var d = state.draft;
-    if (!d || state.saving) return;
+    if (!state.draft || state.saving) return;
     if (!validate()) return;
-    var body = {
-      name: d.name.trim(),
-      categoryCode: d.categoryCode,
-      description: d.description.trim(),
-      tags: (d.tags || []).slice(),
-      sections: SK.SECTIONS.reduce(function (acc, x) {
-        acc[x[0]] = String((d.sections || {})[x[0]] || '');
-        return acc;
-      }, {}),
-      pitfalls: (d.pitfalls || []).slice(),
-      refs: []
-    };
     state.saving = true;
     renderShell();
-    var req = state.mode === 'new'
-      ? API.create('skill', body)
-      : API.update('skill', state.id, body, API.revision('skill', state.id));
-    req.then(function (dto) {
+    var payload = {
+      name: state.form.name.trim(),
+      categoryCode: state.form.categoryCode,
+      description: state.form.description.trim(),
+      tags: state.form.tags.slice(),
+      body: state.body
+    };
+    API.draftSave(state.draft.id, payload, state.skill ? state.skill.revision : null).then(function (res) {
       state.saving = false;
-      state.skill = dto;
       state.draft = null;
-      state.doc = null;
-      state.preview = null;
-      if (state.mode === 'new') {
-        state.id = dto.id;
-        state.mode = 'edit';
-        state.draft = DF.deep(dto);
-        try { history.replaceState(null, '', 'skill-detail.html?id=' + encodeURIComponent(dto.id) + '&mode=edit'); } catch (e) {}
-        render();
-      } else {
-        state.mode = 'view';
-        state.tab = 'structured';
-        render();
-      }
-      DF.toast('已保存 · 当前版本 ' + dto.version, 'ok');
+      state.dirty = false;
+      destroyEditor();
+      setEditChrome(false);
+      DF.toast('已保存 · 当前版本 ' + res.version, 'ok');
+      state.id = res.id;
+      state.mode = 'view';
+      try { history.replaceState(null, '', 'skill-detail.html?id=' + encodeURIComponent(res.id)); } catch (e) {}
+      state.skill = null;
+      loadDetail();
     }).catch(function (err) {
       state.saving = false;
       DF.toast(API.errorText(err), 'err');
@@ -631,5 +637,17 @@
     });
   }
 
+  window.addEventListener('beforeunload', function (e) {
+    if (state.mode !== 'view' && state.dirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === 's' && state.mode !== 'view') {
+      e.preventDefault();
+      save();
+    }
+  });
+
   init();
-})();

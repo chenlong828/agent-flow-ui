@@ -48,6 +48,30 @@
 .sk-md-body hr { border:none; border-top:1px solid var(--c-line); margin:14px 0; }
 .sk-md-body a { color:var(--c-primary); text-decoration:none; }
 .sk-md-body a:hover { text-decoration:underline; }
+
+/* 文档排版边界：阅读宽度、长串换行、表格与图片自适应（此前 .sk-md-body 从未挂到容器上） */
+.skd-docroot { min-width:0; }
+.sk-md-body .ProseMirror { max-width:860px; outline:none; overflow-wrap:anywhere; word-break:break-word; }
+.sk-md-body .ProseMirror > * { max-width:100%; }
+.sk-md-body h1, .sk-md-body h2, .sk-md-body h3, .sk-md-body h4,
+.sk-md-body p, .sk-md-body li, .sk-md-body th, .sk-md-body td { overflow-wrap:anywhere; }
+.sk-md-body table { display:table; width:100%; max-width:100%; }
+.sk-md-body th { background:var(--c-bg); text-align:left; }
+.sk-md-body th, .sk-md-body td { vertical-align:top; }
+.sk-md-body pre { max-width:100%; }
+.sk-md-body img { max-width:100%; height:auto; }
+.sk-md-body img.sk-img-broken {
+  display:inline-block; box-sizing:border-box; min-width:160px; min-height:52px;
+  padding:10px 12px; border:1px dashed var(--c-line); border-radius:6px;
+  background:var(--c-bg); color:var(--t-3); font-size:12px;
+}
+
+/* 编辑态：操作栏吸顶 + 未保存提示 + 拖拽上传高亮 */
+.sk-edit-mode .page-header { position:sticky; top:0; z-index:30; background:var(--c-bg); padding:8px 0 6px; }
+.skd-dirty { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--t-3); }
+.skd-dirty::before { content:'●'; color:var(--c-primary); }
+.skd-dirty[hidden] { display:none; }
+.skd-attach.drag-over { outline:2px dashed var(--c-primary); outline-offset:6px; background:var(--c-bg); }
 .sk-md-body .token.comment, .sk-md-body .token.prolog, .sk-md-body .token.doctype, .sk-md-body .token.cdata { color:#6b7280; }
 .sk-md-body .token.punctuation { color:#9ca3af; }
 .sk-md-body .token.property, .sk-md-body .token.tag, .sk-md-body .token.constant, .sk-md-body .token.symbol, .sk-md-body .token.deleted { color:#f472b6; }
@@ -61,11 +85,6 @@
 </head>
 <body>
 <div id="app"></div>
-<script src="../assets/js/mock-data.js"></script>
-<script src="../assets/js/ui.js"></script>
-<script src="../assets/js/api.js"></script>
-<script src="../assets/js/pages/skill-common.js"></script>
-<script src="../assets/js/pages/skill-detail-markdown.js"></script>
-<script src="../assets/js/pages/skill-detail.js"></script>
+<script type="module" src="../assets/js/pages/skill-detail.js"></script>
 </body>
 </html>

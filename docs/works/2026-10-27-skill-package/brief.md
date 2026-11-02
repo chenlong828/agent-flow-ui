@@ -2,64 +2,62 @@
 layer: works
 module: skills
 status: active
-updated: 2026-10-28
+updated: 2026-10-29
 ---
 
 # 工序：Skill 包形态重构（SKILL.md + scripts/ + references/）
 
 ## 需求
 
-旁路：本工序先产出契约 v3 提案与编辑器复用评估；需求卡与场景卡待提案确认后按 `req-scenario-spec` 新建，本工序不预占编号。
-上一版 Skill 工序见 `docs/history/works/2026-10-26-skill-detail-page/`（已收口归档），其结论（五章结构化表单 + 只读文档 Tab）将被本工序推翻。
+`REQ-0015`：Skill 改为包形态，正文 + 附件草稿编辑，保存后整包生效并可下载 `SKILL.zip`。
+上一版 Skill 工序见 `docs/history/works/2026-10-26-skill-detail-page/`（已收口归档），其结论（五章结构化表单 + 只读文档 Tab）被本工序推翻。
 
 ## 背景
 
-用户决定重构 Skill 的结构设计：Skill 不再用「五章结构化子表」承载内容，而是一个 **Skill 包**——
-`SKILL.md`（frontmatter + 自由 Markdown 正文）+ `scripts/` + `references/` 附件。
-编辑界面拆成三块独立编辑：元数据（控件）、正文（所见即所得）、附件（文件清单 + 上传）；
-编辑期附件先进**临时暂存区**，保存时与元数据、正文一起提交，并打包成 `SKILL.zip` 供下载。
+B1（`agent-flow-orchaster`）已按自己的 v1 契约重建 Skill：**zip 包即内容真相**，数据库只存 brief、包指针与草稿；编辑先建草稿，附件在草稿里增删改，保存时生成 `SKILL.md`、打包并原子切换；读接口只给详情、文档原文与整包下载。
+本仓库此前的 v3 提案（`body_md` + staging 表 + `/files`）已被该契约取代，**以 B1 契约为准**。
 
-现有数据未实际使用，**不做迁移**：旧子表直接删除，不写回填。
-
-本工序只做提案与评估，**不改任何现有代码**，等待确认门。
+本工序负责 UI 侧对齐：详情/编辑/新建三态改为草稿流程，整包下载，BFF 支持大文件上传与下载头，编辑器统一 7.7.0 单包。
 
 ## 验收标准
 
-1. 产出 Skill 契约 v3 提案：字段归属、DTO、写请求、草稿（staging）与文件面 API、`/document` 与 `/package` 语义、版本与 ETag、数据模型（无迁移）、限制与安全、分期。
-2. 产出 `md_preview` 复用评估：能否整包引用、体积与准入、桥接耦合、可复用/不可复用清单、推荐形态与待验证项。
-3. 提案包含 P 级定级、人工确认门与需用户拍板的剩余问题清单。
-4. 不修改 `pages/`、`assets/`、`bff/`、`server.js`、`tools/` 与既有文档；仅新增本工序目录下的文档。
+1. `SCN-0016`（草稿编辑与保存）、`SCN-0017`（整包下载）实现并 `verified`；`SCN-0005`、`SCN-0014`、`SCN-0015` 按新流程重写后仍 `verified`。
+2. 详情页：`body` 只读渲染、文件清单（`path/size/readOnly`）、整包下载入口；编辑/新建走草稿，支持上传/覆盖/改名/删除/取消。
+3. 正文 16 KiB 上限在编辑态做字节计数与阻断提示；超限时引导把内容放进 `references/`。
+4. 保存错误码可读：`428` / `409` / `410` / `422` / `413` / `400`；保存失败保留草稿可重试。
+5. BFF：上传支持 ≥20 MiB（或 multipart 流式），透传 `Content-Disposition`。
+6. 编辑器 7.7.0 单包替换 `DEP-0001`，只读/编辑共用，Markdown 往返与只读断言通过。
+7. `skills/spec.md`、`architecture.md`、`product.md`、`dependencies.md` 与实现一致。
 
 ## 任务表
 
 | ID | 类型 | 组件 | 状态 | 装载清单 |
 |---|---|---|---|---|
-| T-0027-01 | design | `CMP-skills` + `CMP-bff` | 已完成 | 本 brief、`CMP-skills` 模块卡、`REQ-0013`、`REQ-0014`、`SCN-0013`、`SCN-0014`、`SCN-0015`、`architecture.md`、B1 `skill` 组件规格、`http-gateway` 规格、既有迁移 |
-| T-0027-02 | design | `CMP-skills` | 已完成 | `md_preview` 源码与构建、依赖体积实测、准入清单、`dependencies.md` |
-| T-0027-03 | review | `CMP-skills` | 待确认 | 本 proposal 的未决问题、P1 确认门、`REQ/SCN` 补卡 |
+| T-0027-04 | design | `CMP-skills` + `CMP-bff` | 已完成（2026-10-29：spec 重写、gate 绿） | 本 brief、`REQ-0015`、B1 契约 v1、`skills/spec.md`、`SCN-0016`、`SCN-0017`、`SCN-0005/0014/0015`、`bff/index.js` |
+| T-0027-05 | change | `CMP-skills` | 已完成（2026-10-29：页面/API/夹具重写，五场景 DOM 21/21） | `skill-detail.js`、`api.js`、`skill-common.js`、`skill-detail-markdown.js`、`fake-b1.js`、`SCN-0016` |
+| T-0027-06 | change | `CMP-bff` | 已完成（2026-10-29：body 上限 25 MiB、下载头透传、BFF 12/12） | `bff/index.js`、`tests/bff/bff.test.js`、`SCN-0017` |
+| T-0027-07 | change | `CMP-skills` | 已完成（2026-10-29：7.7.0 单包、适配层、渲染 9/9） | `editor-reuse.md`、`dependencies.md`、`assets/vendor/`、编辑器适配层 |
+| T-0027-08 | verify | `CMP-skills` + `CMP-bff` | 已完成（2026-10-29：五场景 verified、BFF 12/12、全量 57/57、live 读 4/4 + 写 4/4） | `verify-m1-scenarios.js`、`verify-skill-page-*.js`、`verify-b1-*.js`、`check-deps`、场景卡 |
 
 ## 装载清单（必读）
 
-- `docs/works/2026-10-27-skill-package/contract-proposal.md`
+- `docs/requirements/REQ-0015-skill-package.md`
+- B1 仓库：`docs/works/2026-10-28-skill-package/contract-proposal.md`（契约 v1，唯一口径）、`src/components/skill/contract.ts`、`src/components/http-gateway/app.ts`
 - `docs/works/2026-10-27-skill-package/editor-reuse.md`
-- `docs/requirements/REQ-0013-skill-contract-v2.md`、`docs/requirements/REQ-0014-skill-detail-page.md`
 - `docs/design/components/skills/spec.md`
-- `docs/design/scenarios/assets/skill-library/manage-skill/scenario.md`
-- `docs/design/scenarios/integration/b1-integration/skill-contract-v2/scenario.md`
+- `docs/design/scenarios/assets/skill-library/edit-skill-draft/scenario.md`、`download-skill-package/scenario.md`
+- `docs/design/scenarios/assets/skill-library/manage-skill/scenario.md`、`open-skill-detail/scenario.md`、`render-skill-document/scenario.md`
+- `assets/js/pages/skill-detail.js`、`assets/js/api.js`、`tools/fake-b1.js`、`bff/index.js`
 - `docs/design/dependencies.md`
-- B1 仓库：`agent-flow-orchaster/docs/design/components/skill/spec.md`、`http-gateway/spec.md`、`db/migrations/0003_skill.sql`、`0005_skill_description.sql`
 
-## 已确认（2026-10-27 ~ 2026-10-28）
+## 已确认（2026-10-29）
 
-- `md_preview` 只做**代码级参考**，不共享运行底座（原生壳 + 本地文件 + 桥 ≠ 浏览器页面 + B1 HTTP）；目标能力为 Heading / 列表 / 缩进 / 表格 / 图片 / 链接 / 代码块。
-- 依赖体积上限（`check-deps` 的 500 / 120 / 300 KiB）已改为**观测阈值**（2026-10-28），超了只 WARN；实现按节约优先，不为数字砍能力。
-- **不做数据迁移**：Skill 未实际使用，旧子表直接删除，不回填。
-- 正文不强制五章（seed 模板）；删除 `refs`（链接进正文、文件进 `references/`）。
-- 附件存本地 FS + `BlobStore`；上传进临时暂存区，保存时提交并打包 `SKILL.zip`；上传不推进 revision/version。
-- `/document` 不含附件清单；上限 20 MiB / 100 MiB / 100 个。
-- 编辑器统一 **7.7.0**、仓外构建、单包替换 `DEP-0001`。
+- **以后端 v1 契约为唯一口径**：zip 即真相、草稿生命周期、`/download` 整包下载、无单文件读取。
+- 正文上限 **16 KiB**（含 frontmatter）是刻意设计；更长的内容放 `references/` 渐进披露。
+- 附件**不含图片**；只接收 `scripts/`、`references/` 下文件；脚本作为附件保留以便执行。
+- 不做数据迁移（Skill 未实际使用）；不做版本历史、在线执行、鉴权。
+- 编辑器统一 **7.7.0**、仓外构建、单包替换 `DEP-0001`；体积为观测阈值（只 WARN）。
 
-## 剩余待确认
+## 待确认
 
-- 草稿快照语义、打包时机、TTL 与 GC、脚本可执行位（见 proposal §11 Q1–Q5）。
-- 是否允许复制 `md_preview` 的 MIT 源码片段（默认允许，需保留版权头）。
+- 无。

@@ -1,27 +1,20 @@
 #!/usr/bin/env node
 /**
- * Milkdown 渲染层验证（jsdom + vendor bundle）
+ * Milkdown 编辑器运行时验证（Playwright WebKit + vendor bundle）
  * 用法: node tools/verify-skill-page-render.js
- * 覆盖: Milkdown 只读渲染、代码块语法高亮、原始 HTML 不执行、渲染容器不可编辑。
+ * 覆盖: 只读渲染、编辑态可写、代码块高亮、原始 HTML 不执行、销毁。
  */
-'use strict';
+import assert from 'node:assert/strict';
+import { startStaticServer, launchBrowser } from './test-harness.js';
 
-const path = require('path');
-const assert = require('assert/strict');
-const { JSDOM } = require('jsdom');
-
-const VENDOR = path.join(__dirname, '..', 'assets', 'vendor', 'milkdown', '7.22.3', 'milkdown-view.esm.js');
-
-const MARKDOWN = [
-  '---',
-  'name: "CRES 技能"',
-  'description: "适用：需要按 CRES 专属框架编写代码或产出技术方案时。"',
-  'version: "v1.4"',
-  '---',
-  '',
+const BODY = [
   '## 流程总述',
   '',
   '这是 <b>原始</b> HTML。',
+  '',
+  '| 列 A | 列 B |',
+  '| --- | --- |',
+  '| 1 | 2 |',
   '',
   '```js',
   'const enabled = true;',
@@ -29,44 +22,62 @@ const MARKDOWN = [
   ''
 ].join('\n');
 
-async function main() {
-  const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
-    url: 'http://127.0.0.1:3000/pages/skill-detail.html',
-    pretendToBeVisual: true
-  });
-  const win = dom.window;
-  global.window = win;
-  global.document = win.document;
-  Object.defineProperty(global, 'navigator', { value: win.navigator, configurable: true });
-  global.HTMLElement = win.HTMLElement;
-  global.Element = win.Element;
-  global.Node = win.Node;
-  global.localStorage = win.localStorage;
-  global.CustomEvent = win.CustomEvent;
-  global.addEventListener = win.addEventListener.bind(win);
-  global.removeEventListener = win.removeEventListener.bind(win);
-  global.dispatchEvent = win.dispatchEvent.bind(win);
-  if (typeof win.requestAnimationFrame === 'function') global.requestAnimationFrame = win.requestAnimationFrame.bind(win);
-  if (typeof win.cancelAnimationFrame === 'function') global.cancelAnimationFrame = win.cancelAnimationFrame.bind(win);
+(async () => {
+  const staticServer = await startStaticServer();
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.goto(staticServer.base + '/pages/skill-detail.html', { waitUntil: 'networkidle' });
+    const facts = await page.evaluate(async (body) => {
+      const vendor = await import('/assets/vendor/milkdown/7.7.0/skill-editor.esm.js');
+      if (typeof vendor.mount !== 'function') throw new Error('vendor bundle 缺 mount 导出');
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const view = await vendor.mount(root, { markdown: body, editable: false });
+      await new Promise((r) => setTimeout(r, 60));
+      const pm = root.querySelector('.ProseMirror');
+      const markdown = view.getMarkdown();
+      const result = {
+        hasProseMirror: !!pm,
+        editable: pm && pm.getAttribute('contenteditable'),
+        text: root.textContent,
+        hasTable: !!root.querySelector('table'),
+        hasCode: !!root.querySelector('pre code'),
+        tokens: root.querySelectorAll('.token').length,
+        hasBoldTag: !!root.querySelector('b'),
+        scripts: root.querySelectorAll('script').length,
+        markdown
+      };
+      await view.destroy();
 
-  const vendor = await import(VENDOR);
-  assert.equal(typeof vendor.renderMarkdown, 'function', 'vendor bundle 缺 renderMarkdown 导出');
-  await vendor.renderMarkdown(global.document.getElementById('root'), MARKDOWN);
+      const editRoot = document.createElement('div');
+      document.body.appendChild(editRoot);
+      const edit = await vendor.mount(editRoot, { markdown: '# 编辑', editable: true, onChange: () => {} });
+      await new Promise((r) => setTimeout(r, 60));
+      const editPm = editRoot.querySelector('.ProseMirror');
+      result.editEditable = editPm && editPm.getAttribute('contenteditable');
+      await edit.destroy();
+      return result;
+    }, BODY);
 
-  const root = global.document.getElementById('root');
-  assert.ok(root.querySelector('.ProseMirror'), 'Milkdown 未生成渲染容器');
-  assert.equal(root.querySelector('.ProseMirror').getAttribute('contenteditable'), 'false', '渲染容器仍可编辑');
-  assert.ok(root.textContent.includes('流程总述'), '标题未渲染');
-  assert.ok(root.querySelector('pre code'), '代码块未渲染');
-  assert.ok(root.querySelectorAll('.token').length > 0, '代码块缺语法高亮 token');
-  assert.equal(global.document.querySelectorAll('script').length, 0, '原始 HTML 被执行');
-  assert.equal(root.querySelector('b'), null, '原始 HTML 被当作标签渲染');
+    assert.ok(facts.hasProseMirror, 'Milkdown 未生成渲染容器');
+    assert.equal(facts.editable, 'false', '只读容器仍可编辑');
+    assert.ok(facts.text.includes('流程总述'), '标题未渲染');
+    assert.ok(facts.hasTable, '表格未渲染');
+    assert.ok(facts.hasCode, '代码块未渲染');
+    assert.ok(facts.tokens > 0, '代码块缺语法高亮 token');
+    assert.equal(facts.hasBoldTag, false, '原始 HTML 被当作标签渲染');
+    assert.equal(facts.scripts, 0, '原始 HTML 被执行');
+    assert.match(facts.markdown, /## 流程总述/, '序列化丢标题');
+    assert.match(facts.markdown, /\| 列 A \| 列 B \|/, '序列化丢表格');
+    assert.equal(facts.editEditable, 'true', '编辑态不可写');
 
-  console.log('SCN-0015 渲染层 5/5 通过');
-  win.close();
-}
-
-main().catch((err) => {
+    console.log('SCN-0015 编辑器层 9/9 通过');
+  } finally {
+    await browser.close();
+    await staticServer.close();
+  }
+})().catch((err) => {
   console.error(err && err.stack ? err.stack : err);
   process.exit(1);
 });
