@@ -29,12 +29,17 @@
 .wl-radio { display:inline-flex; align-items:center; gap:4px; margin-right:16px; cursor:pointer; font-size:12px; color:var(--t-1); }
 .wl-req { color:var(--c-fail); }
 .wl-ro { background:var(--c-line); color:var(--t-2); cursor:default; }
+.wl-filterbar { display:flex; align-items:center; gap:12px; margin-bottom:12px; font-size:12px; color:var(--t-3); }
+.wl-filterbar label { display:flex; align-items:center; gap:6px; }
+.wl-result-count { color:var(--t-3); }
+.wl-pager { display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-top:12px; font-size:12px; color:var(--t-3); }
+.loading { padding:28px; text-align:center; color:var(--t-3); font-size:13px; }
+.banner { border-radius:6px; padding:9px 12px; margin-bottom:12px; font-size:12px; }
+.banner-fail { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; }
 </style>
 </head>
 <body>
 <div id="app"></div>
-<script src="../assets/js/mock-data.js"></script>
-<script src="../assets/js/ui.js"></script>
-<script src="../assets/js/pages/workflow-list.js"></script>
+<script type="module" src="../assets/js/pages/workflow-list.js"></script>
 </body>
 </html>
