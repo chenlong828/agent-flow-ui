@@ -1,10 +1,12 @@
 /**
  * AgentFlow 原型 · 专家管理 · 列表页 + 详情弹窗
- * 数据契约: window.API（assets/js/api.js）——页面状态只保存 B1 DTO，渲染直接读 DTO。
+ * 数据契约: API（assets/js/api.js）——页面状态只保存 B1 DTO，渲染直接读 DTO。
  * 规格: docs/design/components/experts/spec.md（卡片列表 / 五区详情 / 新建弹窗 / 空态）
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { API } from '../api.js';
+
 
   var PALETTE = ['#2563eb', '#7c3aed', '#16a34a', '#ea580c', '#0d9488', '#dc2626', '#4f46e5', '#0ea5e9'];
   var REF_TYPES = ['行业规则', '规范', '经验', '运行期注入'];
@@ -22,7 +24,7 @@
   var pickerRestoring = false;
 
   /* ========== 数据辅助 ========== */
-  /* API 在无 fetch 的环境（如 jsdom 未注入传输）会同步抛错：转成 rejection 走统一错误态，不吞错。 */
+  /* API 在无 fetch 的环境会同步抛错：转成 rejection 走统一错误态，不吞错。 */
   function apiCall(fn) {
     try { return fn(); } catch (err) { return Promise.reject(err); }
   }
@@ -863,4 +865,3 @@
   var newBtn = document.getElementById('ex-new');
   if (newBtn) newBtn.onclick = openNewModal;
   loadExperts();
-})();
