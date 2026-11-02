@@ -2,31 +2,32 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-23
+updated: 2026-10-30
 ---
 
 # 调试方案（分层测试策略与断言模板）
 
-本文档是本项目调试与验证的现行做法。核心原则：**不同类型的缺陷必须用对应层次的工具去抓，低层次工具抓不到的问题不要反复重试**（例如用 jsdom 反复查"弹层为什么被遮住"）。
+本文档是本项目调试与验证的现行做法。核心原则：**不同类型的缺陷必须用对应层次的工具去抓，低层次工具抓不到的问题不要反复重试**（例如在 Node 里模拟 DOM 反复查"弹层为什么被遮住"）。
 
 ## 1. 四层测试策略（由轻到重）
 
 | 层次 | 工具 | 能抓到 | 抓不到 |
 |---|---|---|---|
 | 语法层 | `node --check`、JavaScriptCore 命令行解释器（路径见环境文档第 5 节） | 语法错误、引擎不兼容的新语法 | 一切行为问题 |
-| 结构层 | jsdom（项目外临时安装，如 `/tmp/afdev-deps`，命令见环境文档 3.2） | DOM 结构、事件绑定是否执行、选择器作用域错误、函数抛错 | 层叠/遮挡、CSS zoom、fixed 定位、命中测试、真实布局尺寸 |
-| 引擎层 | Playwright WebKit（真实 WebKit 无头浏览器） | 渲染结果、元素尺寸与位置、遮挡关系、持久化、控制台错误 | 真实 Safari 独有行为（如 CSS zoom 的完整实现） |
+| 逻辑层 | `node --test`（零依赖） | 纯函数、错误映射、DSL 往返、状态机；不碰 DOM（工作流：`tests/workflow`） | 布局、层叠、真实网络 |
+| 引擎层 | Playwright WebKit（真实 WebKit 无头浏览器） | 渲染结果、元素尺寸与位置、遮挡关系、持久化、控制台错误、网络请求（工作流：`tools/verify-workflow-*.js`） | 真实 Safari 独有行为（如 CSS zoom 的完整实现） |
 | 人工层 | 用户 Safari 手工验收 | 全部真实行为 | 需要用户配合反馈 |
 
-执行顺序：改完代码先跑语法层（秒级）→ 涉及行为跑结构层或引擎层冒烟 → 交付用户前对全部页面跑一遍引擎层回归循环。
+执行顺序：改完代码先跑语法层（秒级）→ 纯逻辑跑 `node --test` → 涉及 DOM/网络的行为跑 Playwright 引擎层 → 交付用户前对全部页面跑一遍引擎层回归循环。项目已无 jsdom 入口。
 
 ## 2. 引擎层回归循环（全站冒烟模板）
 
 对所有页面循环加载，收集每个页面的 JavaScript 运行时错误（`pageerror` 事件），同时断言公共结构（顶部栏、字体选择器、侧栏宽度）。这个模式在本项目反复使用，直接复用：
 
 ```javascript
-const { webkit } = require(process.env.PLAYWRIGHT_MODULE || 'playwright-core');
-const pages = ['workflow-list', 'workflow-editor', 'skills', 'experts', 'harnesses',
+import { loadPlaywright } from '../../tools/playwright.js';
+const { webkit } = loadPlaywright();
+const pages = ['workflow-list', 'workflow-editor', 'skills', 'skill-detail', 'experts', 'harnesses',
                'tools', 'instances', 'instance-detail', 'analytics',
                'workspaces', 'workspace-detail', 'keys'];
 (async () => {
@@ -44,11 +45,11 @@ const pages = ['workflow-list', 'workflow-editor', 'skills', 'experts', 'harness
 })();
 ```
 
-带查询参数的页面（`workflow-editor.html?id=w1`、`instance-detail.html?id=INS-2041`、`workspace-detail.html?id=...`）按需追加参数。需要验证「字体大小设置跨页持久」时，先在第一页执行 `page.selectOption('#df-font', 'xl')` 再开始循环——同一个浏览器上下文内 localStorage 会延续。
+带查询参数的页面（`workflow-editor.html?id=<uuid>`、`instance-detail.html?id=INS-2041`、`workspace-detail.html?id=...`）按需追加参数。需要验证「字体大小设置跨页持久」时，先在第一页执行 `page.selectOption('#df-font', 'xl')` 再开始循环——同一个浏览器上下文内 localStorage 会延续。
 
 ## 3. 层叠与遮挡断言（elementFromPoint 命中测试）
 
-jsdom 永远查不出「弹层画在暗色遮罩下面」这类问题（它不做布局与层叠计算），必须用真实引擎做命中测试断言：在目标位置问浏览器"这个点上最顶层的元素是谁"。
+只看 DOM 源码或在 Node 里模拟 DOM，永远查不出「弹层画在暗色遮罩下面」这类问题（不做真实布局与层叠计算），必须用真实引擎做命中测试断言：在目标位置问浏览器"这个点上最顶层的元素是谁"。
 
 ```javascript
 // 断言：弹窗整体在遮罩之上（取弹窗左上角内侧一点，命中的应是弹窗自身或其子元素）

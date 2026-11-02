@@ -14,7 +14,7 @@ updated: 2026-10-28
 
 ## 0 模块卡
 
-> 追溯：`REQ-0007` / `SCN-0007`（verified；DOM/jsdom 3 正 1 反）。
+> 追溯：`REQ-0007` / `SCN-0007`（verified；Playwright 3 正 1 反）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件

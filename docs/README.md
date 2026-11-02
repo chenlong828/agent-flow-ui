@@ -16,8 +16,8 @@ docs/
 │   ├── product.md / architecture.md
 │   ├── dependencies.md               ← 运行时依赖准入清单（DEP-xxxx + 机读 JSON）
 │   ├── dev-environment.md / debugging-and-testing.md / code-refactoring.md
-│   ├── components/<id>/spec.md    ← 组件规格（12 个）
-│   └── scenarios/<领域>/<价值流>/<场景>/scenario.md  ← 15 个，索引 _index.md 自动生成
+│   ├── components/<id>/spec.md    ← 组件规格（13 个）
+│   └── scenarios/<领域>/<价值流>/<场景>/scenario.md  ← 17 个，索引 _index.md 自动生成
 ├── works/                         ← 执行：正在做什么（一级只有工序目录）
 └── history/                       ← 记忆：怎么走到这里（冻结只读）
     ├── decisions/                 ← 决策与裁定

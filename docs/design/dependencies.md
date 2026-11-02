@@ -92,13 +92,13 @@ updated: 2026-10-28
     {
       "id": "DEP-0001",
       "name": "milkdown",
-      "version": "7.22.3",
+      "version": "7.7.0",
       "license": "MIT",
-      "path": "assets/vendor/milkdown/7.22.3/milkdown-view.esm.js",
-      "sha256": "cff931cdedaa18c89879de3a9a0ae513a7e3a5b6867b470ecd0d7fa333407779",
-      "gzipKb": 148.3,
+      "path": "assets/vendor/milkdown/7.7.0/skill-editor.esm.js",
+      "sha256": "15e36e16020b881e1137e1227a2ea6a512f58bddea74e29409750d209f40186a",
+      "gzipKb": 177.6,
       "pages": [],
-      "note": "Milkdown 仅在 Skill 专门页「文档」Tab 按需动态加载，不计入首屏增量"
+      "note": "Milkdown 只在 Skill 专门页按需动态加载，查看态与编辑态共用"
     }
   ]
 }

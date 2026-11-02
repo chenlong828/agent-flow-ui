@@ -3,7 +3,7 @@ layer: design
 module: global
 status: current
 generated: true
-updated: 2026-10-28
+updated: 2026-10-30
 ---
 
 # 场景索引
@@ -12,18 +12,16 @@ updated: 2026-10-28
 
 ## 统计
 
-- 场景：15
-- 文档用例：65
-- jsdom runner：56
-- 其他执行层：9（引擎 / BFF / 真实 B1）
+- 场景：17
+- 文档用例：72
+- Playwright runner：55
+- 其他执行层：17（引擎 / BFF / 真实 B1）
 
 ## 清单
 
 | 场景 | 标题 | 领域 / 价值流 | 状态 | 路径 |
 |---|---|---|---|---|
 | SCN-0001 | SCN-0001 顶栏用户区下拉菜单 | shell / topbar | verified | `design/scenarios/shell/topbar/user-menu/scenario.md` |
-| SCN-0002 | SCN-0002 工作流列表浏览与生命周期入口 | flow / workflow-list | verified | `design/scenarios/flow/workflow-list/browse-workflows/scenario.md` |
-| SCN-0003 | SCN-0003 工作流画布编辑与校验 | flow / workflow-editor | verified | `design/scenarios/flow/workflow-editor/edit-workflow/scenario.md` |
 | SCN-0004 | SCN-0004 实例监控与运行控制 | operations / instances | verified | `design/scenarios/operations/instances/control-instance/scenario.md` |
 | SCN-0005 | SCN-0005 Skill 维护与渐进披露 | assets / skill-library | verified | `design/scenarios/assets/skill-library/manage-skill/scenario.md` |
 | SCN-0006 | SCN-0006 专家注册与组合配置 | assets / expert-registry | verified | `design/scenarios/assets/expert-registry/manage-expert/scenario.md` |
@@ -33,6 +31,10 @@ updated: 2026-10-28
 | SCN-0010 | SCN-0010 工作区创建、配置与归档 | workspace / workspace-config | verified | `design/scenarios/workspace/workspace-config/configure-workspace/scenario.md` |
 | SCN-0011 | SCN-0011 个人 Key 登记、校验与绑定 | workspace / credential | verified | `design/scenarios/workspace/credential/manage-key/scenario.md` |
 | SCN-0012 | SCN-0012 B1 资产同源接入与四类资产读写 | integration / b1-integration | verified | `design/scenarios/integration/b1-integration/scenario.md` |
-| SCN-0013 | SCN-0013 Skill 契约 v2 展示端适配 | integration / b1-integration | verified | `design/scenarios/integration/b1-integration/skill-contract-v2/scenario.md` |
-| SCN-0014 | SCN-0014 Skill 专门页面查看与编辑 | assets / skill-library | verified | `design/scenarios/assets/skill-library/open-skill-detail/scenario.md` |
-| SCN-0015 | SCN-0015 Milkdown 渲染 Skill 文档 | assets / skill-library | verified | `design/scenarios/assets/skill-library/render-skill-document/scenario.md` |
+| SCN-0013 | SCN-0013 Skill 契约 v2 展示端适配（已废弃） | integration / b1-integration | deprecated | `design/scenarios/integration/b1-integration/skill-contract-v2/scenario.md` |
+| SCN-0014 | SCN-0014 Skill 专门页面查看、编辑与下载 | assets / skill-library | verified | `design/scenarios/assets/skill-library/open-skill-detail/scenario.md` |
+| SCN-0015 | SCN-0015 正文渲染（Milkdown 适配层） | assets / skill-library | verified | `design/scenarios/assets/skill-library/render-skill-document/scenario.md` |
+| SCN-0016 | SCN-0016 草稿编辑与保存 Skill 包 | assets / skill-library | verified | `design/scenarios/assets/skill-library/edit-skill-draft/scenario.md` |
+| SCN-0017 | SCN-0017 整包下载 SKILL.zip | assets / skill-library | verified | `design/scenarios/assets/skill-library/download-skill-package/scenario.md` |
+| SCN-0018 | SCN-0018 工作流列表同源浏览、创建与生命周期 | flow / workflow-list | verified | `design/scenarios/flow/workflow-list/browse-workflows-live/scenario.md` |
+| SCN-0019 | SCN-0019 工作流编辑器同源加载、校验与保存 | flow / workflow-editor | verified | `design/scenarios/flow/workflow-editor/edit-workflow-live/scenario.md` |
