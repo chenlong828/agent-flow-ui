@@ -1,10 +1,10 @@
 ---
-layer: design
+layer: history
 module: workflow-list
-status: verified
+status: frozen
 flow: browse-workflows
 scenario: SCN-0002
-updated: 2026-10-23
+updated: 2026-10-30
 ---
 
 # SCN-0002 工作流列表浏览与生命周期入口
@@ -31,11 +31,11 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：DOM（jsdom）+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-23，40/40 通过。
+执行层：Playwright WebKit+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-30，已由 SCN-0018/0019 取代；历史断言不再进入现行 runner。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
 | SCN-0002-T1 | 正 | 列表卡片数、统计「共 n」与 MOCK.workflows.length 一致，默认卡片视图 | `tools/verify-m1-scenarios.js#SCN-0002-T1` |
 | SCN-0002-T2 | 正 | 选择「专项子流程」后条目数=夹具子集；搜索不存在名称显示空态；改搜「需求」恢复 1 条 | `tools/verify-m1-scenarios.js#SCN-0002-T2` |
-| SCN-0002-T3 | 正 | 新建合法名称后 MOCK.workflows +1 且为草稿；复制 w1 生成含「副本」的草稿再 +1 | `tools/verify-m1-scenarios.js#SCN-0002-T3` |
+| SCN-0002-T3 | 正 | 新建合法名称后 MOCK.workflows +1、跳转编辑器并显示新名称与 start/end 两节点；复制 w1 生成含「副本」的草稿再 +1 | `tools/verify-m1-scenarios.js#SCN-0002-T3` |
 | SCN-0002-T4 | 反 | 删除被 3 个实例引用的 w1 时确认框显示引用数；取消后条目与实例引用不变 | `tools/verify-m1-scenarios.js#SCN-0002-T4` |
