@@ -1,9 +1,7 @@
 /**
- * AgentFlow 原型 · 全量模拟数据（window.MOCK）
+ * AgentFlow 原型 · 全量模拟数据（MOCK）
  * 时间基准: 页面加载时刻 - minutesAgo。所有页面只读消费。
  */
-(function () {
-  'use strict';
   const NOW = Date.now();
   const m = min => new Date(NOW - min * 60000); // minutes ago → Date
   const mts = min => m(min).getTime();
@@ -197,8 +195,8 @@
     { id: 'w2', name: '需求分析子流程', type: '专项子流程', ver: 'v0.3', published: true, desc: '需求获取→意图识别→范围识别→交叉探索补全（fan-out）→结果审核→人工校准闭环', nodeCount: 10, stageCount: 0, lastRun: { status: '等待人工确认', instId: 'INS-2038', timeM: 72 }, updater: '李响', updatedM: 480, graph: graphReq() },
     { id: 'w3', name: '批量代码审视', type: '批量审视任务', ver: 'v2.0', published: true, desc: '按调用链/模块/文件拆分审视任务并大规模并行（数千子任务），失败阈值聚合后产出汇总报告', nodeCount: 6, stageCount: 0, lastRun: { status: '运行中', instId: 'INS-2036', timeM: 210 }, updater: '王芳', updatedM: 120, graph: graphBatch() },
     { id: 'w4', name: '每日构建复验', type: '批量审视任务', ver: 'v1.1', published: true, desc: '夜间构建结果批量复验与失败项归因，复验评审不通过回退重查', nodeCount: 7, stageCount: 0, lastRun: { status: '成功', instId: 'INS-2025', timeM: 600 }, updater: '王芳', updatedM: 800, graph: graphNightly() },
-    { id: 'w5', name: '遗留代码逻辑抽取', type: '专项子流程', ver: 'v0.5', published: false, desc: '对遗留模块做逻辑抽取与技术债整理（草稿）', nodeCount: 5, stageCount: 0, lastRun: { status: '失败', instId: 'INS-2022', timeM: 1500 }, updater: '李响', updatedM: 1500, graph: graphSmall(['e5', 'e3'], ['目标圈定', '逻辑抽取', '抽取评审']) },
-    { id: 'w6', name: '知识库索引更新', type: '专项子流程', ver: 'v0.8', published: true, desc: '收集校准反馈，更新知识库索引与技能沉淀，防技能老化', nodeCount: 5, stageCount: 0, lastRun: { status: '成功', instId: 'INS-2024', timeM: 2200 }, updater: '陈明', updatedM: 2200, graph: graphSmall(['e8'], ['变更收集', '索引更新', '更新评审']) }
+    { id: 'w5', name: '遗留代码逻辑抽取', type: '专项子流程', ver: 'v0.5', published: false, desc: '对遗留模块做逻辑抽取与技术债整理（草稿）', nodeCount: 5, stageCount: 0, lastRun: { status: '失败', instId: 'INS-2022', timeM: 1500 }, updater: '李响', updatedM: 1500, graph: graphSmall(['e5', 'e3', 'e6'], ['目标圈定', '逻辑抽取', '抽取评审']) },
+    { id: 'w6', name: '知识库索引更新', type: '专项子流程', ver: 'v0.8', published: true, desc: '收集校准反馈，更新知识库索引与技能沉淀，防技能老化', nodeCount: 5, stageCount: 0, lastRun: { status: '成功', instId: 'INS-2024', timeM: 2200 }, updater: '陈明', updatedM: 2200, graph: graphSmall(['e8', 'e8', 'e6'], ['变更收集', '索引更新', '更新评审']) }
   ];
 
   /* ============ 工作区 ============ */
@@ -372,6 +370,5 @@
     ]
   };
 
-  window.MOCK = { now: NOW, m, mts, experts, skills, harnesses, tools, knowledgeTree, workflows, workspaces, keys, instances, analytics,
+  export const MOCK = { now: NOW, m, mts, experts, skills, harnesses, tools, knowledgeTree, workflows, workspaces, keys, instances, analytics,
     byId: (arr, id) => arr.find(x => x.id === id) || null };
-})();
