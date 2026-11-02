@@ -13,7 +13,7 @@
 .we-pitem:hover{border-color:var(--c-primary);color:var(--c-primary);}
 .we-canvas-col{flex:1;min-width:0;display:flex;flex-direction:column;}
 .we-canvas-col .cv-wrap{flex:1;min-height:430px;}
-.we-name{width:200px;font-weight:700;}
+.we-name{width:170px;flex:0 0 170px;font-weight:700;}
 .we-segwrap{display:flex;align-items:center;gap:8px;}
 .edge-del{position:absolute;z-index:6;background:#fff;border:1px solid var(--c-fail);color:var(--c-fail);border-radius:6px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow);}
 svg.cv-edges path.hit{pointer-events:stroke;stroke:transparent;stroke-width:16;cursor:pointer;}
@@ -23,12 +23,26 @@ svg.cv-edges path.esel{stroke:var(--c-fail)!important;stroke-width:2.6!important
 .insp-sec .t{font-size:12px;font-weight:700;color:var(--t-2);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
 .chip-add{display:flex;gap:6px;margin-top:6px;}
 .chip-add input{flex:1;}
+.page-header .acts { flex-wrap:wrap; justify-content:flex-end; }
+.page-header .acts .btn { white-space:nowrap; flex-shrink:0; }
+.we-rev { font-size:11px; color:var(--t-3); white-space:nowrap; }
+.we-rev.dirty { color:var(--c-wait); font-weight:600; }
+.we-issues { padding:8px 12px; margin-top:8px; max-height:150px; overflow:auto; font-size:12px; }
+.we-ok { display:flex; align-items:center; gap:6px; color:var(--c-ok); }
+.we-issue { padding:4px 0; border-bottom:1px dashed var(--c-line); cursor:pointer; }
+.we-issue:last-child { border-bottom:none; }
+.we-issue b { margin-right:6px; }
+.we-issue.err b { color:var(--c-fail); }
+.we-issue.warn b { color:var(--c-wait); }
+.we-issue .mono { color:var(--t-3); font-size:10px; }
+.cv-node.has-error, .cv-stage.has-error { border-color:var(--c-fail)!important; box-shadow:0 0 0 2px rgba(220,38,38,.16); }
+svg.cv-edges path.has-error { stroke:var(--c-fail)!important; stroke-width:2.6!important; }
+.we-dsl { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.we-dsl .code-block { flex:1; overflow:auto; }
 </style>
 </head>
 <body>
 <div id="app"></div>
-<script src="../assets/js/mock-data.js"></script>
-<script src="../assets/js/ui.js"></script>
-<script src="../assets/js/pages/workflow-editor.js"></script>
+<script type="module" src="../assets/js/pages/workflow-editor.js"></script>
 </body>
 </html>
