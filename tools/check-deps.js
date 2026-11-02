@@ -3,15 +3,18 @@
  * 运行时依赖准入门禁（零依赖）
  * 用法: node tools/check-deps.js
  * 校验：design/dependencies.md 清单 JSON、页面外链/vendor 引用、vendor 文件存在与
- * SHA-256/体积、页面 JS 裸模块、BFF/server 的 require、package.json 运行时依赖。
+ * SHA-256/体积、页面 JS 裸模块、BFF/server 的 import、package.json 运行时依赖。
  */
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const zlib = require('zlib');
-const { builtinModules } = require('module');
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import zlib from 'node:zlib';
+import { builtinModules } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(__dirname, '..');
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+const ROOT = path.resolve(HERE, '..');
 const REGISTRY = path.join(ROOT, 'docs', 'design', 'dependencies.md');
 const WARN_LIMITS = { dep: 500, page: 120, total: 300 }; // KiB gzip，仅观测阈值
 const LICENSES = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC']);
@@ -125,12 +128,12 @@ for (const p of walk(path.join(ROOT, 'assets', 'js'), (f) => f.endsWith('.js')))
   }
 }
 
-/* 7. server.js 与 bff/*：只允许 Node 内置模块 */
+/* 7. server.js 与 bff/*：只允许 Node 内置模块（ESM import） */
 for (const p of [path.join(ROOT, 'server.js'), ...walk(path.join(ROOT, 'bff'), (f) => f.endsWith('.js'))]) {
   if (!fs.existsSync(p)) continue;
   const r = rel(p);
   const t = fs.readFileSync(p, 'utf8');
-  for (const m of t.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) {
+  for (const m of t.matchAll(/\bimport\s+(?:[^'";]*?\s+from\s+)?["']([^"']+)["']/g)) {
     const spec = m[1];
     if (/^(\.\.?\/|\/)/.test(spec)) continue;
     const name = spec.startsWith('node:') ? spec.slice(5) : spec;

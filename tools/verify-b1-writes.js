@@ -1,42 +1,22 @@
 #!/usr/bin/env node
 /**
- * B1 四页真实写入冒烟（jsdom + 真实 BFF）
+ * B1 四页真实写入冒烟（Playwright WebKit + 真实 BFF）
  * 用法: BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js
  * 每个页面通过 UI 新建一条唯一数据，确认后端已落库，然后清理。
+ * 注意：会写并删除真实 B1 测试数据，运行前确认目标环境。
  */
-'use strict';
+import assert from 'node:assert/strict';
+import { launchBrowser, openPage, assertNoPageErrors } from './test-harness.js';
 
-const fs = require('fs');
-const path = require('path');
-const assert = require('assert/strict');
-let jsdom;
-try { jsdom = require('jsdom'); } catch (e) {
-  console.error('缺少 jsdom：见 docs/design/dev-environment.md');
-  process.exit(1);
-}
-const { JSDOM, VirtualConsole } = jsdom;
-const ROOT = path.join(__dirname, '..');
 const BASE = (process.env.BASE_URL || 'http://127.0.0.1:3000').replace(/\/$/, '');
-const IGNORE = /Could not load img|not implemented|Not implemented|navigation \(except hash changes\)/i;
 const stamp = Date.now().toString(36);
 
-function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
-function ev(win, type) {
-  return new win.MouseEvent(type, { bubbles: true, cancelable: true, view: win, clientX: 10, clientY: 10 });
-}
-function click(el) { assert.ok(el, 'click 目标为空'); el.dispatchEvent(ev(el.ownerDocument.defaultView, 'click')); }
-function setValue(el, value) {
-  assert.ok(el, '输入框为空');
-  el.value = value;
-  el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true }));
-  el.dispatchEvent(new el.ownerDocument.defaultView.Event('change', { bubbles: true }));
-}
 async function api(pathname, opts) {
   const res = await fetch(BASE + '/api/v1' + pathname, opts);
   const text = await res.text();
   let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch (e) { /* ignore */ }
-  return { status: res.status, data: data };
+  try { data = text ? JSON.parse(text) : null; } catch { /* 非 JSON */ }
+  return { status: res.status, data };
 }
 async function list(kind) {
   const r = await api('/' + kind + '?limit=200');
@@ -44,8 +24,7 @@ async function list(kind) {
   return r.data.items;
 }
 async function removeByName(kind, name) {
-  const items = await list(kind);
-  const item = items.filter((x) => x.name === name)[0];
+  const item = (await list(kind)).filter((x) => x.name === name)[0];
   if (!item) return;
   const r = await api('/' + kind + '/' + encodeURIComponent(item.id), {
     method: 'DELETE', headers: { 'If-Match': '"' + item.revision + '"' }
@@ -55,17 +34,16 @@ async function removeByName(kind, name) {
 async function exists(kind, name) {
   return (await list(kind)).some((x) => x.name === name);
 }
-
 async function detail(kind, id) {
   const r = await api('/' + kind + '/' + encodeURIComponent(id));
   assert.equal(r.status, 200, 'GET ' + kind + '/' + id + ' -> ' + r.status);
   return r.data;
 }
 async function write(method, pathname, body, revision) {
-  const headers = { 'Accept': 'application/json' };
+  const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (revision != null) headers['If-Match'] = '"' + revision + '"';
-  const r = await api(pathname, { method: method, headers: headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await api(pathname, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   assert.ok(r.status >= 200 && r.status < 300, method + ' ' + pathname + ' -> ' + r.status + ' ' + JSON.stringify(r.data));
   return r.data;
 }
@@ -86,12 +64,13 @@ async function fullCrud(kind, name) {
       harnessId: d.harnessId, timeoutMs: d.timeoutMs, params: d.params || []
     }, d.revision);
   } else if (kind === 'skills') {
-    await write('PUT', '/skills/' + d.id, {
+    const draft = await write('POST', '/skill-drafts', { skillId: d.id });
+    const saved = await write('POST', '/skill-drafts/' + draft.id + '/save', {
       name: d.name, categoryCode: d.categoryCode, description: 'B1 update smoke',
-      tags: d.tags || [], sections: d.sections || {},
-      pitfalls: d.pitfalls || [], refs: (d.refs || []).map((r) => ({ label: r.label, refType: r.refType, path: r.path }))
+      tags: d.tags || [], body: d.body
     }, d.revision);
-    await write('PATCH', '/skills/' + d.id + '/enabled', { enabled: false }, d.revision + 1);
+    assert.match(saved.version, /^v\d+\.\d+$/);
+    await write('PATCH', '/skills/' + d.id + '/enabled', { enabled: false }, saved.revision);
   } else if (kind === 'experts') {
     await write('PATCH', '/experts/' + d.id, { duty: 'B1 update smoke' }, d.revision);
     await write('PATCH', '/experts/' + d.id + '/enabled', { enabled: false }, d.revision + 1);
@@ -99,181 +78,144 @@ async function fullCrud(kind, name) {
   const after = await detail(kind, item.id);
   assert.ok(after.revision > d.revision, kind + ' revision 未递增');
   if (kind === 'skills') {
-    assert.equal(after.description, 'B1 update smoke', 'Skill 描述未写回');
-    assert.equal(after.summary, undefined, 'Skill 详情仍返回 summary');
-    assert.equal(after.triggers, undefined, 'Skill 详情仍返回 triggers');
-    const docRes = await fetch(BASE + '/api/v1/skills/' + encodeURIComponent(item.id) + '/document', {
-      headers: { Accept: 'text/markdown' }
-    });
+    assert.equal(after.description, 'B1 update smoke');
+    assert.equal(after.summary, undefined);
+    assert.equal(after.triggers, undefined);
+    const docRes = await fetch(BASE + '/api/v1/skills/' + encodeURIComponent(item.id) + '/document', { headers: { Accept: 'text/markdown' } });
     const docText = await docRes.text();
-    assert.equal(docRes.status, 200, '文档端点非 200');
+    assert.equal(docRes.status, 200);
     assert.equal(docRes.headers.get('content-type'), 'text/markdown; charset=utf-8');
-    assert.ok(docText.includes('description: "B1 update smoke"'), '文档未反映最新描述');
+    assert.ok(docText.includes('description: "B1 update smoke"'));
     const etag = docRes.headers.get('etag');
-    assert.match(etag || '', /^"\d+"$/, '文档缺 ETag');
-    const cached = await fetch(BASE + '/api/v1/skills/' + encodeURIComponent(item.id) + '/document', {
-      headers: { Accept: 'text/markdown', 'If-None-Match': etag }
-    });
-    assert.equal(cached.status, 304, 'If-None-Match 未返回 304');
+    assert.match(etag || '', /^"\d+"$/);
+    const cached = await fetch(BASE + '/api/v1/skills/' + encodeURIComponent(item.id) + '/document', { headers: { Accept: 'text/markdown', 'If-None-Match': etag } });
+    assert.equal(cached.status, 304);
     const legacy = await api('/skills/' + encodeURIComponent(item.id), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'If-Match': '"' + after.revision + '"' },
-      body: JSON.stringify({
-        name: after.name, categoryCode: after.categoryCode, description: after.description,
-        tags: after.tags || [], sections: after.sections || {}, pitfalls: after.pitfalls || [],
-        refs: (after.refs || []).map((r) => ({ label: r.label, refType: r.refType, path: r.path })),
-        summary: 'legacy'
-      })
+      method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': '"' + after.revision + '"' },
+      body: JSON.stringify({ name: after.name, description: after.description })
     });
-    assert.equal(legacy.status, 400, '旧字段 summary 未返回 400');
-    assert.equal(legacy.data.error.code, 'validation_error');
-    assert.equal(legacy.data.error.details.field, 'body');
+    assert.equal(legacy.status, 404);
+    assert.equal(legacy.data.error.code, 'not_found');
+    const stale = await api('/skill-drafts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skillId: item.id })
+    });
+    assert.equal(stale.status, 201);
+    const noMatch = await api('/skill-drafts/' + stale.data.id + '/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: after.name, categoryCode: after.categoryCode, description: after.description, tags: after.tags || [], body: after.body })
+    });
+    assert.equal(noMatch.status, 428);
+    await api('/skill-drafts/' + stale.data.id, { method: 'DELETE' });
   }
   await write('DELETE', '/' + kind + '/' + item.id, undefined, after.revision);
   assert.equal(await exists(kind, name), false, kind + ' 删除后仍存在');
 }
-
 async function waitName(kind, name, label) {
   const end = Date.now() + 8000;
   while (Date.now() < end) {
     if (await exists(kind, name)) return;
-    await wait(150);
+    await new Promise((r) => setTimeout(r, 150));
   }
   throw new Error('等待 ' + label + ' 落库超时');
 }
-
-async function load(page) {
-  const errors = [];
-  const vc = new VirtualConsole();
-  vc.on('jsdomError', (e) => {
-    const msg = (e && e.message) || String(e);
-    if (!IGNORE.test(msg)) errors.push(msg);
-  });
-  vc.on('error', (...args) => errors.push('console.error: ' + args.map(String).join(' ')));
-  const dom = new JSDOM(fs.readFileSync(path.join(ROOT, 'pages', page.split('?')[0]), 'utf8'), {
-    url: BASE + '/pages/' + page,
-    runScripts: 'dangerously',
-    resources: 'usable',
-    pretendToBeVisual: true,
-    virtualConsole: vc,
-    beforeParse(window) {
-      window.fetch = function (url, opts) {
-        const target = /^https?:/.test(String(url)) ? String(url) : BASE + String(url);
-        return fetch(target, opts);
-      };
-      window.HTMLElement.prototype.scrollIntoView = function () {};
-      window.scrollTo = function () {};
-    }
-  });
-  return { dom, win: dom.window, doc: dom.window.document, errors, close() { dom.window.close(); } };
+async function open(browser, pageName, query = '') {
+  return openPage(browser, BASE, pageName, query, { routeB1: false, wait: 900 });
 }
 
-async function waitFor(fn, label, timeout) {
-  const end = Date.now() + (timeout || 8000);
-  while (Date.now() < end) {
-    const v = fn();
-    if (v) return v;
-    await wait(100);
-  }
-  throw new Error('等待超时: ' + label);
-}
-
-async function pageHarness() {
+async function pageHarness(browser) {
   const name = 'AF-harness-' + stamp;
-  const ctx = await load('harnesses.html');
+  const ctx = await open(browser, 'harnesses');
   try {
-    await waitFor(() => ctx.doc.querySelectorAll('#page-body tbody tr').length, 'harness list');
-    click(ctx.doc.querySelector('#ha-reg-btn'));
-    await wait(100);
-    setValue(ctx.doc.querySelector('[data-m="name"]'), name);
-    setValue(ctx.doc.querySelector('[data-m="address"]'), '127.0.0.1:19999');
-    setValue(ctx.doc.querySelector('[data-m="concurrencyMax"]'), '2');
-    click(ctx.doc.querySelector('.modal .d-foot .btn.primary'));
+    await ctx.page.locator('#page-body tbody tr').first().waitFor({ state: 'visible' });
+    await ctx.page.locator('#ha-reg-btn').click();
+    await ctx.page.locator('[data-m="name"]').fill(name);
+    await ctx.page.locator('[data-m="address"]').fill('127.0.0.1:19999');
+    await ctx.page.locator('[data-m="concurrencyMax"]').fill('2');
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
     await waitName('harnesses', name, 'Harness');
     await fullCrud('harnesses', name);
-    assert.deepEqual(ctx.errors, [], 'Harness 页面错误: ' + ctx.errors.join(' | '));
+    assertNoPageErrors(ctx.errors);
     console.log('✓ harnesses.html 创建 ' + name);
   } finally {
-    ctx.close();
+    await ctx.page.close();
     await removeByName('harnesses', name);
   }
 }
 
-async function pageTool() {
+async function pageTool(browser) {
   const name = 'af_tool_' + stamp;
   const harnesses = await list('harnesses');
   assert.ok(harnesses.length > 0, '缺少 Harness，无法创建 Tool');
-  const ctx = await load('tools.html');
+  const ctx = await open(browser, 'tools');
   try {
-    await waitFor(() => ctx.doc.querySelectorAll('#tl-table tbody tr').length, 'tool list');
-    click(ctx.doc.querySelector('#tl-add'));
-    await wait(100);
-    setValue(ctx.doc.querySelector('#tl-f-name'), name);
-    setValue(ctx.doc.querySelector('#tl-f-inv'), 'echo ' + name);
-    const select = ctx.doc.querySelector('#tl-f-harness');
-    select.value = harnesses[0].id;
-    select.dispatchEvent(new ctx.win.Event('change', { bubbles: true }));
-    click(ctx.doc.querySelector('.modal .d-foot .btn.primary'));
+    await ctx.page.locator('#tl-table tbody tr').first().waitFor({ state: 'visible' });
+    await ctx.page.locator('#tl-add').click();
+    await ctx.page.locator('#tl-f-name').fill(name);
+    await ctx.page.locator('#tl-f-inv').fill('echo ' + name);
+    await ctx.page.locator('#tl-f-harness').selectOption(harnesses[0].id);
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
     await waitName('tools', name, 'Tool');
     await fullCrud('tools', name);
-    assert.deepEqual(ctx.errors, [], 'Tool 页面错误: ' + ctx.errors.join(' | '));
+    assertNoPageErrors(ctx.errors);
     console.log('✓ tools.html 创建 ' + name);
   } finally {
-    ctx.close();
+    await ctx.page.close();
     await removeByName('tools', name);
   }
 }
 
-async function pageSkill() {
+async function pageSkill(browser) {
   const name = 'AF Skill ' + stamp;
-  const ctx = await load('skill-detail.html?mode=new');
+  const ctx = await open(browser, 'skill-detail', 'mode=new');
   try {
-    await waitFor(() => ctx.doc.querySelector('#sk-name'), 'skill new form');
-    await waitFor(() => {
-      const sel = ctx.doc.querySelector('#sk-cat');
-      return sel && sel.options.length > 0 ? sel : null;
-    }, 'skill categories');
-    setValue(ctx.doc.querySelector('#sk-name'), name);
-    setValue(ctx.doc.querySelector('#sk-cat'), ctx.doc.querySelector('#sk-cat').options[0].value);
-    setValue(ctx.doc.querySelector('#sk-desc'), '适用：B1 写入验证；触发：冒烟；不适用：生产。');
-    click(ctx.doc.querySelector('#sk-save'));
+    await ctx.page.locator('#sk-name').waitFor({ state: 'visible' });
+    await ctx.page.locator('#sk-cat option').first().waitFor({ state: 'attached' });
+    const cat = await ctx.page.locator('#sk-cat option').first().getAttribute('value');
+    await ctx.page.locator('#sk-name').fill(name);
+    await ctx.page.locator('#sk-cat').selectOption(cat);
+    await ctx.page.locator('#sk-desc').fill('适用：B1 写入验证；触发：冒烟；不适用：生产。');
+    await ctx.page.locator('#sk-save').click();
     await waitName('skills', name, 'Skill');
-    await waitFor(() => ctx.doc.querySelector('#sk-save'), 'skill edit mode');
+    await ctx.page.locator('#sk-edit').waitFor({ state: 'visible' });
     await fullCrud('skills', name);
-    assert.deepEqual(ctx.errors, [], 'Skill 页面错误: ' + ctx.errors.join(' | '));
+    assertNoPageErrors(ctx.errors);
     console.log('✓ skill-detail.html 创建 ' + name);
   } finally {
-    ctx.close();
+    await ctx.page.close();
     await removeByName('skills', name);
   }
 }
 
-async function pageExpert() {
+async function pageExpert(browser) {
   const name = 'AF Expert ' + stamp;
-  const ctx = await load('experts.html');
+  const ctx = await open(browser, 'experts');
   try {
-    await waitFor(() => ctx.doc.querySelectorAll('#ex-grid .item-card').length, 'expert list');
-    click(ctx.doc.querySelector('#ex-new'));
-    await wait(100);
-    setValue(ctx.doc.querySelector('#ex-n-name'), name);
-    setValue(ctx.doc.querySelector('#ex-n-role'), '验证 B1 专家写入');
-    click(ctx.doc.querySelector('.modal .d-foot .btn.primary'));
+    await ctx.page.locator('#ex-grid .item-card').first().waitFor({ state: 'visible' });
+    await ctx.page.locator('#ex-new').click();
+    await ctx.page.locator('#ex-n-name').fill(name);
+    await ctx.page.locator('#ex-n-role').fill('验证 B1 专家写入');
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
     await waitName('experts', name, 'Expert');
     await fullCrud('experts', name);
-    assert.deepEqual(ctx.errors, [], 'Expert 页面错误: ' + ctx.errors.join(' | '));
+    assertNoPageErrors(ctx.errors);
     console.log('✓ experts.html 创建 ' + name);
   } finally {
-    ctx.close();
+    await ctx.page.close();
     await removeByName('experts', name);
   }
 }
 
 (async () => {
-  await pageHarness();
-  await pageTool();
-  await pageSkill();
-  await pageExpert();
-  console.log('B1 四页真实写入验证通过');
+  const browser = await launchBrowser();
+  try {
+    await pageHarness(browser);
+    await pageTool(browser);
+    await pageSkill(browser);
+    await pageExpert(browser);
+    console.log('B1 四页真实写入验证通过');
+  } finally {
+    await browser.close();
+  }
 })().catch((e) => {
   console.error('B1 四页真实写入验证失败:', e && e.stack ? e.stack : e);
   process.exit(1);

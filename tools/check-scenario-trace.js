@@ -5,16 +5,20 @@
  *
  * 规则：
  *  - 场景卡表格里的 SCN-xxxx-Tn 是文档用例全集；
- *  - tools/verify-m1-scenarios.js 里的 SCN-xxxx-Tn 是 jsdom runner 执行集；
+ *  - tools/verify-m1-scenarios.js 里的 SCN-xxxx-Tn 是 Playwright runner 执行集；
  *  - runner 只能执行已写进场景卡表格的 ID；
- *  - 未进 runner 的 ID 必须属于外部执行层（SCN-0001 引擎 / SCN-0012 BFF+真实 B1），
- *    且这两类场景的 ID 不得混入 jsdom runner；
+ *  - 未进 runner 的 ID 必须属于外部执行层（SCN-0001 引擎 / SCN-0012 BFF+真实 B1 /
+ *    场景 frontmatter 标 execution: playwright|engine|bff|real 的页面级场景），
+ *    且外部执行层场景的 ID 不得混入 MOCK 页面 runner；
  *  - 同一 ID 不得出现在两张场景卡。
  */
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(__dirname, '..');
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+const ROOT = path.resolve(HERE, '..');
 const DOCS = path.join(ROOT, 'docs');
 const RUNNER = path.join(ROOT, 'tools', 'verify-m1-scenarios.js');
 const errors = [];
@@ -51,30 +55,33 @@ for (const p of scenarioFiles) {
   for (const id of ids) {
     if (!id.startsWith(sid + '-')) err(`${rel(p)}: ${id} 与场景 ${sid} 不匹配`);
     if (docIds.has(id)) err(`${id}: 同时出现在 ${docIds.get(id).file} 与 ${rel(p)}`);
-    else docIds.set(id, { file: rel(p), sid });
+    else docIds.set(id, { file: rel(p), sid, execution: f.execution || '' });
   }
 }
 
 if (!fs.existsSync(RUNNER)) err('缺 tools/verify-m1-scenarios.js');
 const runnerText = fs.existsSync(RUNNER) ? fs.readFileSync(RUNNER, 'utf8') : '';
 const runnerIds = new Set(runnerText.match(/SCN-\d{4}-T\d+/g) || []);
+const EXTERNAL_EXEC = new Set(['playwright', 'engine', 'bff', 'real']);
+const isExternal = (entry) => entry.sid === 'SCN-0001' || entry.sid === 'SCN-0012' || EXTERNAL_EXEC.has(entry.execution);
+
 for (const id of runnerIds) {
   if (!docIds.has(id)) err(`runner: ${id} 未写进任何场景卡表格`);
-  const sid = docIds.get(id)?.sid;
-  if (sid === 'SCN-0001' || sid === 'SCN-0012') {
-    err(`runner: ${id} 属外部执行层（${sid}），不得放进 jsdom runner`);
+  const entry = docIds.get(id);
+  if (entry && isExternal(entry)) {
+    err(`runner: ${id} 属外部执行层（${entry.sid}${entry.execution ? ' / ' + entry.execution : ''}），不得放进 MOCK 页面 runner`);
   }
 }
 
 const external = [...docIds.keys()].filter((id) => !runnerIds.has(id));
 for (const id of external) {
-  const sid = docIds.get(id).sid;
-  if (sid !== 'SCN-0001' && sid !== 'SCN-0012') {
-    err(`${docIds.get(id).file}: ${id} 未进 jsdom runner，且不属于 SCN-0001/SCN-0012 外部执行层`);
+  const entry = docIds.get(id);
+  if (!isExternal(entry)) {
+    err(`${entry.file}: ${id} 未进 runner，且未声明外部执行层（frontmatter execution: playwright）`);
   }
 }
 
-const summary = `scenarios: ${scenarioFiles.length} | documented: ${docIds.size} | jsdom: ${runnerIds.size} | external: ${external.length}`;
+const summary = `scenarios: ${scenarioFiles.length} | documented: ${docIds.size} | runner: ${runnerIds.size} | external: ${external.length}`;
 if (errors.length) {
   console.log(summary);
   console.log(`FAIL (${errors.length}):`);
@@ -82,4 +89,4 @@ if (errors.length) {
   process.exit(1);
 }
 console.log(summary);
-console.log('PASS: 场景追溯一致（jsdom 只跑文档用例；SCN-0001/SCN-0012 留在外部执行层）');
+console.log('PASS: 场景追溯一致（runner 只跑文档用例；SCN-0001/SCN-0012 与 execution 声明的外部层不混入）');

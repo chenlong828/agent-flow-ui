@@ -4,7 +4,7 @@
  * 用法: node tools/check-architecture.js
  *
  * 做 6 项可机械判定的检查（覆盖 architecture.md 禁止边 1/3/4/5，并部分覆盖 6）：
- *  1. bff/** 只 require Node 内置或 bff 内相对文件；不引入 DF/MOCK/pages/assets。
+ *  1. bff/** 只 import Node 内置或 bff 内相对文件；不引入 DF/MOCK/pages/assets。
  *  2. server.js 只做静态服务 + 把 /api/v1/* 与 /healthz 交给 bff.handle；不按 method 写业务路由。
  *  3. 四个 live 资产页（harnesses/tools/skills/experts）不得引用 MOCK。
  *  4. 页面 HTML 只能加载自己的页面 JS 或登记过的共享模块。
@@ -16,11 +16,14 @@
  *  - 禁止边 6 的任意横向耦合（仅共享模块路径可机械判定）；
  *  - 禁止边 7：vendor / 外链 / package 依赖（由 check-deps 覆盖）。
  */
-const fs = require('fs');
-const path = require('path');
-const { builtinModules } = require('module');
+import fs from 'node:fs';
+import path from 'node:path';
+import { builtinModules } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(__dirname, '..');
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+const ROOT = path.resolve(HERE, '..');
 const errors = [];
 const err = (m) => errors.push(m);
 const rel = (p) => path.relative(ROOT, p);
@@ -46,11 +49,11 @@ const bffDir = path.join(ROOT, 'bff');
 for (const p of walk(bffDir, (f) => f.endsWith('.js'))) {
   const r = rel(p);
   const code = stripComments(read(p));
-  for (const m of code.matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+  for (const m of code.matchAll(/\bimport\s+(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/g)) {
     const spec = m[1];
     if (spec.startsWith('.')) {
       const resolved = path.resolve(path.dirname(p), spec);
-      if (!resolved.startsWith(bffDir + path.sep)) err(`${r}: BFF 不得 require bff/ 之外的相对文件（${spec}）`);
+      if (!resolved.startsWith(bffDir + path.sep)) err(`${r}: BFF 不得 import bff/ 之外的相对文件（${spec}）`);
     } else if (!builtinModules.includes(spec.replace(/^node:/, ''))) {
       err(`${r}: BFF 只允许 Node 内置模块（${spec}）`);
     }
@@ -64,7 +67,7 @@ const serverPath = path.join(ROOT, 'server.js');
 if (!fs.existsSync(serverPath)) err('缺 server.js');
 else {
   const code = stripComments(read(serverPath));
-  if (!/require\(\s*['"]\.\/bff['"]\s*\)/.test(code)) err('server.js: 必须通过 require("./bff") 组合 BFF');
+  if (!/from\s+['"]\.\/bff\/index\.js['"]/.test(code)) err('server.js: 必须通过 import ./bff/index.js 组合 BFF');
   if (!/bff\.handle\(\s*req\s*,\s*res\s*\)/.test(code)) err('server.js: 必须把 /api/v1/* 与 /healthz 交给 bff.handle(req, res)');
   if (/\breq\.method\b/.test(code)) err('server.js: 不得按请求方法承载业务路由（应交给 BFF）');
 }

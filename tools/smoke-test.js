@@ -1,66 +1,39 @@
 /**
- * AgentFlow 原型 · 页面冒烟测试
- * 用法: npm i --no-save jsdom && node tools/smoke-test.js
- * 逐页用 jsdom 加载 HTML 及其全部脚本（mock-data / ui / 页面 JS），
- * 捕获脚本加载期/初始化期的运行时错误与 console.error，非零退出码表示存在错误。
+ * AgentFlow 原型 · 页面冒烟测试（Playwright WebKit）
+ * 用法: node tools/smoke-test.js
+ * 逐页在真实浏览器加载 ESM 页面，捕获初始化期运行时错误与 console.error；
+ * B1 请求由 tools/fake-b1.js 经 Playwright route 注入，非零退出码表示存在错误。
  */
-const fs = require('fs');
-const path = require('path');
-let jsdom;
-try { jsdom = require('jsdom'); } catch (e) {
-  console.error('缺少 jsdom：请先执行 `npm_config_cache=/tmp/agentflow-npm-cache npm install --no-save --package-lock=false jsdom`（见 docs/design/dev-environment.md）。');
-  process.exit(1);
-}
-const { JSDOM, VirtualConsole } = jsdom;
+import fs from 'node:fs';
+import path from 'node:path';
+import { ROOT, startStaticServer, launchBrowser, openPage } from './test-harness.js';
 
-const ROOT = path.join(__dirname, '..');
-const PAGES = fs.readdirSync(path.join(ROOT, 'pages')).filter(f => f.endsWith('.html')).sort();
+const PAGES = fs.readdirSync(path.join(ROOT, 'pages')).filter((f) => f.endsWith('.html')).sort();
 
 (async () => {
+  const staticServer = await startStaticServer();
+  const browser = await launchBrowser();
   let failed = 0;
-  for (const page of PAGES) {
-    const errors = [];
-    const vc = new VirtualConsole();
-    vc.on('jsdomError', e => {
-      const msg = (e && e.message) || String(e);
-      if (/Could not load img|not implemented/.test(msg)) return; // jsdom 未实现的噪声
-      errors.push(msg + (e && e.detail && e.detail.stack ? '\n    ' + String(e.detail.stack).split('\n').slice(0, 4).join('\n    ') : ''));
-    });
-    vc.on('error', (...a) => errors.push('console.error: ' + a.map(String).join(' ')));
 
-    const file = path.join(ROOT, 'pages', page);
-    let dom;
+  for (const file of PAGES) {
+    const name = file.replace(/\.html$/, '');
+    let ctx;
     try {
-      dom = new JSDOM(fs.readFileSync(file, 'utf8'), {
-        url: 'file://' + file,
-        runScripts: 'dangerously',
-        resources: 'usable',
-        pretendToBeVisual: true,
-        virtualConsole: vc,
-        beforeParse(window) {
-          window.HTMLElement.prototype.scrollIntoView = function () {};
-          window.scrollTo = function () {};
-        }
-      });
-    } catch (e) {
-      errors.push('load failed: ' + e.message);
+      ctx = await openPage(browser, staticServer.base, name);
+      const painted = await ctx.page.locator('#app').evaluate((el) => el.innerHTML.trim().length > 0);
+      if (ctx.errors.length || !painted) failed++;
+      console.log((ctx.errors.length || !painted ? '✕ ' : '✓ ') + file + (painted ? '' : '  [页面未渲染出内容]'));
+      ctx.errors.forEach((e) => console.log('    ' + e));
+    } catch (err) {
+      failed++;
+      console.log('✕ ' + file + '  [加载失败] ' + err.message);
+    } finally {
+      if (ctx) await ctx.page.close();
     }
-
-    let app = null;
-    if (dom) {
-      // 留 400ms 让 setTimeout(0/120) 的初始化回调执行完
-      await new Promise(r => setTimeout(r, 400));
-      // 必须在 close() 前取到 DOM；jsdom 24 关闭后 window 不再可用
-      app = dom.window.document.getElementById('app');
-      dom.window.close();
-    }
-
-    const painted = !!(app && app.innerHTML.trim());
-    if (errors.length || !painted) failed++;
-    console.log((errors.length || !painted ? '✕ ' : '✓ ') + page +
-      (painted ? '' : '  [页面未渲染出内容]'));
-    errors.forEach(e => console.log('    ' + e));
   }
+
+  await browser.close();
+  await staticServer.close();
   console.log(failed ? '\n' + failed + ' 个页面存在问题' : '\n全部 ' + PAGES.length + ' 个页面冒烟通过');
   process.exit(failed ? 1 : 0);
 })();
