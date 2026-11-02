@@ -1,14 +1,17 @@
 /**
  * AgentFlow 原型 · Skill 列表页（B1 实时接口）
- * 依赖: window.API（B1 DTO 客户端）、window.DF（ui.js）、window.SK（skill-common.js）
+ * 依赖: API（B1 DTO 客户端）、DF（ui.js）、SK（skill-common.js）
  *
  * 约定：
  * - 本页只承载列表、筛选、启停、删除与引用计数；
  * - 查看/编辑/新建跳转 `skill-detail.html`，不再打开抽屉；
  * - 页面状态直接保存 B1 DTO，不读 MOCK，不建第二套视图模型。
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { API } from '../api.js';
+import { SK } from './skill-common.js';
+
 
   var state = {
     cat: 'all',
@@ -356,4 +359,3 @@
   }
 
   render();
-})();

@@ -2,20 +2,13 @@
  * Skill 两页共用的纯渲染 helpers。
  * 不发请求、不持状态、不做业务写操作；只把 DTO 渲染成页面可用的字符串/值。
  */
-(function () {
-  'use strict';
 
-  var SECTIONS = [
-    ['overview', '流程总述'],
-    ['steps', '详细步骤与约束'],
-    ['examples', '参考案例模板'],
-    ['scripts', '外部脚本使用指南'],
-    ['verification', '完成验证方案']
-  ];
+import { DF } from '../ui.js';
+
   var CAT_COLORS = ['blue', 'teal', 'purple', 'orange', 'green', 'red'];
-  var REF_COLORS = { skill: 'blue', template: 'teal', spec: 'purple', doc: 'gray', url: 'orange' };
   var DESC_MIN = 1;
   var DESC_MAX = 400;
+  var BODY_LIMIT = 16384;
 
   function pad2(n) { return n < 10 ? '0' + n : String(n); }
 
@@ -62,6 +55,53 @@
 
   function descLen(v) { return String(v == null ? '' : v).trim().length; }
 
+  function utf8Len(str) {
+    var s = String(str == null ? '' : str);
+    var n = 0;
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c < 0x80) n += 1;
+      else if (c < 0x800) n += 2;
+      else if (c >= 0xd800 && c <= 0xdbff) { n += 4; i++; }
+      else n += 3;
+    }
+    return n;
+  }
+
+  function fmtSize(n) {
+    var v = Number(n) || 0;
+    if (v < 1024) return v + ' B';
+    if (v < 1024 * 1024) return (v / 1024).toFixed(1) + ' KB';
+    return (v / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
+  function yamlScalar(value) {
+    return '"' + String(value == null ? '' : value)
+      .replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n') + '"';
+  }
+
+  /** 与 B1 一致：frontmatter（name/description/version）+ 正文。 */
+  function composeMarkdown(fm, body) {
+    var meta = fm || {};
+    return '---\nname: ' + yamlScalar(meta.name || '') + '\ndescription: ' + yamlScalar(meta.description || '') +
+      '\nversion: ' + yamlScalar(meta.version || 'v1.0') + '\n---\n\n' + String(body == null ? '' : body);
+  }
+
+  function markdownBytes(fm, body) { return utf8Len(composeMarkdown(fm, body)); }
+
+  function defaultBody() {
+    return [
+      '# 用途',
+      '',
+      '说明这个 Skill 解决什么问题、什么时候使用。',
+      '',
+      '## 步骤',
+      '',
+      '1. ',
+      ''
+    ].join('\n');
+  }
+
   function detailUrl(id, mode) {
     var qs = [];
     if (id) qs.push('id=' + encodeURIComponent(id));
@@ -69,18 +109,21 @@
     return 'skill-detail.html' + (qs.length ? '?' + qs.join('&') : '');
   }
 
-  window.SK = {
-    SECTIONS: SECTIONS,
+  export const SK = {
     CAT_COLORS: CAT_COLORS,
-    REF_COLORS: REF_COLORS,
     DESC_MIN: DESC_MIN,
     DESC_MAX: DESC_MAX,
+    BODY_LIMIT: BODY_LIMIT,
     fmtDateTime: fmtDateTime,
     relTime: relTime,
     sortCats: sortCats,
     catLabel: catLabel,
     catColor: catColor,
     descLen: descLen,
+    utf8Len: utf8Len,
+    fmtSize: fmtSize,
+    composeMarkdown: composeMarkdown,
+    markdownBytes: markdownBytes,
+    defaultBody: defaultBody,
     detailUrl: detailUrl
   };
-})();
