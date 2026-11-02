@@ -4,40 +4,38 @@ module: skills
 status: verified
 flow: skill-library
 scenario: SCN-0015
-updated: 2026-10-26
+updated: 2026-10-29
 ---
 
-# SCN-0015 Milkdown 渲染 Skill 文档
+# SCN-0015 正文渲染（Milkdown 适配层）
 
 ## 入口
 
-- `CMP-skills/pages/skill-detail.html#document-tab`
-- `CMP-skills/assets/js/pages/skill-detail.js#renderDocument`
+- `CMP-skills/pages/skill-detail.html#page-body`
+- `CMP-skills/assets/js/pages/skill-detail.js#mountBodyView`
 
 ## 运行序
 
-1. 查看态切换到「文档」Tab，页面调用 `window.API.document('skill', id)` 请求 `GET /skills/{id}/document`。
-2. 响应体整体交给 Milkdown 只读渲染；不在前端重组 `sections`，不把 Markdown 塞回 `<pre>`，也不把渲染器暴露为编辑入口；代码块启用语法高亮。
-3. 再次进入文档 Tab 时沿用 `window.API` 的 ETag 缓存：200 更新文本与 ETag，304 保留上次文本；停用 Skill 仍可 200 读取。
-4. 渲染结果用于阅读，不承担保存、版本、启停等业务动作。
+1. 查看态用详情返回的 `body` 调 `window.SKILL_MD.mount(el, { editable: false })`，不请求 `/document`，不在前端拼装章节。
+2. 适配层加载 7.7.0 单包，把 Markdown 渲染成只读文档；渲染结果不提供编辑入口，不执行原始 HTML/脚本。
+3. 编辑态用同一适配层、`editable: true`，`onChange` 回写正文并触发字节计数。
+4. 渲染结果只用于阅读与编辑，不承担保存、版本、启停等业务动作。
 
-失败路径：404 或网络失败时显示显式错误与重试入口；空文档显示空态；渲染器初始化失败时显式报错，不静默回落为原始 `<pre>`；原始 HTML/脚本不得被执行。
+失败路径：渲染器初始化失败时显式报错并提供重试，不静默回落为原始 `<pre>`；空正文显示空态。
 
 ## 不可变引用
 
-- B1 API-31：`GET /api/v1/skills/{id}/document` 返回 `text/markdown; charset=utf-8`、`ETag`、`Cache-Control: no-cache`；`If-None-Match` 精确匹配返回 304 空体；缺失 404；停用仍 200。
-- 文档结构：frontmatter `name/description/version`；五章顺序 `流程总述/执行步骤/示例/脚本/完成验证`；可选 `常见踩坑`、`参考资料`；空可选节整节省略；末尾单换行。
-- `window.API.document` 的文档缓存语义：按 revision 失效，304 复用上次文本。
-- Milkdown 在本场景中只作为只读渲染运行时，不作为编辑器，也不改写 API-31 响应体。
+- 详情 `body` 已去掉 frontmatter；正文渲染不再依赖 `/document`。
+- `window.SKILL_MD` 适配层契约：`mount(target,{markdown,editable,onChange})`，不泄漏 ProseMirror 类型。
+- `DEP-0001` 7.7.0 单包，查看与编辑共用。
 
 ## 测试
 
-执行层：DOM（jsdom）+ 真实引擎（Playwright WebKit）。最近一次执行：2026-10-26，DOM 5/5 + 渲染层 5/5 + 引擎 15/15 通过。
+执行层：Playwright WebKit+ 渲染层（`npm run test:skill-render`）+ 真实引擎。最近一次执行：2026-10-29，SCN-0015 4/4 通过；渲染层 9/9 通过；引擎层（WebKit）29/29 通过（含表格边框、标题/段落间距、长串不撑破页面）。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0015-T1 | 正 | 文档 Tab 使用 Milkdown 渲染标题/段落/列表/代码块，代码块带语法高亮，不再出现 `<pre>` 原文视图 | `tools/verify-skill-page-render.js#SCN-0015-T1`、`tools/verify-m1-scenarios.js#SCN-0015-T1`、`tools/verify-skill-page-engine.js#B` |
-| SCN-0015-T2 | 正 | 二次进入文档 Tab 带 `If-None-Match`，304 后文本与首次一致且状态提示为 304 | `tools/verify-m1-scenarios.js#SCN-0015-T2` |
-| SCN-0015-T3 | 正 | 停用 Skill 仍可读取并渲染文档 | `tools/verify-m1-scenarios.js#SCN-0015-T3` |
-| SCN-0015-T4 | 反 | 文档 404/网络失败显示显式错误与重试入口，不显示伪文本或静默空态 | `tools/verify-m1-scenarios.js#SCN-0015-T4` |
-| SCN-0015-T5 | 反 | 原始 HTML/脚本不被执行，渲染结果不提供编辑入口 | `tools/verify-skill-page-render.js#SCN-0015-T5`、`tools/verify-m1-scenarios.js#SCN-0015-T5`、`tools/verify-skill-page-engine.js#B` |
+| SCN-0015-T1 | 正 | 查看态只读渲染，收到不含 frontmatter 的 Markdown 正文 | `tools/verify-m1-scenarios.js#SCN-0015-T1` |
+| SCN-0015-T2 | 正 | 停用 Skill 仍渲染正文 | `tools/verify-m1-scenarios.js#SCN-0015-T2` |
+| SCN-0015-T3 | 正 | 渲染结果不是 Markdown 源码 | `tools/verify-m1-scenarios.js#SCN-0015-T3` |
+| SCN-0015-T4 | 反 | 渲染器失败显式报错，重试后恢复 | `tools/verify-m1-scenarios.js#SCN-0015-T4` |

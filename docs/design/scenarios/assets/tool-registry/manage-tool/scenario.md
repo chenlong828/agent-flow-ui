@@ -31,7 +31,7 @@ updated: 2026-10-25
 
 ## 测试
 
-执行层：DOM（jsdom）+ `tools/fake-b1.js` 内存传输；真实读取/写入另由 `tools/verify-b1-pages.js`、`tools/verify-b1-writes.js` 覆盖。最近一次执行：2026-10-25，40/40 通过。
+执行层：Playwright WebKit+ `tools/fake-b1.js` 内存传输；真实读取/写入另由 `tools/verify-b1-pages.js`、`tools/verify-b1-writes.js` 覆盖。最近一次执行：2026-10-30，全量 49/49 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|

@@ -35,35 +35,42 @@ updated: 2026-10-28
 
 ### 3.1 安装位置与约定
 
-- 测试与构建期依赖装在项目目录之外（保持仓库自包含；运行时依赖走 vendor 准入）：历史用 `/tmp/dsh`，2026-10-23 复跑用 `/tmp/afdev-deps`。临时目录可能被清理，清理后按 3.2 重装。
-- 浏览器构建存放目录：`/tmp/dsh/pw-browsers`，运行时通过环境变量 `PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers` 指定。
-- 场景测试脚本已入库：`tools/verify-user-menu.js`（SCN-0001，引擎层）、`tools/verify-m1-scenarios.js`（SCN-0002..0011 + SCN-0013 + SCN-0014 + SCN-0015，DOM/jsdom，13 场景、56 条用例）；结构层 `tools/smoke-test.js`（jsdom）；真实 B1：`tools/verify-b1-pages.js` / `tools/verify-b1-writes.js`。历史脚本随工序归档在 `history/works/`，不再作现行入口。
+- **库**：`~/.cache/playwright-libs/<version>/node_modules/playwright-core`（版本入目录名，多版本可共存）。2026-10-29 定版为 `~/.cache/playwright-libs/1.49.1`。
+- **浏览器**：`~/Library/Caches/ms-playwright/webkit-2104/`（Playwright 在 macOS 的默认缓存位置；Linux 为 `~/.cache/ms-playwright`）。按构建号分目录，多项目/多版本共享且互不覆盖，运行时**不需要**设 `PLAYWRIGHT_BROWSERS_PATH`。
+- **加载方式**：脚本统一从 `tools/playwright.js` 的 `loadPlaywright()` 取模块：优先 `PLAYWRIGHT_MODULE`，其次本机缓存，最后普通模块解析。不要用 `NODE_PATH`（全局模块搜索根、影响整条 `require` 链且 ESM 忽略）。
+- **根因（2026-10-29 查明）**：macOS 自带 `com.apple.tmp_cleaner`（`/usr/libexec/tmp_cleaner`，launchd 每天 0 点执行）会删除 `/tmp` 下 **atime/mtime/ctime 都超过 3 天**的文件，再删空的旧目录。它按文件删除、保留目录骨架，所以表现为「依赖目录还在、`require` 却报 MODULE_NOT_FOUND」。与重启无关（本次 `kern.boottime` 为 10 月 2 日）。**`/tmp` 只适合临时验证，不适合长期存放测试依赖**；历史路径 `/tmp/dsh`、`/tmp/afdev-deps`、`/tmp/pw` 均已废弃。
+- 版本配对由库内 `browsers.json` 决定：`playwright-core@1.49.1 → webkit revision 2104 / WebKit 18.2`；换库版本必须同时换对应浏览器构建。
+- 测试栈已无 jsdom：纯逻辑用 Node 自带 `node:test`，DOM/网络用 Playwright WebKit。
+- 场景测试脚本已入库：`tools/verify-user-menu.js`（SCN-0001，引擎层）、`tools/verify-m1-scenarios.js`（SCN-0004..0011 + SCN-0013..0017，Playwright，12 个执行场景、49 条用例；SCN-0013 已废弃挂起；原工作流列表/编辑器场景已归档，由 SCN-0018/0019 取代）；结构层 `tools/smoke-test.js`（Playwright 13 页）；真实 B1：`tools/verify-b1-pages.js` / `tools/verify-b1-writes.js`。历史脚本随工序归档在 `history/works/`，不再作现行入口。
 
 ### 3.2 安装步骤（按顺序执行）
 
-1. 安装 Playwright 库时必须重定向 npm 缓存目录（默认的 `~/.npm` 在本机被屏蔽，会直接报权限错误）：
+1. 安装库（npm 缓存重定向到 `/tmp`，因为默认 `~/.npm` 在本机被屏蔽）：
    ```bash
-   npm_config_cache=/tmp/dsh/.npm-cache npm install playwright@1.49.1 --prefix /tmp/dsh
+   mkdir -p ~/.cache/playwright-libs/1.49.1
+   npm_config_cache=/tmp/afdev-npm-cache \
+     npm install --prefix ~/.cache/playwright-libs/1.49.1 playwright-core@1.49.1
    ```
-2. `npx playwright install webkit` 会尝试从 CDN 下载浏览器构建，**直连与 npmmirror 镜像都返回 404**，不要反复重试。改为手动下载（必须走代理）：
+2. 下载浏览器构建。`npx playwright install webkit` 的 CDN **直连与 npmmirror 镜像都返回 404**，不要反复重试；手动走代理下载：
    ```bash
-   curl -x socks5h://127.0.0.1:2080 -o /tmp/dsh/webkit.zip \
+   curl -x socks5h://127.0.0.1:2080 -L -o /tmp/webkit-2104.zip \
      "https://cdn.playwright.dev/dbazure/download/playwright/builds/webkit/2104/webkit-mac-15-arm64.zip"
    ```
-   下载得到的文件大小应为 65870767 字节，可用 `ls -l` 核对（版本号 2104 与 Playwright 1.49.1 对应；若升级 Playwright，构建号会变化，从报错信息里读出期望的构建号）。
-3. 解压到 `PLAYWRIGHT_BROWSERS_PATH` 指向的目录下，目录名必须与 Playwright 期望的一致（报错信息中会写出，例如 `webkit-2104`），然后在解压出的目录内创建空文件 `INSTALLATION_COMPLETE`（Playwright 用它判断安装已完成，缺了会认为未安装）。
-4. 运行任何测试脚本时都带上环境变量（脚本在项目内）：
+   大小应为 65870767 字节（构建号 2104 对应 1.49.1；升级库版本时从报错信息读出新构建号）。
+3. 解压到默认缓存并补安装标记：
    ```bash
-   PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers \
-   NODE_PATH=/tmp/afdev-deps/node_modules node tools/verify-user-menu.js
-   NODE_PATH=/tmp/afdev-deps/node_modules node tools/smoke-test.js
-   NODE_PATH=/tmp/afdev-deps/node_modules node tools/verify-m1-scenarios.js
+   mkdir -p ~/Library/Caches/ms-playwright/webkit-2104
+   unzip -q /tmp/webkit-2104.zip -d ~/Library/Caches/ms-playwright/webkit-2104
+   touch ~/Library/Caches/ms-playwright/webkit-2104/INSTALLATION_COMPLETE
    ```
-5. 依赖安装（2026-10-23 复跑实际使用）：
+4. 运行引擎脚本（项目根目录；不设 `PLAYWRIGHT_BROWSERS_PATH`）：
    ```bash
-   npm_config_cache=/tmp/afdev-npm-cache npm install --prefix /tmp/afdev-deps jsdom@24.1.3 playwright-core@1.49.1
+   PLAYWRIGHT_MODULE=$HOME/.cache/playwright-libs/1.49.1/node_modules/playwright-core \
+     BASE_URL=http://127.0.0.1:3000/pages/ node tools/verify-user-menu.js
+   PLAYWRIGHT_MODULE=$HOME/.cache/playwright-libs/1.49.1/node_modules/playwright-core \
+     BASE_URL=http://127.0.0.1:3000 node tools/verify-skill-page-engine.js
    ```
-   注意 `playwright-core` 只装库、不自动下载浏览器；浏览器仍按第 2、3 步准备 WebKit 2104。
+5. 2026-10-29 实测：上述位置 + 命令下，SCN-0001 引擎 45/45、Skill 引擎 29/29 通过。
 
 ### 3.3 能做什么、不能做什么
 
@@ -73,30 +80,27 @@ updated: 2026-10-28
   - 合成鼠标事件（`page.mouse`）的坐标与页面内部命中测试在缩放场景下不一致，验证拖拽必须改用页面内程序化派发事件（详见《调试方案》文档第 4 节）。
   - 该 WebKit 构建对 CSS `zoom` 的支持是残缺的（计算值存在、布局无视），不能用它推断真实 Safari 的 zoom 行为。
 
-### 3.4 DOM 场景 runner（jsdom，测试依赖不入仓库）
+### 3.4 业务场景 runner（Playwright WebKit）
 
-- 用途：跑 `SCN-0002..0011`、`SCN-0013`、`SCN-0014`、`SCN-0015` 的业务断言（各场景至少 3 正 1 反）；执行层是 jsdom，不是真实引擎。
-- 安装（只在需要跑场景时安装，不写入 `package.json`）：
-  ```bash
-  npm_config_cache=/tmp/agentflow-npm-cache npm install --no-save --package-lock=false jsdom
-  ```
-  2026-10-28 实测 `jsdom@30.1.3` 可跑通 56/56。
+- 用途：跑 `SCN-0004..0011`、`SCN-0014`、`SCN-0015`、`SCN-0016`、`SCN-0017` 的业务断言（各场景至少 3 正 1 反；`SCN-0013` 已废弃、挂起不执行；原工作流列表/编辑器场景已归档，现由 `SCN-0018/0019` 取代）；执行层是真实 WebKit，不是 DOM 模拟。
+- 无需另装 jsdom。`tools/test-harness.js` 在 `127.0.0.1:0` 自起临时静态服务，用 `page.route` 把 `/api/v1/**` 接到 `tools/fake-b1.js`，每个场景独立 page；结束后关闭浏览器与静态服务。
 - 运行：`npm run test:scenarios`；单场景 `node tools/verify-m1-scenarios.js SCN-0007`。
-- Milkdown 渲染层：`npm run test:skill-render`，用 jsdom + vendor bundle 验证只读渲染、语法高亮与原始 HTML 不执行。
+- Milkdown 渲染层：`npm run test:skill-render`，用真实 WebKit + vendor bundle 验证只读渲染、语法高亮与原始 HTML 不执行。
 - 引擎层（Playwright WebKit，需 `:3000` 静态服务 + B1）：
   ```bash
-  NODE_PATH=/tmp/afdev-deps/node_modules PLAYWRIGHT_BROWSERS_PATH=/tmp/dsh/pw-browsers \
+  PLAYWRIGHT_MODULE=$HOME/.cache/playwright-libs/1.49.1/node_modules/playwright-core \
   BASE_URL=http://127.0.0.1:3000 node tools/verify-skill-page-engine.js
   ```
-  也可用 `npm run test:skill-engine`，再按上面环境变量补 Playwright 依赖。
+  也可用 `npm run test:skill-engine`，并带上 `PLAYWRIGHT_MODULE`。
 - runner 在 `127.0.0.1:0` 自起临时静态 HTTP，结束后关闭；不依赖 `:3000`，也不要求先启动 `server.js`。必须走 HTTP 而不是 `file://`：页面用 `sessionStorage` 传递 `df-new-workspace`，不透明源下会直接抛错。
-- `npm test` 包含此脚本（需 jsdom）；`npm run test:gate` 是不含 jsdom 的快速子集（文档/依赖/架构/追溯/BFF）。jsdom 缺失时脚本会给出安装提示。
+- 工作流：`npm run test:workflow`（`node --test tests/workflow` + `tools/verify-workflow-list.js` + `tools/verify-workflow-editor.js`）；runner 用 `tools/fake-b3.js` 与 `tools/fake-b1.js`，不写真实 B3；真实 B3 只读走查见 `docs/works/2026-10-30-workflow-ui/brief.md`。
+- `npm test` 包含此脚本；`npm run test:gate` 是只跑门禁与 BFF、不跑浏览器的快速子集。首次运行需要已安装 WebKit（见 §3.2）。
 
-### 3.5 真实 B1 页面 runner（jsdom + 运行中的 BFF）
+### 3.5 真实 B1 页面 runner（Playwright + 运行中的 BFF）
 
 - 前置：`API_BASE` 指向的 B1 已启动，且 `node server.js` 在 `127.0.0.1:3000` 运行。
 - 读验证：`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js`，四页各断言列表行/卡片数；不写库。
-- 写验证：`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`，每页用唯一名称创建一条，随后经 BFF 更新、启停并删除；失败会清理残留。
+- 写验证：`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`，每页用唯一名称创建一条，随后经 BFF 更新、启停并删除；失败会清理残留。**会写并删除真实 B1 测试数据，运行前确认目标环境。**
 - 也可用 `npm run test:b1-pages` / `npm run test:b1-writes`；两者不纳入 `npm test`，避免无后端时误报。
 
 ## 4. Safari 手工调试链路（真机引擎）

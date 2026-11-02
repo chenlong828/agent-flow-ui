@@ -14,7 +14,7 @@ updated: 2026-10-28
 
 ## 0 模块卡
 
-> 追溯：`REQ-0010` / `SCN-0010`（verified；DOM/jsdom 3 正 1 反）。
+> 追溯：`REQ-0010` / `SCN-0010`（verified；Playwright 3 正 1 反）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件（列表 + 详情两个页面入口）
@@ -31,7 +31,7 @@ updated: 2026-10-28
 - 预算：`workspaces.js` 约 13 KB + `workspace-detail.js` 约 8 KB + `workspace-common.js` 约 2.5 KB + 本规格约 7 KB；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/workspaces.html`（详情页用 `?id=` 定位；两页共用 `WSC`）。
 - 删除测试：删除后工作区无法准备、绑定与清理，节点失去唯一共享通道；复杂度会集中到实例页与 Key 页，故保留为独立组件。
-- 已知偏差：M1 追溯已补（REQ-0010/SCN-0010），场景 verified（DOM/jsdom 3 正 1 反 40/40）；行为级断言已由 M1 runner 覆盖；git 克隆/连通性/目录初始化均为模拟；步骤② 无 `validate`，连接测试失败仍可进入步骤③ 并创建「已初始化」工作区；目录模板为单模板；`df-new-workspace` 为一次性传递，刷新丢失；`WSC` 被两个页面共用，改它需同时回归列表与详情。
+- 已知偏差：M1 追溯已补（REQ-0010/SCN-0010），场景 verified（Playwright 3 正 1 反，M1 40/40）；行为级断言已由 M1 runner 覆盖；git 克隆/连通性/目录初始化均为模拟；步骤② 无 `validate`，连接测试失败仍可进入步骤③ 并创建「已初始化」工作区；目录模板为单模板；`df-new-workspace` 为一次性传递，刷新丢失；`WSC` 被两个页面共用，改它需同时回归列表与详情。
 
 ## 1 页面定位
 

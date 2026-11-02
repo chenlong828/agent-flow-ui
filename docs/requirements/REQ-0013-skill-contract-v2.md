@@ -1,8 +1,9 @@
 ---
 layer: requirements
 module: skills
-status: delivered
-updated: 2026-10-26
+status: superseded
+updated: 2026-10-29
+superseded_by: REQ-0015
 ---
 
 # REQ-0013 Skill 契约 v2 展示端适配

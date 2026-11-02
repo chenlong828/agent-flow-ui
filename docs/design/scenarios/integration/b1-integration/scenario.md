@@ -39,7 +39,7 @@ updated: 2026-10-28
 
 ## 测试
 
-执行层：Node HTTP（BFF stub 上游）+ DOM（jsdom，fake B1）+ 真实 B1 页面读写。可执行脚本：`npm run test:bff`、`npm run test:scenarios`、`npm run test:b1-pages`、`npm run test:b1-writes`。最近一次执行：2026-10-28，BFF 10/10、M1 40/40、四页真实读取 4/4、四页真实写入 4/4。
+执行层：Node HTTP（BFF stub 上游）+ Playwright（fake B1）+ 真实 B1 页面读写。可执行脚本：`npm run test:bff`、`npm run test:scenarios`、`npm run test:b1-pages`、`npm run test:b1-writes`。最近一次执行：2026-10-30，BFF 12/12、全量场景 49/49、四页真实读取 4/4、四页真实写入 4/4。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|

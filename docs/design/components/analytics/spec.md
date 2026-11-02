@@ -14,7 +14,7 @@ updated: 2026-10-28
 
 ## 0 模块卡
 
-> 追溯：`REQ-0009` / `SCN-0009`（verified；DOM/jsdom 3 正 1 反）。
+> 追溯：`REQ-0009` / `SCN-0009`（verified；Playwright 3 正 1 反）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
@@ -31,7 +31,7 @@ updated: 2026-10-28
 - 预算：`analytics.js` 约 8 KB + 本规格约 4 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/analytics.html`（全部数据来自 `MOCK.analytics`，无跨页依赖）。
 - 删除测试：删除后失去唯一的跨实例经营回看入口，指标会散落到实例页；但无业务写入，删除只影响可视化，故保留为独立只读组件。
-- 已知偏差：M1 追溯已补（REQ-0009/SCN-0009），场景 verified（DOM/jsdom 3 正 1 反 40/40）；行为级断言已由 M1 runner 覆盖；指标与记录均为模拟数据；准出汇总按「评审结果记录」呈现，不是 50 项打分卡配置（OQ-3）。
+- 已知偏差：M1 追溯已补（REQ-0009/SCN-0009），场景 verified（Playwright 3 正 1 反，M1 40/40）；行为级断言已由 M1 runner 覆盖；指标与记录均为模拟数据；准出汇总按「评审结果记录」呈现，不是 50 项打分卡配置（OQ-3）。
 
 ## 1 页面定位
 

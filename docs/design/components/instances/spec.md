@@ -14,7 +14,7 @@ updated: 2026-10-28
 
 ## 0 模块卡
 
-> 追溯：`REQ-0004` / `SCN-0004`（verified；DOM/jsdom 3 正 1 反）。
+> 追溯：`REQ-0004` / `SCN-0004`（verified；Playwright 3 正 1 反）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件（列表 + 详情两个页面入口）
@@ -31,7 +31,7 @@ updated: 2026-10-28
 - 预算：`instances.js` 约 7 KB + `instance-detail.js` 约 18 KB + 本规格约 9 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，远低于上限。
 - 单独运行：`npm start` → `/pages/instances.html`（详情页用 `?id=` 定位，缺省回落到夹具实例）。
 - 删除测试：删除后实例不可观察、不可控制、不可审批，工作流只剩定义；复杂度会集中到工作流列表/编辑器，故保留为独立组件。
-- 已知偏差：M1 追溯已补（REQ-0004/SCN-0004），场景 verified（DOM/jsdom 3 正 1 反 40/40）；状态迁移与控制行为已有 DOM 层断言，拖拽/真实调度仍无引擎层断言；`df-new-instance` 的新建实例注入是演示路径，刷新复位；fan-out 数千规模为聚合视图 + 抽样，非逐条真实调度（OQ-6）。
+- 已知偏差：M1 追溯已补（REQ-0004/SCN-0004），场景 verified（Playwright 3 正 1 反，M1 40/40）；状态迁移与控制行为已有 Playwright 层断言，拖拽/真实调度仍无引擎层断言；`df-new-instance` 的新建实例注入是演示路径，刷新复位；fan-out 数千规模为聚合视图 + 抽样，非逐条真实调度（OQ-6）。
 
 ## 1 页面定位
 

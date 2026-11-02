@@ -14,7 +14,7 @@ updated: 2026-10-28
 
 ## 0 模块卡
 
-> 追溯：`REQ-0006` / `SCN-0006`（verified；DOM/jsdom 3 正 1 反）+ `REQ-0013` / `SCN-0013`（Skill 摘要读 `description`）。
+> 追溯：`REQ-0006` / `SCN-0006`（verified；Playwright 3 正 1 反）+ `REQ-0013` / `SCN-0013`（Skill 摘要读 `description`）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
