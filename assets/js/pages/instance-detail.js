@@ -1,8 +1,10 @@
 /**
  * 运行实例详情（docs/09 §3）— 只读流程轨迹图 + 节点详情面板 + 人工确认 + fan-out 子任务下钻
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { MOCK } from '../mock-data.js';
+
   const { esc, icon, tag, dot } = DF;
   const NODE_W = 168, NODE_H = 58;
 
@@ -22,6 +24,7 @@
     }
     if (!inst) {
       const body = DF.renderShell({
+      pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length,
         active: 'instances', breadcrumb: [{ label: '运行与运营' }, { label: '运行实例', href: 'instances.html' }, { label: '实例详情' }],
         title: '实例详情', subtitle: ''
       });
@@ -54,6 +57,7 @@
     const canResume = i.status === '已暂停';
     const canStop = ['运行中', '回退重跑中', '已暂停', '等待人工确认'].includes(i.status);
     DF.renderShell({
+      pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length,
       active: 'instances',
       breadcrumb: [{ label: '运行与运营' }, { label: '运行实例', href: 'instances.html' }, { label: i.id }],
       title: i.id + ' · ' + state.wf.name + ' ' + i.ver,
@@ -444,4 +448,3 @@
   init = function () { _origInit(); bindConfirm(); };
 
   init();
-})();

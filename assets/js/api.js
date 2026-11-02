@@ -1,12 +1,10 @@
 /**
- * AgentFlow · B1 客户端数据层（window.API）
+ * AgentFlow · B1 客户端数据层
  *
  * 只做传输、If-Match 版本携带和统一错误解析；不复制、不改写 B1 DTO。
  * 页面直接消费 API DTO 字段（kind / accessMode / concurrencyMax / categoryCode ...）。
- * 测试通过 window.__AGENTFLOW_TRANSPORT__(method, path, body, headers) 注入内存传输。
+ * 测试通过真实 HTTP 路由注入响应，不读取页面内部状态。
  */
-(function () {
-  'use strict';
 
   var BASE = '/api/v1';
   var PATH = { harness: '/harnesses', tool: '/tools', skill: '/skills', expert: '/experts' };
@@ -42,15 +40,9 @@
 
   function request(method, path, body, ifMatch) {
     var headers = { 'Accept': 'application/json' };
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    var isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+    if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
     if (ifMatch != null) headers['If-Match'] = '"' + ifMatch + '"';
-
-    if (typeof window.__AGENTFLOW_TRANSPORT__ === 'function') {
-      return Promise.resolve(window.__AGENTFLOW_TRANSPORT__(method, path, body, headers)).then(function (res) {
-        if (res && res.status >= 400) fail(res.status, res.body);
-        return res ? res.body : null;
-      });
-    }
 
     if (typeof fetch !== 'function') {
       var unsupported = new Error('当前环境不支持 fetch');
@@ -58,7 +50,7 @@
       return Promise.reject(unsupported);
     }
     var opts = { method: method, headers: headers };
-    if (body !== undefined) opts.body = JSON.stringify(body);
+    if (body !== undefined) opts.body = isForm ? body : JSON.stringify(body);
     return fetch(BASE + path, opts).then(function (res) {
       return res.text().then(function (text) {
         var data = parse(text);
@@ -162,18 +154,11 @@
    * 取编排文档（API-31）。纯文本原样返回，不在客户端二次拼装。
    * 首次 200 保存 ETag/文本；再次请求带 If-None-Match，304 复用上次文本。
    */
-  function document(kind, id) {
+  function fetchDocument(kind, id) {
     var path = PATH[kind] + '/' + encodeURIComponent(id) + '/document';
     var cached = documents[key(kind, id)];
     var headers = { 'Accept': 'text/markdown' };
     if (cached && cached.etag) headers['If-None-Match'] = cached.etag;
-
-    if (typeof window.__AGENTFLOW_TRANSPORT__ === 'function') {
-      return Promise.resolve(window.__AGENTFLOW_TRANSPORT__('GET', path, undefined, headers)).then(function (res) {
-        var status = res ? res.status : 200;
-        return settleDocument(kind, id, status, res ? res.body : null, headerValue(res, 'ETag'));
-      });
-    }
 
     if (typeof fetch !== 'function') {
       var unsupported = new Error('当前环境不支持 fetch');
@@ -192,11 +177,59 @@
     });
   }
 
+  /* ---------------- Skill 草稿 ---------------- */
+
+  function draftCreate(skillId) {
+    return request('POST', '/skill-drafts', { skillId: skillId || undefined });
+  }
+
+  function draftGet(id) {
+    return request('GET', '/skill-drafts/' + encodeURIComponent(id));
+  }
+
+  function draftUpload(id, path, file) {
+    var form = new FormData();
+    form.append('path', path);
+    form.append('file', file);
+    return request('POST', '/skill-drafts/' + encodeURIComponent(id) + '/files', form);
+  }
+
+  function draftRename(id, path, newPath) {
+    return request('PATCH', '/skill-drafts/' + encodeURIComponent(id) + '/files', { path: path, newPath: newPath });
+  }
+
+  function draftDeleteFile(id, path) {
+    return request('DELETE', '/skill-drafts/' + encodeURIComponent(id) + '/files?path=' + encodeURIComponent(path));
+  }
+
+  function draftSave(id, body, revision) {
+    return request('POST', '/skill-drafts/' + encodeURIComponent(id) + '/save', body, revision);
+  }
+
+  function draftCancel(id) {
+    return request('DELETE', '/skill-drafts/' + encodeURIComponent(id));
+  }
+
+  function downloadUrl(kind, id) {
+    return BASE + PATH[kind] + '/' + encodeURIComponent(id) + '/download';
+  }
+
+  function download(kind, id) {
+    var url = downloadUrl(kind, id);
+    var doc = document;
+    var a = doc.createElement('a');
+    a.href = url;
+    a.rel = 'noopener';
+    doc.body.appendChild(a);
+    a.click();
+    doc.body.removeChild(a);
+  }
+
   function categories() {
     return request('GET', '/skill-categories').then(function (page) { return page.items || []; });
   }
 
-  window.API = {
+  export const API = {
     list: list,
     get: get,
     create: create,
@@ -204,7 +237,16 @@
     patch: patch,
     setEnabled: setEnabled,
     remove: remove,
-    document: document,
+    document: fetchDocument,
+    downloadUrl: downloadUrl,
+    download: download,
+    draftCreate: draftCreate,
+    draftGet: draftGet,
+    draftUpload: draftUpload,
+    draftRename: draftRename,
+    draftDeleteFile: draftDeleteFile,
+    draftSave: draftSave,
+    draftCancel: draftCancel,
     categories: categories,
     revision: function (kind, id) { return revisions[key(kind, id)]; },
     errorText: function (error) {
@@ -212,6 +254,12 @@
       if (error.status === 404) return '目标不存在或已被删除';
       if (error.status === 409) return error.message || '数据已被其他操作修改，请刷新后重试';
       if (error.status === 428) return '缺少版本信息，请刷新后重试';
+      if (error.status === 410) return '草稿已过期，请重新编辑';
+      if (error.status === 413) return '文件或整包超过大小限制';
+      if (error.status === 415) return '上传格式不支持';
+      if (error.status === 422 && error.code === 'skill_md_too_large') {
+        return '正文超过 16 KiB，请把长内容放进 references/';
+      }
       if (error.status === 400) {
         if (error.code === 'validation_error' && error.details && error.details.field === 'body') {
           return '契约已升级，请刷新页面';
@@ -221,4 +269,3 @@
       return error.message || '操作失败';
     }
   };
-})();

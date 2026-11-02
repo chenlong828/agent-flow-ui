@@ -1,9 +1,9 @@
 'use strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const http = require('http');
-const { createBff } = require('../../bff');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import { createBff } from '../../bff/index.js';
 
 function listen(server) {
   return new Promise((resolve) => {
@@ -64,6 +64,14 @@ async function setup() {
         return res.end();
       }
       return markdown(res, 200, '# CRES 技能\n\n## 流程总述\n\n正文\n', { ETag: etag });
+    }
+    if (url.pathname === '/api/v1/skills/s1/download') {
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="cres-v1.0.zip"',
+        'X-Content-Type-Options': 'nosniff'
+      });
+      return res.end(Buffer.from('PK'));
     }
     if (url.pathname === '/api/v1/echo') {
       const body = await readBody(req);
@@ -179,6 +187,32 @@ test('超出 body 上限返回 413', async () => {
   });
   assert.equal(response.status, 413);
   assert.equal((await response.json()).error.code, 'payload_too_large');
+});
+
+test('默认 body 上限覆盖 Skill 附件上传（>1 MiB）', async () => {
+  const bff = createBff({ apiBase: `http://127.0.0.1:${ctx.upstreamPort}`, timeoutMs: 5000, quiet: true });
+  const server = http.createServer((req, res) => bff.handle(req, res));
+  const port = await listen(server);
+  try {
+    const body = 'x'.repeat(2 * 1024 * 1024);
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/echo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body
+    });
+    assert.equal(response.status, 201);
+    assert.equal((await response.json()).body.length, body.length);
+  } finally {
+    await close(server);
+  }
+});
+
+test('下载响应透传 Content-Disposition 与 X-Content-Type-Options', async () => {
+  const response = await fetch(ctx.base + '/api/v1/skills/s1/download');
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-disposition'), 'attachment; filename="cres-v1.0.zip"');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('content-type'), 'application/zip');
 });
 
 test('上游超时返回 504', async () => {

@@ -1,11 +1,13 @@
 /**
  * AgentFlow · 工具与集成页（pages/tools.html）
- * 依赖: window.API（B1 客户端数据层）+ window.DF（assets/js/ui.js）
+ * 依赖: API（B1 客户端数据层）+ DF（assets/js/ui.js）
  * 直接消费 B1 Tool DTO；不读本地夹具，不引入客户端视图模型。
  * B1 无调试端点：状态与 lastDebugAt 只读展示，页面不执行工具、不改状态。
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { API } from '../api.js';
+
 
   /* ---------- DTO 枚举 → 中文标签（仅渲染时映射，不写回 DTO） ---------- */
   var KINDS = [
@@ -539,4 +541,3 @@
 
   /* ---------- 首次加载 ---------- */
   loadPage();
-})();

@@ -3,12 +3,13 @@
  * 启动: node server.js  →  http://127.0.0.1:3000
  * 静态只服务 pages/ 与 assets/；/api/v1/* 与 /healthz 交给 CMP-bff 透明转发。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const { createBff } = require('./bff');
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createBff } from './bff/index.js';
 
-const ROOT = __dirname;
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const HOST = '127.0.0.1';
 const ALLOWED = ['/pages/', '/assets/'];

@@ -2,11 +2,13 @@
  * AgentFlow 原型 · 工作区配置 · 详情页（独立二级页）
  * 规格: docs/design/components/workspaces/spec.md §4 详情页 / §5 状态与空态
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { MOCK } from '../mock-data.js';
+import { WSC } from './workspace-common.js';
+
   const $ = s => document.querySelector(s);
-  const M = window.MOCK;
-  const WSC = window.WSC; // 工作区列表页 / 详情页共用模块（跨页联动、目录树等）
+  const M = MOCK;
 
   /* ========== 取数：MOCK.workspaces 按 id；ws-new* 从 sessionStorage 合并 ========== */
   const id = DF.qs('id');
@@ -15,6 +17,7 @@
 
   const title = ws ? ws.name : '工作区详情';
   const body = DF.renderShell({
+      pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length,
     active: 'workspaces',
     breadcrumb: [{ label: '基础配置' }, { label: '工作区配置', href: 'workspaces.html' }, { label: title }],
     title: title,
@@ -33,8 +36,7 @@
         action: { id: 'wd-back', label: '返回工作区配置', style: 'margin-top:14px' }
       }) + '</div>';
     document.getElementById('wd-back').onclick = () => { location.href = 'workspaces.html'; };
-    return;
-  }
+  } else {
 
   /* ws-new* 记录的变更回写 sessionStorage，保证列表页联动可见（见 workspace-common.js） */
   function syncSession() { WSC.syncNewWs(ws); }
@@ -193,4 +195,4 @@
   }
 
   render();
-})();
+  }

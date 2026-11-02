@@ -8,14 +8,14 @@
  * 文档端点（text/markdown + ETag）依赖 If-None-Match 与 ETag 透传。
  */
 
-const crypto = require('crypto');
+import crypto from 'node:crypto';
 
 const DEFAULT_API_BASE = 'http://127.0.0.1:3100';
 const DEFAULT_TIMEOUT_MS = 10000;
-const DEFAULT_MAX_BODY = 1024 * 1024;
+const DEFAULT_MAX_BODY = 25 * 1024 * 1024;
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const REQUEST_HEADERS = ['accept', 'content-type', 'if-match', 'if-none-match', 'x-actor', 'x-request-id'];
-const RESPONSE_HEADERS = ['content-type', 'location', 'x-request-id', 'cache-control', 'etag'];
+const RESPONSE_HEADERS = ['content-type', 'location', 'x-request-id', 'cache-control', 'etag', 'content-disposition', 'x-content-type-options'];
 
 function createBff(options = {}) {
   const apiBase = new URL(options.apiBase || process.env.API_BASE || DEFAULT_API_BASE);
@@ -67,7 +67,9 @@ function createBff(options = {}) {
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const isUpload = String(req.headers['content-type'] || '').startsWith('multipart/form-data');
+    const effectiveTimeout = isUpload ? Math.max(timeoutMs, 120000) : timeoutMs;
+    const timer = setTimeout(() => controller.abort(), effectiveTimeout);
     try {
       const upstreamUrl = new URL(req.url, apiBase);
       if (!isAllowedPath(upstreamUrl.pathname) || hasTraversal(upstreamUrl.pathname)) {
@@ -189,4 +191,4 @@ function log(quiet, method, pathname, status, elapsedMs, requestId) {
   console.log(`[bff] ${method} ${pathname} ${status} ${elapsedMs}ms ${requestId}`);
 }
 
-module.exports = { createBff, DEFAULT_API_BASE, DEFAULT_TIMEOUT_MS, DEFAULT_MAX_BODY };
+export { createBff, DEFAULT_API_BASE, DEFAULT_TIMEOUT_MS, DEFAULT_MAX_BODY };
