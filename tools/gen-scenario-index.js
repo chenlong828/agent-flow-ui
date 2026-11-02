@@ -5,13 +5,16 @@
  *   node tools/gen-scenario-index.js [docsRoot]           # 重新生成
  *   node tools/gen-scenario-index.js --check [docsRoot]   # 只校验，不写盘
  */
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
 const checkOnly = args.includes('--check');
 const docArg = args.find((a) => !a.startsWith('--'));
-const DOCS = path.resolve(docArg || path.join(__dirname, '..', 'docs'));
+const DOCS = path.resolve(docArg || path.join(HERE, '..', 'docs'));
 const INDEX = path.join(DOCS, 'design', 'scenarios', '_index.md');
 
 function walk(dir) {
@@ -63,7 +66,7 @@ function buildIndex() {
     const m = line.match(/SCN-\d{4}-T\d+/);
     if (m) docIds.add(m[0]);
   }
-  const runnerPath = path.join(__dirname, '..', 'tools', 'verify-m1-scenarios.js');
+  const runnerPath = path.join(HERE, '..', 'tools', 'verify-m1-scenarios.js');
   const runnerIds = new Set(
     fs.existsSync(runnerPath) ? (fs.readFileSync(runnerPath, 'utf8').match(/SCN-\d{4}-T\d+/g) || []) : []
   );
@@ -78,7 +81,7 @@ function buildIndex() {
   const stats = [
     `- 场景：${rows.length}`,
     `- 文档用例：${docIds.size}`,
-    `- jsdom runner：${runnerIds.size}`,
+    `- Playwright runner：${runnerIds.size}`,
     `- 其他执行层：${external.length}（引擎 / BFF / 真实 B1）`,
   ].join('\n');
 

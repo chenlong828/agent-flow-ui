@@ -3,7 +3,9 @@
  * 运行（需 :3000 静态服务）:
  *   NODE_PATH=<playwright 依赖目录> PLAYWRIGHT_BROWSERS_PATH=<浏览器目录> node tools/verify-user-menu.js
  * 模块名可用 PLAYWRIGHT_MODULE 覆盖，默认 playwright-core。*/
-const { webkit } = require(process.env.PLAYWRIGHT_MODULE || 'playwright-core');
+import { loadPlaywright } from './playwright.js';
+
+const { webkit } = loadPlaywright();
 const BASE = process.env.BASE_URL || 'http://localhost:3000/pages/';
 const pages = ['workflow-list', 'workflow-editor', 'skills', 'experts', 'harnesses',
                'tools', 'instances', 'instance-detail', 'analytics',

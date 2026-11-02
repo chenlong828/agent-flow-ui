@@ -1,178 +1,105 @@
 #!/usr/bin/env node
 /**
- * B1 四页真实读取验证（jsdom + 真实 BFF）
+ * B1 四页真实读取验证（Playwright WebKit + 真实 BFF）
  * 用法: BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js
  * 前提: BFF 与 B1 后端已启动；本脚本只读，不写业务数据。
  */
-'use strict';
+import assert from 'node:assert/strict';
+import { launchBrowser, openPage, assertNoPageErrors } from './test-harness.js';
 
-const fs = require('fs');
-const path = require('path');
-const assert = require('assert/strict');
-let jsdom;
-try { jsdom = require('jsdom'); } catch (e) {
-  console.error('缺少 jsdom：见 docs/design/dev-environment.md');
-  process.exit(1);
-}
-const { JSDOM, VirtualConsole } = jsdom;
-const ROOT = path.join(__dirname, '..');
 const BASE = (process.env.BASE_URL || 'http://127.0.0.1:3000').replace(/\/$/, '');
-const IGNORE = /Could not load img|not implemented|Not implemented|navigation \(except hash changes\)/i;
-
-function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function apiGet(p) {
   const res = await fetch(BASE + p);
   assert.equal(res.status, 200, 'GET ' + p + ' -> ' + res.status);
   return res.json();
 }
-
 async function apiText(p, headers) {
   const res = await fetch(BASE + p, { headers: Object.assign({ Accept: 'text/markdown' }, headers || {}) });
   return { res, text: await res.text() };
 }
-
-async function load(page) {
-  const errors = [];
-  const vc = new VirtualConsole();
-  vc.on('jsdomError', (e) => {
-    const msg = (e && e.message) || String(e);
-    if (!IGNORE.test(msg)) errors.push(msg);
-  });
-  vc.on('error', (...args) => errors.push('console.error: ' + args.map(String).join(' ')));
-  const dom = new JSDOM(fs.readFileSync(path.join(ROOT, 'pages', page.split('?')[0]), 'utf8'), {
-    url: BASE + '/pages/' + page,
-    runScripts: 'dangerously',
-    resources: 'usable',
-    pretendToBeVisual: true,
-    virtualConsole: vc,
-    beforeParse(window) {
-      window.fetch = function (url, opts) {
-        var target = /^https?:/.test(String(url)) ? String(url) : BASE + String(url);
-        return fetch(target, opts);
-      };
-      window.HTMLElement.prototype.scrollIntoView = function () {};
-      window.scrollTo = function () {};
-    }
-  });
-  return { dom, win: dom.window, doc: dom.window.document, errors, close() { dom.window.close(); } };
+async function rows(page, selector) {
+  await page.locator(selector).first().waitFor({ state: 'visible', timeout: 8000 });
+  return page.locator(selector).count();
 }
-
-async function waitFor(fn, label, timeout) {
-  const end = Date.now() + (timeout || 6000);
-  while (Date.now() < end) {
-    try { const v = fn(); if (v) return v; } catch (e) { /* 继续等 */ }
-    await wait(100);
-  }
-  throw new Error('等待超时: ' + label);
-}
-
-async function harness() {
-  const total = (await apiGet('/api/v1/harnesses?limit=200')).total;
-  const ctx = await load('harnesses.html');
-  try {
-    const rows = await waitFor(() => {
-      const n = ctx.doc.querySelectorAll('#page-body tbody tr').length;
-      return n ? n : null;
-    }, 'harness rows');
-    assert.equal(rows, total, 'Harness 行数与 B1 总数不一致');
-    assert.match(ctx.doc.querySelector('#page-body').textContent, /总数/);
-    assert.deepEqual(ctx.errors, [], 'Harness 页面错误: ' + ctx.errors.join(' | '));
-  } finally { ctx.close(); }
-  console.log('✓ harnesses.html live rows=' + total);
-}
-
-async function tools() {
-  const total = (await apiGet('/api/v1/tools?limit=200')).total;
-  const ctx = await load('tools.html');
-  try {
-    const rows = await waitFor(() => {
-      const n = ctx.doc.querySelectorAll('#tl-table tbody tr').length;
-      return n ? n : null;
-    }, 'tool rows');
-    assert.equal(rows, total, 'Tool 行数与 B1 总数不一致');
-    assert.equal(ctx.doc.querySelectorAll('[data-act="debug"]').length, 0, 'B1 无调试端点，不应出现调试入口');
-    assert.deepEqual(ctx.errors, [], 'Tool 页面错误: ' + ctx.errors.join(' | '));
-  } finally { ctx.close(); }
-  console.log('✓ tools.html live rows=' + total);
-}
-
-async function skills() {
-  const page = await apiGet('/api/v1/skills?limit=200');
-  const total = page.total;
-  const first = page.items[0];
-  assert.ok(first && first.description, 'Skill 列表缺 description');
-  assert.equal(first.summary, undefined, 'Skill 列表仍返回 summary');
-  assert.equal(first.triggers, undefined, 'Skill 列表仍返回 triggers');
-
-  const direct = await apiText('/api/v1/skills/' + encodeURIComponent(first.id) + '/document');
-  assert.equal(direct.res.status, 200, '文档端点非 200');
-  assert.equal(direct.res.headers.get('content-type'), 'text/markdown; charset=utf-8');
-  const etag = direct.res.headers.get('etag');
-  assert.match(etag || '', /^"\d+"$/, '文档缺 ETag');
-  assert.ok(direct.text.startsWith('---\n'), '文档缺 frontmatter');
-  const cached = await apiText('/api/v1/skills/' + encodeURIComponent(first.id) + '/document', {
-    'If-None-Match': etag
-  });
-  assert.equal(cached.res.status, 304, 'If-None-Match 未返回 304');
-  assert.equal(cached.text, '', '304 不应有响应体');
-
-  const listCtx = await load('skills.html');
-  try {
-    const rows = await waitFor(() => {
-      const n = listCtx.doc.querySelectorAll('#sk-tblbox tbody tr').length;
-      return n ? n : null;
-    }, 'skill rows');
-    assert.equal(rows, total, 'Skill 行数与 B1 总数不一致');
-    assert.match(listCtx.doc.querySelector('#sk-count').textContent, new RegExp('共\\s*' + total));
-    assert.equal(listCtx.doc.querySelectorAll('[data-cat]').length >= 4, true, '缺少分类入口');
-    const head = listCtx.doc.querySelector('#sk-tblbox thead').textContent;
-    assert.ok(head.includes('描述') && !head.includes('触发'), 'Skill 列表列头仍是旧契约');
-    assert.equal(listCtx.doc.querySelectorAll('.drawer').length, 0, 'Skill 列表不应再使用详情抽屉');
-    assert.equal(listCtx.doc.querySelector('#sk-tblbox [data-view="' + first.id + '"]') !== null, true, '缺少首个 Skill 行');
-    assert.deepEqual(listCtx.errors, [], 'Skill 列表错误: ' + listCtx.errors.join(' | '));
-  } finally { listCtx.close(); }
-
-  const ctx = await load('skill-detail.html?id=' + encodeURIComponent(first.id));
-  try {
-    await waitFor(() => ctx.doc.querySelector('#sk-viewbox details'), 'skill detail structured view');
-    assert.ok(ctx.doc.querySelector('#sk-tab [data-tab="document"]'), 'Skill 专门页缺文档 Tab');
-    assert.ok(ctx.doc.querySelector('#sk-viewbox').textContent.includes(first.description), '专门页未展示 description');
-    ctx.win.SKILL_MD = {
-      render: function (el, text) { el.textContent = text; return Promise.resolve(); }
-    };
-    ctx.doc.querySelector('#sk-tab [data-tab="document"]').dispatchEvent(new ctx.win.MouseEvent('click', {
-      bubbles: true, cancelable: true, view: ctx.win
-    }));
-    await waitFor(() => ctx.doc.querySelector('#sk-doc-root'), 'document tab');
-    assert.equal(ctx.doc.querySelector('#sk-doc-root').textContent, direct.text, '文档 Tab 与 GET /document 响应不一致');
-    assert.equal(ctx.doc.querySelector('#sk-doc-text'), null, '文档仍走 <pre> 原文视图');
-    assert.deepEqual(ctx.errors, [], 'Skill 专门页错误: ' + ctx.errors.join(' | '));
-  } finally { ctx.close(); }
-  console.log('✓ skills.html live rows=' + total + ' · document 200/304');
-}
-
-async function experts() {
-  const total = (await apiGet('/api/v1/experts?limit=200')).total;
-  const ctx = await load('experts.html');
-  try {
-    const cards = await waitFor(() => {
-      const n = ctx.doc.querySelectorAll('#ex-grid .item-card').length;
-      return n ? n : null;
-    }, 'expert cards');
-    assert.equal(cards, total, 'Expert 卡片数与 B1 总数不一致');
-    assert.match(ctx.doc.querySelector('#page-body').textContent, /引用/);
-    assert.deepEqual(ctx.errors, [], 'Expert 页面错误: ' + ctx.errors.join(' | '));
-  } finally { ctx.close(); }
-  console.log('✓ experts.html live cards=' + total);
+async function open(browser, pageName, query = '') {
+  return openPage(browser, BASE, pageName, query, { routeB1: false, wait: 900 });
 }
 
 (async () => {
-  await harness();
-  await tools();
-  await skills();
-  await experts();
-  console.log('B1 四页真实读取验证通过');
+  const browser = await launchBrowser();
+  try {
+    const harnessTotal = (await apiGet('/api/v1/harnesses?limit=200')).total;
+    const h = await open(browser, 'harnesses');
+    try {
+      assert.equal(await rows(h.page, '#page-body tbody tr'), harnessTotal);
+      assert.match(await h.page.locator('#page-body').textContent(), /总数/);
+      assertNoPageErrors(h.errors);
+    } finally { await h.page.close(); }
+    console.log('✓ harnesses.html live rows=' + harnessTotal);
+
+    const toolTotal = (await apiGet('/api/v1/tools?limit=200')).total;
+    const t = await open(browser, 'tools');
+    try {
+      assert.equal(await rows(t.page, '#tl-table tbody tr'), toolTotal);
+      assert.equal(await t.page.locator('[data-act="debug"]').count(), 0);
+      assertNoPageErrors(t.errors);
+    } finally { await t.page.close(); }
+    console.log('✓ tools.html live rows=' + toolTotal);
+
+    const skillPage = await apiGet('/api/v1/skills?limit=200');
+    const total = skillPage.total;
+    const first = skillPage.items[0];
+    assert.ok(first && first.description, 'Skill 列表缺 description');
+    assert.equal(first.summary, undefined, 'Skill 列表仍返回 summary');
+    assert.equal(first.triggers, undefined, 'Skill 列表仍返回 triggers');
+
+    const direct = await apiText('/api/v1/skills/' + encodeURIComponent(first.id) + '/document');
+    assert.equal(direct.res.status, 200);
+    assert.equal(direct.res.headers.get('content-type'), 'text/markdown; charset=utf-8');
+    const etag = direct.res.headers.get('etag');
+    assert.match(etag || '', /^"\d+"$/);
+    assert.ok(direct.text.startsWith('---\n'));
+    const cached = await apiText('/api/v1/skills/' + encodeURIComponent(first.id) + '/document', { 'If-None-Match': etag });
+    assert.equal(cached.res.status, 304);
+    assert.equal(cached.text, '');
+
+    const list = await open(browser, 'skills');
+    try {
+      assert.equal(await rows(list.page, '#sk-tblbox tbody tr'), total);
+      assert.match(await list.page.locator('#sk-count').textContent(), new RegExp('共\\s*' + total));
+      assert.ok(await list.page.locator('[data-cat]').count() >= 4);
+      const head = await list.page.locator('#sk-tblbox thead').textContent();
+      assert.ok(head.includes('描述') && !head.includes('触发'));
+      assert.equal(await list.page.locator('.drawer').count(), 0);
+      assert.equal(await list.page.locator('#sk-tblbox [data-view="' + first.id + '"]').count(), 1);
+      assertNoPageErrors(list.errors);
+    } finally { await list.page.close(); }
+
+    const detail = await open(browser, 'skill-detail', 'id=' + encodeURIComponent(first.id));
+    try {
+      await detail.page.locator('#sk-body').waitFor({ state: 'visible', timeout: 8000 });
+      assert.match(await detail.page.locator('#sk-files').textContent(), /SKILL\.md/);
+      assert.equal(await detail.page.locator('[data-tab]').count(), 0);
+      assert.equal(await detail.page.locator('#sk-download').count(), 1);
+      assert.match(await detail.page.locator('#page-body').textContent(), new RegExp(first.description.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assertNoPageErrors(detail.errors);
+    } finally { await detail.page.close(); }
+    console.log('✓ skills.html live rows=' + total + ' · document 200/304');
+
+    const expertTotal = (await apiGet('/api/v1/experts?limit=200')).total;
+    const e = await open(browser, 'experts');
+    try {
+      assert.equal(await rows(e.page, '#ex-grid .item-card'), expertTotal);
+      assert.match(await e.page.locator('#page-body').textContent(), /引用/);
+      assertNoPageErrors(e.errors);
+    } finally { await e.page.close(); }
+    console.log('✓ experts.html live cards=' + expertTotal);
+
+    console.log('B1 四页真实读取验证通过');
+  } finally {
+    await browser.close();
+  }
 })().catch((e) => {
   console.error('B1 四页真实读取验证失败:', e && e.stack ? e.stack : e);
   process.exit(1);

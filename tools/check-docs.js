@@ -5,8 +5,8 @@
  * 校验 frontmatter、状态值域、模块卡必备字段、组件/场景字段、works 工序、
  * REQ/SCN/CMP/DEP 引用、场景索引、旧路径残留。
  */
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
 
 const ROOT = path.resolve(process.argv[2] || 'docs');
 const PROJECT = path.resolve(ROOT, '..');
@@ -232,7 +232,9 @@ for (const p of all) {
   }
 }
 
-const joined = all.map((p) => fs.readFileSync(p, 'utf8')).join('\n');
+// 历史文档允许引用已归档/已退役的编号；现行文档仍必须全部可解析。
+const activeDocs = all.filter((p) => rel(p).split(path.sep)[0] !== 'history');
+const joined = activeDocs.map((p) => fs.readFileSync(p, 'utf8')).join('\n');
 for (const id of new Set(joined.match(/REQ-\d{4}/g) || [])) if (!reqs.has(id)) err(`引用了不存在的需求卡 ${id}`);
 for (const id of new Set(joined.match(/SCN-\d{4}/g) || [])) if (!scenarios.has(id)) err(`引用了不存在的场景卡 ${id}`);
 
