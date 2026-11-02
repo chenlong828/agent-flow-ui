@@ -2,15 +2,18 @@
  * AgentFlow 原型 · 工作区配置 · 列表页
  * 规格: docs/design/components/workspaces/spec.md §2 列表页 / §3 新建向导弹窗 / §5 状态与空态
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { MOCK } from '../mock-data.js';
+import { WSC } from './workspace-common.js';
+
   const $ = s => document.querySelector(s);
-  const M = window.MOCK;
-  const WSC = window.WSC; // 工作区列表页 / 详情页共用模块（跨页联动、目录树等）
+  const M = MOCK;
 
   /* ========== 页面 ========== */
   function render() {
     const body = DF.renderShell({
+      pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length,
       active: 'workspaces',
       breadcrumb: [{ label: '基础配置' }, { label: '工作区配置' }],
       title: '工作区配置',
@@ -330,4 +333,3 @@
   }
 
   render();
-})();

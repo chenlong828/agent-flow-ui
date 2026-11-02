@@ -1,8 +1,8 @@
 'use strict';
 
 /** 单独运行 CMP-bff，便于组件验证；生产由 node server.js 同进程挂载。 */
-const http = require('http');
-const { createBff } = require('./index');
+import http from 'node:http';
+import { createBff } from './index.js';
 
 const PORT = Number(process.env.PORT || 3001);
 const HOST = '127.0.0.1';

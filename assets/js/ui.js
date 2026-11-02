@@ -2,8 +2,6 @@
  * AgentFlow 原型 · DF 组件库
  * 用法: 页面 JS 调 DF.renderShell({active,...}) 渲染外壳，再用 DF.drawer/modal/toast 等组件。
  */
-(function () {
-  'use strict';
 
   /* ---------------- 图标（feather 风格线性图标） ---------------- */
   const P = {
@@ -215,10 +213,6 @@
     ] }
   ];
 
-  function pendingConfirmCount() {
-    return (window.MOCK.instances || []).filter(i => i.status === '等待人工确认').length;
-  }
-
   /* ---------------- 界面字体大小（顶部栏可调：小/中/大/最大，最大≈20px 基准） ----------------
    * 双路径：优先 html 级 zoom（真实 Safari/Chrome 支持，fixed 弹层一并缩放）；
    * 探测不生效（如部分引擎）则 transform 兜底缩放外壳（.topbar + #df-layout），弹层保持基准尺寸。 */
@@ -256,7 +250,7 @@
 
   function renderShell(opt) {
     const app = document.getElementById('app');
-    const bell = pendingConfirmCount();
+    const bell = opt.pendingCount || 0;
     const bc = (opt.breadcrumb || []).map((b, i, arr) =>
       (b.href && i < arr.length - 1 ? '<a href="' + b.href + '">' + esc(b.label) + '</a>' : '<span>' + esc(b.label) + '</span>')
     ).join(' <span style="margin:0 4px">/</span> ');
@@ -508,7 +502,6 @@
     }
   }
 
-  window.DF = { icon, esc, qs, relTime, fmtDur, fmtBytes, ts, fmtClock, tag, dot, statusMeta, renderShell, drawer, modal, toast, menu, closeMenu, copyText, NAV, zoomK, zoomOnFixed: () => zoomOnFixed,
+  export const DF = { icon, esc, qs, relTime, fmtDur, fmtBytes, ts, fmtClock, tag, dot, statusMeta, renderShell, drawer, modal, toast, menu, closeMenu, copyText, NAV, zoomK, zoomOnFixed: () => zoomOnFixed,
     lsGet, lsSet, ssGet, ssSet, ssRemove, download, deep,
     searchBox, empty, table, field, kv, tabsHtml, statCard, statRow };
-})();

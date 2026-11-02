@@ -1,8 +1,10 @@
 /**
  * 运行实例列表（docs/09 §2）
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { MOCK } from '../mock-data.js';
+
   const { esc, icon, tag } = DF;
 
   const TABS = ['全部', '运行中', '等待人工确认', '回退重跑中', '已暂停', '已结束'];
@@ -10,6 +12,7 @@
 
   function init() {
     const body = DF.renderShell({
+      pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length,
       active: 'instances',
       breadcrumb: [{ label: '运行与运营' }, { label: '运行实例' }],
       title: '运行实例',
@@ -164,4 +167,3 @@
   }
 
   init();
-})();

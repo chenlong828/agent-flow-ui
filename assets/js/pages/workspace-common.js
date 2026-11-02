@@ -1,10 +1,11 @@
 /**
- * AgentFlow 原型 · 工作区配置公共模块（window.WSC）
+ * AgentFlow 原型 · 工作区配置公共模块（WSC）
  * 列表页（workspaces.js）与详情页（workspace-detail.js）共用的取数、跨页联动与只读目录树。
- * 依赖: assets/js/mock-data.js (window.MOCK)、assets/js/ui.js (window.DF)
+ * 依赖: assets/js/mock-data.js (MOCK)、assets/js/ui.js (DF)
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { MOCK } from '../mock-data.js';
 
   const pad = n => String(n).padStart(2, '0');
 
@@ -59,5 +60,4 @@
       '</details></div>';
   }
 
-  window.WSC = { pad, readNewWs, saveNewWs, dropNewWs, syncNewWs, allWorkspaces, keyById, createdText, treeHtml };
-})();
+  export const WSC = { pad, readNewWs, saveNewWs, dropNewWs, syncNewWs, allWorkspaces, keyById, createdText, treeHtml };

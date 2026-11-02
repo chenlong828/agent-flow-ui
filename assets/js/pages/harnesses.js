@@ -1,10 +1,12 @@
 /**
  * AgentFlow · Harness 管理页（列表 + 详情抽屉 + 注册弹窗）
- * 依赖: ../assets/js/ui.js (window.DF) / ../assets/js/api.js (window.API)
+ * 依赖: ../assets/js/ui.js (DF) / ../assets/js/api.js (API)
  * 数据约定: 页面状态直接保存 B1 Harness DTO；中文标签仅在渲染/选项时按映射即时转换；不读本地夹具。
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { API } from '../api.js';
+
 
   /* ---------------- 常量（B1 枚举 → 展示文案，仅渲染时即时转换） ---------------- */
   var PRESET_TAGS = ['CICD', '构建', '测试', '审视', '检索', '批处理', '造数', '回放', '数据', '调试'];
@@ -551,4 +553,3 @@
   document.getElementById('ha-reg-btn').onclick = openRegister;
   body.addEventListener('click', onBodyClick);
   loadList();
-})();

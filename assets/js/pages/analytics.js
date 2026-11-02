@@ -1,6 +1,8 @@
 /* 效能看板 · 交付价值与运行健康（KPI 指标卡 + 趋势图 + 准出记录汇总 + Skill 审计） */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { MOCK } from '../mock-data.js';
+
 
   const A = MOCK.analytics;
   const PAGE_SIZE = 5;
@@ -11,6 +13,7 @@
 
   /* ---------- 外壳 ---------- */
   DF.renderShell({
+      pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length,
     active: 'analytics',
     breadcrumb: [{ label: '运行与运营' }, { label: '效能看板' }],
     title: '效能看板',
@@ -208,4 +211,3 @@
   });
 
   render();
-})();

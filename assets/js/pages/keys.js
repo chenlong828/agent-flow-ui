@@ -2,8 +2,10 @@
  * AgentFlow 原型 · 基础配置 / 个人 Key 管理
  * 密钥资产（git ssh-key / LLM API Key）、有效性校验、用途绑定。
  */
-(function () {
-  'use strict';
+
+import { DF } from '../ui.js';
+import { MOCK } from '../mock-data.js';
+
 
   /* ---------------- 页面私有状态 ---------------- */
   let tabType = '全部';          // 全部 | git ssh-key | LLM API Key
@@ -17,6 +19,7 @@
 
   /* ---------------- 外壳 ---------------- */
   const body = DF.renderShell({
+      pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length,
     active: 'keys',
     breadcrumb: [{ label: '基础配置' }, { label: '个人 Key 管理' }],
     title: '个人 Key 管理',
@@ -376,4 +379,3 @@
 
   /* ---------------- 启动 ---------------- */
   renderList();
-})();
