@@ -49,7 +49,14 @@ function renderFailOnceInit() {
   };
 }
 
+/* MOCK 页默认关闭（REQ-0018 / SCN-0020）：场景验证统一加 ?demo=1，业务断言不变。 */
+const MOCK_PAGES = new Set(['analytics', 'workspaces', 'workspace-detail', 'keys']);
 async function open(browser, page, query = '', opts = {}) {
+  if (MOCK_PAGES.has(page)) {
+    const q = new URLSearchParams(query);
+    q.set('demo', '1');
+    query = q.toString();
+  }
   return openPage(browser, BASE, page, query, opts);
 }
 

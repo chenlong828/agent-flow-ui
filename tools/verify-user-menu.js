@@ -10,7 +10,7 @@ const BASE = process.env.BASE_URL || 'http://localhost:3000/pages/';
 const pages = ['workflow-list', 'workflow-editor', 'skills', 'experts', 'harnesses',
                'tools', 'instances', 'instance-detail', 'analytics',
                'workspaces', 'workspace-detail', 'keys'];
-const queryParams = { 'workflow-editor': '?id=w1', 'instance-detail': '?id=INS-2042', 'workspace-detail': '?id=ws1' };
+const queryParams = { 'workflow-editor': '?id=w1', 'instance-detail': '?id=INS-2042', 'workspace-detail': '?id=ws1&demo=1', analytics: '?demo=1', workspaces: '?demo=1', keys: '?demo=1' };
 let pass = 0, fail = 0;
 const ok = (cond, label) => { console.log((cond ? '  ✓ ' : '  ✗ ') + label); cond ? pass++ : fail++; };
 
@@ -126,12 +126,12 @@ const ok = (cond, label) => { console.log((cond ? '  ✓ ' : '  ✗ ') + label);
     return { items: Array.from(m.querySelectorAll('.mi')).map(x => x.textContent.trim()).join('|'),
              dLeft: Math.round(mr.left - br.left), halfW: Math.round(br.width / 2), fit: mr.right <= innerWidth };
   });
-  ok(!!more && more.items === '复制|导出 DSL|删除', 'workflow-list「更多」菜单正常弹出（' + (more ? more.items : '未弹出') + '）');
+  ok(!!more && more.items === '编辑信息|复制|导出 JSON|导出 YAML|删除', 'workflow-list「更多」菜单正常弹出（' + (more ? more.items : '未弹出') + '）');
   ok(!!more && Math.abs(more.dLeft - more.halfW) <= 2 && more.fit,
      '「更多」菜单画在触发点（按钮中心）处 (Δleft=' + (more ? more.dLeft : '—') + ' ≈ 半宽 ' + (more ? more.halfW : '—') + ') 且不溢出视口');
   await page.evaluate(() => document.body.click());
   await page.waitForTimeout(60);
-  await page.goto(BASE + 'keys.html', { waitUntil: 'networkidle' });
+  await page.goto(BASE + 'keys.html?demo=1', { waitUntil: 'networkidle' });
   await page.waitForTimeout(350);
   more = await page.evaluate(() => {
     const b = document.querySelector('.ky-more');

@@ -194,6 +194,22 @@
     return '<div class="stat-row"' + (style ? ' style="' + style + '"' : '') + '>' + cards.join('') + '</div>';
   }
 
+  /* ---------------- MOCK 演示页开关（REQ-0018 / SCN-0020） ----------------
+   * 效能看板 / 工作区两页 / 个人 Key 管理仍由 MOCK 供数，默认从导航隐藏并在直达时
+   * 显示占位页；URL 带 ?demo=1 时在本标签页内恢复（sessionStorage），?demo=0 退出。
+   * 关闭只影响入口，不删除页面、数据或规格。 */
+  const MOCK_PAGE_IDS = ['analytics', 'workspaces', 'keys'];
+  const DEMO_STORE_KEY = 'df-demo-pages';
+  function demoOn() {
+    try {
+      const demo = new URLSearchParams(location.search).get('demo');
+      if (demo === '1') { ssSet(DEMO_STORE_KEY, '1'); return true; }
+      if (demo === '0') { ssRemove(DEMO_STORE_KEY); return false; }
+      return ssGet(DEMO_STORE_KEY) === '1';
+    } catch (e) { return false; }
+  }
+  function mockPageHidden(active) { return MOCK_PAGE_IDS.indexOf(active) >= 0 && !demoOn(); }
+
   /* ---------------- 外壳 ---------------- */
   const NAV = [
     { group: '流程研发', items: [{ id: 'workflows', label: '工作流', icon: 'flow', href: 'workflow-list.html' }] },
@@ -205,11 +221,11 @@
     ] },
     { group: '运行与运营', items: [
       { id: 'instances', label: '运行实例', icon: 'play', href: 'instances.html' },
-      { id: 'analytics', label: '效能看板', icon: 'chart', href: 'analytics.html' }
+      { id: 'analytics', label: '效能看板', icon: 'chart', href: 'analytics.html', mockOnly: true }
     ] },
     { group: '基础配置', items: [
-      { id: 'workspaces', label: '工作区配置', icon: 'folder', href: 'workspaces.html' },
-      { id: 'keys', label: '个人 Key 管理', icon: 'key', href: 'keys.html' }
+      { id: 'workspaces', label: '工作区配置', icon: 'folder', href: 'workspaces.html', mockOnly: true },
+      { id: 'keys', label: '个人 Key 管理', icon: 'key', href: 'keys.html', mockOnly: true }
     ] }
   ];
 
@@ -251,6 +267,10 @@
   function renderShell(opt) {
     const app = document.getElementById('app');
     const bell = opt.pendingCount || 0;
+    const showMock = demoOn();
+    const navGroups = NAV.map(function (g) {
+      return { group: g.group, items: g.items.filter(function (it) { return showMock || !it.mockOnly; }) };
+    }).filter(function (g) { return g.items.length; });
     const bc = (opt.breadcrumb || []).map((b, i, arr) =>
       (b.href && i < arr.length - 1 ? '<a href="' + b.href + '">' + esc(b.label) + '</a>' : '<span>' + esc(b.label) + '</span>')
     ).join(' <span style="margin:0 4px">/</span> ');
@@ -268,7 +288,7 @@
         '<span class="user" id="df-user" title="账号菜单"><span class="avatar">陈</span>陈龙 ' + icon('down', 14) + '</span>' +
       '</header>' +
       '<div class="layout" id="df-layout"><aside class="sidebar">' +
-        NAV.map(g => '<div class="nav-group"><div class="nav-group-title">' + g.group + '</div>' +
+        navGroups.map(g => '<div class="nav-group"><div class="nav-group-title">' + g.group + '</div>' +
           g.items.map(it => '<a class="nav-item' + (it.id === opt.active ? ' active' : '') + '" href="' + it.href + '">' + icon(it.icon) + '<span class="lbl">' + it.label + '</span></a>').join('') + '</div>').join('') +
         '<button class="btn sm collapse-btn" id="df-collapse" style="justify-content:center">' + icon('collapse') + '<span class="lbl">收起</span></button>' +
       '</aside><main class="main">' +
@@ -310,6 +330,39 @@
     };
     if (lsGet('df-collapsed')) document.getElementById('df-layout').classList.add('collapsed');
     return document.getElementById('page-body');
+  }
+
+  /* 关闭页占位：页面模块在初始化前调用；返回 true 表示本页已关闭、占位页已渲染，
+   * 页面主体不应继续执行。占位页提供「以演示模式打开」（同页 ?demo=1，保留其他参数）
+   * 与回工作流列表的入口。 */
+  function mockPageGate(opt) {
+    opt = opt || {};
+    if (!mockPageHidden(opt.active)) return false;
+    renderShell({
+      pendingCount: opt.pendingCount || 0,
+      active: opt.active,
+      breadcrumb: opt.breadcrumb || [],
+      title: opt.title || '',
+      subtitle: opt.subtitle || ''
+    });
+    const query = new URLSearchParams(location.search);
+    query.set('demo', '1');
+    const demoHref = location.pathname + '?' + query.toString();
+    const body = document.getElementById('page-body');
+    body.innerHTML =
+      '<div class="card" style="max-width:560px;margin:44px auto 0"><div class="empty" style="padding:40px 28px">' +
+        '<div class="e-ic">🧭</div>' +
+        '<div style="font-size:15px;font-weight:600;color:var(--t-1)">该页面由演示数据驱动，已临时关闭</div>' +
+        '<div style="margin:8px auto 0;max-width:420px;line-height:1.8">' +
+          '为免与已接入真实后端的页面混淆，本页默认不显示。需要在评审或演示中查看时，' +
+          '打开演示模式；演示模式仅在当前标签页内有效，可在地址后加 <code>?demo=0</code> 退出。' +
+        '</div>' +
+        '<div style="margin-top:18px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
+          '<a class="btn primary" id="mock-demo-open" href="' + esc(demoHref) + '">' + icon('play', 14) + '以演示模式打开</a>' +
+          '<a class="btn" href="workflow-list.html">返回工作流列表</a>' +
+        '</div>' +
+      '</div></div>';
+    return true;
   }
 
   /* ---------------- 抽屉 ---------------- */
@@ -502,6 +555,6 @@
     }
   }
 
-  export const DF = { icon, esc, qs, relTime, fmtDur, fmtBytes, ts, fmtClock, tag, dot, statusMeta, renderShell, drawer, modal, toast, menu, closeMenu, copyText, NAV, zoomK, zoomOnFixed: () => zoomOnFixed,
+  export const DF = { icon, esc, qs, relTime, fmtDur, fmtBytes, ts, fmtClock, tag, dot, statusMeta, renderShell, mockPageGate, drawer, modal, toast, menu, closeMenu, copyText, NAV, zoomK, zoomOnFixed: () => zoomOnFixed,
     lsGet, lsSet, ssGet, ssSet, ssRemove, download, deep,
     searchBox, empty, table, field, kv, tabsHtml, statCard, statRow };

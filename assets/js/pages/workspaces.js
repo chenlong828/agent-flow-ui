@@ -7,6 +7,16 @@ import { DF } from '../ui.js';
 import { MOCK } from '../mock-data.js';
 import { WSC } from './workspace-common.js';
 
+/* 2026-11-12 起默认关闭（REQ-0018 / SCN-0020）：直达显示占位页，?demo=1 恢复演示。 */
+if (!DF.mockPageGate({
+  active: 'workspaces',
+  breadcrumb: [{ label: '基础配置' }, { label: '工作区配置' }],
+  title: '工作区配置',
+  subtitle: '统一工作区准备与配置：仓库绑定、worktree 隔离策略、目录模板初始化、凭证关联与清理归档',
+  pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length
+})) init();
+
+function init() {
   const $ = s => document.querySelector(s);
   const M = MOCK;
 
@@ -333,3 +343,4 @@ import { WSC } from './workspace-common.js';
   }
 
   render();
+}

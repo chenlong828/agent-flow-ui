@@ -38,7 +38,7 @@ updated: 2026-10-23
 | SCN-0001-T3 | 正 | 点 Key 管理到 `keys.html`；退出登录弹确认框，确认后 Toast | C、D 段 |
 | SCN-0001-T4 | 反 | 取消退出登录无 Toast、弹层全关；旧调用方菜单仍按左缘弹出、不溢出视口 | D、F 段 |
 
-最近一次执行：2026-10-23 迁移后复跑，45 通过 / 0 失败（命令见 `design/dev-environment.md` 3.2；原始证据见 `history/works/2026-10-13-user-menu/result.md`）。
+最近一次执行：2026-11-12 复跑，45 通过 / 0 失败（命令见 `design/dev-environment.md` 3.2；原始证据见 `history/works/2026-10-13-user-menu/result.md`）。
 
 ## 人工确认（不计入 3+1）
 

@@ -5,7 +5,7 @@ component: CMP-keys
 requirement: REQ-0011
 scenario: SCN-0011
 status: active
-updated: 2026-10-28
+updated: 2026-11-12
 ---
 
 # 个人 Key 管理
@@ -14,24 +14,24 @@ updated: 2026-10-28
 
 ## 0 模块卡
 
-> 追溯：`REQ-0011` / `SCN-0011`（verified；Playwright 3 正 1 反）。
+> 追溯：`REQ-0011` / `SCN-0011`（verified；Playwright 3 正 1 反）；`REQ-0018` / `SCN-0020`（默认关闭与演示模式）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为个人用户提供 git ssh-key 与 LLM API Key 的登记、掩码展示、有效性校验与用途绑定；没有它，工作区、Harness 与专家调用无法关联凭证，原型也无法演示「按用途治理密钥」。
 - 负责 / 不负责：负责 Key 列表（类型分栏/状态/掩码）、添加弹窗（git / LLM 两套表单）、指纹与模型信息展示、有效性校验（模拟）、绑定用途编辑、删除；不负责真实登录态与鉴权、密钥的安全存储/加密、工作区/Harness/专家的定义（各自组件）、真实调用凭证。
 - 内部逻辑：列表只显示末 4 位；git/LLM 表单分离；绑定目标只能从既有集合选；删除二次确认；校验状态三值。
-- 数据所有权：读 `MOCK.keys`、`MOCK.experts`、`MOCK.harnesses`、`MOCK.workspaces`（绑定目标与引用展示）；写 `MOCK.keys`（新增 `push`、删除 `filter`、绑定用途写回，仅内存态，刷新复位）；弹窗编辑态只在内存，不落 localStorage/sessionStorage。
-- 公开契约：页面入口 `pages/keys.html`；操作 `CMP-keys#list`、`#create-git`、`#create-llm`、`#verify`、`#bind`、`#delete`；不变量 密钥只显示末 4 位掩码，完整值不在列表/详情回显；git 与 LLM 表单字段分离，不能互相提交；绑定目标只能从已存在的 `MOCK.workspaces` / `MOCK.harnesses` / `MOCK.experts` 中选择；删除必须二次确认；校验状态只取「有效/失效/未校验」三值。
+- 数据所有权：读 `MOCK.keys`、`MOCK.experts`、`MOCK.harnesses`、`MOCK.workspaces`（绑定目标与引用展示）；写 `MOCK.keys`（新增 `push`、删除 `filter`、绑定用途写回，仅内存态，刷新复位）；弹窗编辑态只在内存，不落 localStorage/sessionStorage；页面默认关闭，`?demo=1` 才执行（`REQ-0018` / `SCN-0020`），演示开关由 `CMP-ui-shell` 统一写 sessionStorage `df-demo-pages`，本页不直接读写。
+- 公开契约：页面入口 `pages/keys.html`（默认关闭，`?demo=1` 进入）；操作 `CMP-keys#list`、`#create-git`、`#create-llm`、`#verify`、`#bind`、`#delete`；不变量 密钥只显示末 4 位掩码，完整值不在列表/详情回显；git 与 LLM 表单字段分离，不能互相提交；绑定目标只能从已存在的 `MOCK.workspaces` / `MOCK.harnesses` / `MOCK.experts` 中选择；删除必须二次确认；校验状态只取「有效/失效/未校验」三值。
 - 依赖：`DF`（外壳、表格、弹窗、表单、Toast、图标）/ `MOCK`；不依赖其他页面组件（跨页只走 URL）。
 - 冷热属性：冷（管理面；无真实鉴权/加密）。
 - 变化轴：凭证供应商与 Key 类型（git / LLM 多供应商）最易变，新增类型须同步列表分栏、添加弹窗与绑定用途。
-- 验证入口：`npm start` + `/pages/keys.html`；`node tools/smoke-test.js`（全站冒烟，含本页）；SCN-0011（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0011`）。
+- 验证入口：`npm start` + `/pages/keys.html?demo=1`（默认直达先见占位）；`node tools/smoke-test.js`（全站冒烟，含本页）；SCN-0011（verified，3 正 1 反；`node tools/verify-m1-scenarios.js SCN-0011` 自动带 `?demo=1`）；`node tools/verify-mock-pages.js`（SCN-0020）。
 - 验证计划：掩码/登记/校验/必填与取消→SCN-0011 T1-T4；结构→`smoke-test`。
 - 预算：`keys.js` 约 15 KB + 本规格约 5 KB，场景断言在 `tools/verify-m1-scenarios.js`；上限 120k token，远低于上限。
-- 单独运行：`npm start` → `/pages/keys.html`（绑定目标只读其他夹具集合）。
+- 单独运行：`npm start` → `/pages/keys.html?demo=1`（绑定目标只读其他夹具集合）。
 - 删除测试：删除后凭证无法登记、校验与绑定，工作区/Harness/专家调用失去凭证来源；但真实鉴权不在原型内，复杂度会集中到各消费页，故保留为独立组件。
-- 已知偏差：M1 追溯已补（REQ-0011/SCN-0011），场景 verified（Playwright 3 正 1 反，M1 40/40）；行为级断言已由 M1 runner 覆盖；密钥为演示数据、掩码展示；有效性校验与绑定影响均为模拟，无真实鉴权；删除/绑定只改内存夹具。
+- 已知偏差：M1 追溯已补（REQ-0011/SCN-0011），场景 verified（Playwright 3 正 1 反，M1 40/40）；行为级断言已由 M1 runner 覆盖；密钥为演示数据、掩码展示；有效性校验与绑定影响均为模拟，无真实鉴权；删除/绑定只改内存夹具；2026-11-12 起默认关闭，直达显示占位页，`?demo=1` 恢复（`REQ-0018` / `SCN-0020`）；用户区「个人 Key 管理」快捷入口保留，关闭状态落到占位页。
 
 ## 1 页面定位
 

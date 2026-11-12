@@ -14,6 +14,8 @@ updated: 2026-10-23
 - `CMP-analytics/assets/js/pages/analytics.js#render`
 - `CMP-analytics/pages/analytics.html#page-body`
 
+> 2026-11-12 起页面默认关闭（`REQ-0018` / `SCN-0020`）；本场景以 `?demo=1` 进入，业务断言不变。
+
 ## 运行序
 
 1. KPI 卡渲染吞吐、缺陷率、成功率、平均时长、待确认与 fan-out 子任务指标；数值来自 `MOCK.analytics`。
@@ -31,7 +33,7 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：Playwright WebKit+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-30，全量 49/49 通过。
+执行层：Playwright WebKit+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-11-12，全量 50/50 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|

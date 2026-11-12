@@ -15,6 +15,8 @@ updated: 2026-10-23
 - `CMP-workspaces/assets/js/pages/workspace-detail.js#init`
 - `CMP-workspaces/pages/workspaces.html`、`pages/workspace-detail.html?id=<workspaceId>`
 
+> 2026-11-12 起页面默认关闭（`REQ-0018` / `SCN-0020`）；本场景以 `?demo=1` 进入，业务断言不变。
+
 ## 运行序
 
 1. 列表渲染工作区名称、仓库/分支、状态、关联 Key 与最近使用；行数与 `MOCK.workspaces` 同源。
@@ -32,7 +34,7 @@ updated: 2026-10-23
 
 ## 测试
 
-执行层：Playwright WebKit+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-30，全量 49/49 通过。
+执行层：Playwright WebKit+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-11-12，全量 50/50 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|

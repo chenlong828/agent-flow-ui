@@ -14,7 +14,7 @@
     "check:scenario-trace": "node tools/check-scenario-trace.js",
     "docs:index": "node tools/gen-scenario-index.js docs",
     "docs:index:check": "node tools/gen-scenario-index.js --check docs",
-    "test": "npm run check:syntax && npm run check:docs && npm run docs:index:check && npm run check:deps && npm run check:architecture && npm run check:scenario-trace && npm run test:shared && npm run test:bff && npm run test:smoke && npm run test:scenarios && npm run test:workflow",
+    "test": "npm run check:syntax && npm run check:docs && npm run docs:index:check && npm run check:deps && npm run check:architecture && npm run check:scenario-trace && npm run test:shared && npm run test:bff && npm run test:smoke && npm run test:mock-pages && npm run test:scenarios && npm run test:workflow",
     "test:gate": "npm run check:syntax && npm run check:docs && npm run docs:index:check && npm run check:deps && npm run check:architecture && npm run check:scenario-trace && npm run test:shared && npm run test:bff",
     "test:shared": "node --test tests/shared",
     "test:bff": "node --test tests/bff",
@@ -25,6 +25,7 @@
     "test:b1-writes": "node tools/verify-b1-writes.js",
     "test:skill-render": "node tools/verify-skill-page-render.js",
     "test:skill-engine": "BASE_URL=http://127.0.0.1:3000 node tools/verify-skill-page-engine.js",
-    "test:workflow": "node --test tests/workflow && node tools/verify-workflow-list.js && node tools/verify-workflow-editor.js"
+    "test:workflow": "node --test tests/workflow && node tools/verify-workflow-list.js && node tools/verify-workflow-editor.js",
+    "test:mock-pages": "node tools/verify-mock-pages.js"
   }
 }

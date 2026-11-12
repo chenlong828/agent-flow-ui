@@ -13,7 +13,7 @@ updated: 2026-11-12
 
 - 形态：agent-flow 前端（13 个 HTML 页面 + 同源 BFF）；原生 HTML/CSS/ESM，无构建步骤；第三方运行时依赖默认零，例外须经准入（`design/dependencies.md`）并自托管到 `assets/vendor/`，禁止 CDN 外链。
 - 模块系统（2026-10-30 完成迁移）：全站原生 ESM，`package.json` 为 `"type":"module"`，Node 侧 `server.js` / `bff/` / `tools/` / `tests/` 同为 ESM；页面只通过显式 `import` 取依赖，无 `window.DF/MOCK/API/WSC`，无构建与 `.cjs` 兼容层。迁移记录见 `history/works/2026-10-30-frontend-esm/`，决策见 `history/decisions/2026-10-30-frontend-esm.md`。
-- 数据：Harness / Tool / Skill / Expert 四页直接消费 B1 DTO（经 `CMP-bff` 同源访问），写操作走 B1 并带 `If-Match`；工作流列表/编辑器经 `workflow/data` 消费 B3 `/api/v1/workflows*`；运行列表/详情/发起运行经 `run/data` 消费 B4 `/api/v1/runs` 与 `/api/v1/workflows/{id}/runs`（状态机与节点推进由后端运行编排服务 拥有）；`layout/viewport` 由前端拥有/后端透传。效能、工作区、Key 页面仍由 `assets/js/mock-data.js` 的 `MOCK` 具名导出提供，写操作只改内存。前端不直接持有数据库或鉴权态。
+- 数据：Harness / Tool / Skill / Expert 四页直接消费 B1 DTO（经 `CMP-bff` 同源访问），写操作走 B1 并带 `If-Match`；工作流列表/编辑器经 `workflow/data` 消费 B3 `/api/v1/workflows*`；运行列表/详情/发起运行经 `run/data` 消费 B4 `/api/v1/runs` 与 `/api/v1/workflows/{id}/runs`（状态机与节点推进由后端运行编排服务 拥有）；`layout/viewport` 由前端拥有/后端透传。效能看板、工作区两页、个人 Key 管理仍由 `assets/js/mock-data.js` 的 `MOCK` 具名导出提供，写操作只改内存；这四页自 2026-11-12 起**默认关闭**（导航隐藏、直达显示占位页），地址带 `?demo=1` 才恢复，开关存 sessionStorage `df-demo-pages`（`REQ-0018` / `SCN-0020`）。前端不直接持有数据库或鉴权态。
 - 服务：`server.js`（Node 原生 `http`）是组合根，做静态托管、`/` 302 与 `CMP-bff` 挂载；`CMP-bff` 只透明转发 `/api/v1/*` 与 `/healthz`，不承载业务逻辑。
 - 验证：`tools/check-docs.js`（五态文档）、`tools/check-deps.js`（依赖准入）、`tools/check-architecture.js`（ESM import 图与边界）、`tools/check-scenario-trace.js`（核对场景卡 / Playwright runner / 外部执行层；统计以 `design/scenarios/_index.md` 为准）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（Playwright 13 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）、`tools/verify-workflow-list.js` / `tools/verify-workflow-editor.js`（SCN-0018/0019，fake B3 + Playwright）；`npm test` 串联零依赖门禁、BFF 单测、Playwright 业务场景与工作流场景；人工 Safari 走查为发布门禁。
 - 明确不做：真实工作流执行引擎、Agent 运行时、CI/CD 触发、权限体系、密钥加密存储、移动端适配、前端持久化；BFF 不做 CORS、鉴权、TLS、DTO 映射、revision 缓存或聚合。
@@ -101,7 +101,7 @@ updated: 2026-11-12
 
 | 组件 | 操作 ID |
 |---|---|
-| `CMP-ui-shell` | `#renderShell`、`#topbar`、`#nav`、`#font-scale`、`#bell`、`#user-menu` |
+| `CMP-ui-shell` | `#renderShell`、`#topbar`、`#nav`、`#font-scale`、`#bell`、`#user-menu`、`#mock-page-gate` |
 | `CMP-workflow-list` | `#list`、`#create`、`#copy`、`#update`、`#delete`、`#import`、`#export` |
 | `CMP-workflow-editor` | `#open`、`#add-node`、`#connect-edge`、`#inspector`、`#validate`、`#save`、`#dsl` |
 | `CMP-instances` | `#list`、`#launch`、`#detail`、`#cancel`、`#decide`、`#session-log` |
@@ -116,6 +116,7 @@ updated: 2026-11-12
 ### 4.3 共享契约不变量
 
 - 13 页外壳结构一致；`DF.menu` 默认左缘、`#user-menu` 使用 `alignRight` 右缘语义，不得互换。
+- MOCK 页关闭只由 `CMP-ui-shell` 的 `DF.mockPageGate` / 导航过滤实现；页面 JS 不得各自判断 URL 或复制占位页。
 - 缩放系数只通过 `DF.zoomK()` / `DF.zoomOnFixed()` 获取；页面不得缓存或自算。
 - 弹窗 footer 按钮以最近容器为作用域绑定；同一 id 全文档唯一；先 `innerHTML` 后 `appendChild`。
 - 错误与校验在页面入口统一处理，业务数据缺失不得用 `?? 0` / `|| "Unknown"` 掩盖；展示性占位符除外。

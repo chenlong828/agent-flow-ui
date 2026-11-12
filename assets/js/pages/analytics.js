@@ -3,7 +3,16 @@
 import { DF } from '../ui.js';
 import { MOCK } from '../mock-data.js';
 
+/* 2026-11-12 起默认关闭（REQ-0018 / SCN-0020）：直达显示占位页，?demo=1 恢复演示。 */
+if (!DF.mockPageGate({
+  active: 'analytics',
+  breadcrumb: [{ label: '运行与运营' }, { label: '效能看板' }],
+  title: '效能看板',
+  subtitle: '交付价值与运行健康',
+  pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length
+})) init();
 
+function init() {
   const A = MOCK.analytics;
   const PAGE_SIZE = 5;
   const VERDICT_COLOR = { '通过': 'green', '回退': 'purple', '驳回': 'red', '不通过': 'red' };
@@ -211,3 +220,4 @@ import { MOCK } from '../mock-data.js';
   });
 
   render();
+}

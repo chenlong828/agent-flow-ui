@@ -9,6 +9,8 @@ import path from 'node:path';
 import { ROOT, startStaticServer, launchBrowser, openPage } from './test-harness.js';
 
 const PAGES = fs.readdirSync(path.join(ROOT, 'pages')).filter((f) => f.endsWith('.html')).sort();
+/* MOCK 页默认关闭（REQ-0018 / SCN-0020）：冒烟仍加载真实页面，统一带 ?demo=1。 */
+const DEMO_PAGES = new Set(['analytics', 'workspaces', 'workspace-detail', 'keys']);
 
 (async () => {
   const staticServer = await startStaticServer();
@@ -17,9 +19,10 @@ const PAGES = fs.readdirSync(path.join(ROOT, 'pages')).filter((f) => f.endsWith(
 
   for (const file of PAGES) {
     const name = file.replace(/\.html$/, '');
+    const query = DEMO_PAGES.has(name) ? '?demo=1' : '';
     let ctx;
     try {
-      ctx = await openPage(browser, staticServer.base, name);
+      ctx = await openPage(browser, staticServer.base, name, query);
       const painted = await ctx.page.locator('#app').evaluate((el) => el.innerHTML.trim().length > 0);
       if (ctx.errors.length || !painted) failed++;
       console.log((ctx.errors.length || !painted ? '✕ ' : '✓ ') + file + (painted ? '' : '  [页面未渲染出内容]'));

@@ -6,7 +6,16 @@
 import { DF } from '../ui.js';
 import { MOCK } from '../mock-data.js';
 
+/* 2026-11-12 起默认关闭（REQ-0018 / SCN-0020）：直达显示占位页，?demo=1 恢复演示。 */
+if (!DF.mockPageGate({
+  active: 'keys',
+  breadcrumb: [{ label: '基础配置' }, { label: '个人 Key 管理' }],
+  title: '个人 Key 管理',
+  subtitle: '密钥资产、校验与用途绑定',
+  pendingCount: (MOCK.instances || []).filter(i => i.status === '等待人工确认').length
+})) init();
 
+function init() {
   /* ---------------- 页面私有状态 ---------------- */
   let tabType = '全部';          // 全部 | git ssh-key | LLM API Key
   let kw = '';                   // 搜索关键字（名称/掩码）
@@ -379,3 +388,4 @@ import { MOCK } from '../mock-data.js';
 
   /* ---------------- 启动 ---------------- */
   renderList();
+}
