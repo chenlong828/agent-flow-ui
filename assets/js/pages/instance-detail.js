@@ -10,6 +10,7 @@ import { DF } from '../ui.js';
 import { request } from '../shared/http.js';
 import { createWorkflowData } from '../workflow/data.js';
 import { toEditorGraph } from '../workflow/model.js';
+import { renderMarkdown } from '../shared/markdown.js';
 import {
   createRunData,
   errorText,
@@ -61,7 +62,9 @@ const state = {
   error: null,
   timer: null,
   version: 0,
-  pending: 0
+  pending: 0,
+  md: {},
+  full: null
 };
 
 function shortId(id) {
@@ -323,6 +326,7 @@ function renderPanel() {
   const st = nodeState(node.id);
   const runNode = st.run;
   const confirmable = runNode && runNode.state === 'waiting_confirm';
+  state.md = {};
   panel.innerHTML =
     (confirmable ? confirmCard(node, runNode) : '') +
     '<div class="id-tabs">' +
@@ -341,6 +345,45 @@ function renderPanel() {
   if (state.tab === 'log') bodyEl.innerHTML = logTab(node, runNode);
   else bodyEl.innerHTML = summaryTab(node, st, runNode);
   if (confirmable) bindConfirm(node, runNode);
+  panel.querySelectorAll('[data-md]').forEach(function (btn) {
+    btn.onclick = function () { openMarkdownFull(btn.dataset.md); };
+  });
+}
+
+/** 登记一段 Markdown 并渲染；「全屏」按钮按 key 取回原文。 */
+function mdBlock(key, title, text) {
+  state.md[key] = { title: title || '节点消息', text: String(text == null ? '' : text) };
+  return '<div class="section-title">' + esc(title) + ' <span class="line"></span>' +
+    '<button class="btn sm" data-md="' + key + '" title="在整屏中查看">' + icon('panel', 12) + '全屏</button></div>' +
+    '<div class="md-body">' + renderMarkdown(text) + '</div>';
+}
+
+function closeMarkdownFull() {
+  if (!state.full) return;
+  state.full.close();
+  state.full = null;
+}
+
+function openMarkdownFull(key) {
+  const entry = state.md[key];
+  if (!entry) return;
+  closeMarkdownFull();
+  const overlay = document.createElement('div');
+  overlay.className = 'id-full';
+  overlay.innerHTML = '<div class="id-full-head"><b>' + esc(entry.title) + '</b>' +
+    '<button class="icon-btn" data-close title="关闭（Esc）">' + icon('x', 18) + '</button></div>' +
+    '<div class="id-full-body"><div class="md-body">' + renderMarkdown(entry.text) + '</div></div>';
+  document.body.appendChild(overlay);
+  const onKey = function (e) { if (e.key === 'Escape') close(); };
+  const close = function () {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+    if (state.full && state.full.overlay === overlay) state.full = null;
+  };
+  document.addEventListener('keydown', onKey);
+  overlay.querySelector('[data-close]').onclick = close;
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  state.full = { overlay: overlay, close: close };
 }
 
 function summaryTab(node, st, runNode) {
@@ -362,9 +405,7 @@ function summaryTab(node, st, runNode) {
     html += '<div class="section-title">判定结论 <span class="line"></span></div>' +
       '<pre class="id-pre">' + esc(typeof verdict === 'string' ? verdict : JSON.stringify(verdict, null, 2)) + '</pre>';
   }
-  if (runNode && runNode.message) {
-    html += '<div class="section-title">节点消息 <span class="line"></span></div><pre class="id-pre">' + esc(runNode.message) + '</pre>';
-  }
+  if (runNode && runNode.message) html += mdBlock('node', '节点消息', runNode.message);
   if (runNode && runNode.error) {
     html += '<div class="section-title">错误 <span class="line"></span></div>' +
       '<pre class="id-pre id-pre-err">' + esc((runNode.error.code || '') + '：' + (runNode.error.message || '')) + '</pre>';
@@ -394,7 +435,7 @@ function logTab(node, runNode) {
 function confirmCard(node, runNode) {
   return '<div class="id-confirm-card">' +
     '<h4>' + icon('warn', 14) + ' 待人工确认 · ' + esc(node.name) + '</h4>' +
-    (runNode.message ? '<pre class="id-pre">' + esc(runNode.message) + '</pre>' : '<div class="sub">执行节点正在等待确认决策。</div>') +
+    (runNode.message ? mdBlock('confirm', '确认说明', runNode.message) : '<div class="sub">执行节点正在等待确认决策。</div>') +
     '<input class="inp" id="cf-comment" placeholder="审批意见（批准选填 / 驳回必填）" style="margin:8px 0">' +
     '<div style="display:flex;gap:8px">' +
       '<button class="btn primary" id="cf-ok">' + icon('check', 12) + '批准，继续执行</button>' +

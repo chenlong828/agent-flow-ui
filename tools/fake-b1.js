@@ -93,7 +93,7 @@ for (const k of Object.keys(MOCK)) {
         error: null,
         nodes: [
           { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-5', verdict: null, message: '开始', error: null, dispatchedAt: iso(3), finishedAt: iso(2) },
-          { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'dispatched', taskId: 't-6', verdict: null, message: '', error: null, dispatchedAt: iso(2), finishedAt: null }
+          { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'dispatched', taskId: 't-6', verdict: null, message: '## 执行中\n\n- 步骤一\n- 步骤二', error: null, dispatchedAt: iso(2), finishedAt: null }
         ]
       },
       {

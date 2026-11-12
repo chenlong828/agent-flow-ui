@@ -49,6 +49,7 @@ updated: 2026-11-12
 | 工作流数据服务 | `assets/js/workflow/data.js` | `CMP-workflow-data` §1 的 11 个操作 | B3 工作流唯一读写入口；页面不得直接 `fetch /api/v1/workflows*`；规格见 `components/workflow-data/spec.md` |
 | 运行数据服务 | `assets/js/run/data.js` | `CMP-run-data` §0 的 6 个操作 + 状态词表 | B4 run 唯一读写入口；页面不得直接 `fetch /api/v1/runs*`；规格见 `components/run-data/spec.md` |
 | Markdown 编辑器适配 | `assets/js/shared/markdown-editor.js` | `mountMarkdown/destroyMarkdown` | Milkdown 7.7.0（`DEP-0001`）唯一入口；Skill 正文与运行意图共用；不泄漏第三方类型 |
+| Markdown 显示渲染 | `assets/js/shared/markdown.js` | `renderMarkdown/renderInline` | 只读渲染模型输出（运行节点消息）；先转义后出标签，链接只放行 http(s)/mailto/站内路径 |
 | 工作流领域模型/校验 | `assets/js/workflow/model.js`、`validate.js` | 图映射、ID、DSL、B3 规则镜像 | 无 DOM/network；供数据服务与编辑器复用 |
 | 工作流视图 | `assets/js/workflow/views/{canvas,inspector,dsl}.js` | 画布/属性/DSL 纯视图 | 编辑器按领域与视图拆分；交互编排留在页面 |
 | 同源 HTTP 传输 | `assets/js/shared/http.js` | `request/requestText/ApiError` | B3 工作流复用；B1 仍走 `api.js` 的 ETag/文档缓存 |
@@ -66,6 +67,7 @@ updated: 2026-11-12
 | 运行两页 | `run/data` | B4 `/api/v1/runs*` 与启动端点 | HTTP，同源 | 唯一读写入口；不推断状态机、不缓存 |
 | 运行两页 | `workflow/data` / `workflow/model` | 工作流图与坐标 | HTTP + 同步 | 详情轨迹只读工作流图，不改图 |
 | Skill 正文 / 运行意图 | `shared/markdown-editor` | `mountMarkdown/destroyMarkdown` | 动态 import vendor | 只经适配层使用 Milkdown，页面不直接 import vendor |
+| 运行详情 | `shared/markdown` | `renderMarkdown` | 同步，ESM import | 节点消息只读渲染；不执行原始 HTML |
 | `CMP-workspaces` 两页 | `WSC` | 目录树/跨页联动 | 同步，ESM import | 不供其他页面使用 |
 | 页面 ↔ 页面 | — | URL 参数 / sessionStorage 单键 | 跳转或一次性传递 | 禁止互相 `import`/调用 JS |
 | `server.js` | 静态文件 / `CMP-bff` | `/pages/*`、`/assets/*`、`/api/v1/*` | HTTP / 进程内 | 组合根；不承载业务逻辑 |

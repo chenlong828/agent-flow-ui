@@ -130,6 +130,12 @@ async function scn0004T2(browser) {
     assert.equal(await ctx.page.locator('.cv-node.st-wait').count(), 1);
     assert.equal(await ctx.page.locator('.id-confirm-card').count(), 1);
     assert.match(await ctx.page.locator('body').textContent(), /请确认方案/);
+    assert.equal(await ctx.page.locator('.id-confirm-card .md-body').count(), 1);
+    await ctx.page.locator('.id-confirm-card [data-md]').click();
+    assert.equal(await ctx.page.locator('.id-full').count(), 1);
+    assert.match(await ctx.page.locator('.id-full').innerText(), /请确认方案/);
+    await ctx.page.keyboard.press('Escape');
+    assert.equal(await ctx.page.locator('.id-full').count(), 0);
     assert.equal(await ctx.page.locator('#id-pause').isDisabled(), true);
     assert.equal(await ctx.page.locator('#id-stop').count(), 1);
     noErrors(ctx);
@@ -187,6 +193,8 @@ async function scn0004T5(browser) {
 async function scn0004T4(browser) {
   const ctx = await openRunPage(browser, 'instance-detail', 'id=' + RUN_RUNNING);
   try {
+    assert.equal(await ctx.page.locator('#id-panel .md-body h2').innerText(), '执行中');
+    assert.equal(await ctx.page.locator('#id-panel .md-body li').count(), 2);
     await ctx.page.locator('#id-stop').click();
     await ctx.page.locator('#mc-no').click();
     await ctx.page.waitForTimeout(120);
