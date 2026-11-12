@@ -31,6 +31,8 @@ const TAB_STATE = {
   已结束: ['done']
 };
 
+const DEFAULT_WORKSPACE_PATH = '/Users/chenlong/hundsun/af-workspace-demo';
+
 const state = { runs: [], workflows: new Map(), loading: true, error: null, now: Date.now(), editor: null };
 
 function currentTab() {
@@ -239,7 +241,7 @@ async function openLaunch() {
         '<select class="inp" id="rn-harness">' + options + '</select>',
         { required: true, hint: usable.length ? '只列出已绑定执行节点且启用的 Harness' : '没有可用的执行节点：请先在 Harness 详情登记 clientId 与凭据' }) +
       DF.field('工作区路径',
-        '<input class="inp mono" id="rn-path" placeholder="/tmp/agentflow/ws-1" autocomplete="off">',
+        '<input class="inp mono" id="rn-path" value="' + esc(DEFAULT_WORKSPACE_PATH) + '" placeholder="' + esc(DEFAULT_WORKSPACE_PATH) + '" autocomplete="off">',
         { required: true, hint: '执行节点上的绝对路径；同一 clientId + 路径已有实例时复用' }) +
       DF.field('启动意图（Markdown）',
         '<div class="rn-editor" id="rn-intent"></div>',

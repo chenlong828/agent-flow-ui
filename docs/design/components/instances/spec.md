@@ -68,7 +68,7 @@ updated: 2026-11-12
 |---|---|---|---|
 | 工作流 | 下拉（B3 全部工作流） | 是 | 选项带 `r<revision> · <nodeCount> 节点`；启动时后端冻结图快照 |
 | 执行 Harness | 下拉（`/harnesses`） | 是 | 只列 `enabled && clientId`；未绑定/停用的选项置灰并注明原因；无可用项时提交按钮禁用 |
-| 工作区路径 | 单行文本（绝对路径） | 是 | 前端校验以 `/` 开头；同 `clientId` + 路径已有实例时后端复用 |
+| 工作区路径 | 单行文本（绝对路径） | 是 | 默认值 `/Users/chenlong/hundsun/af-workspace-demo`（可改）；前端校验以 `/` 开头；同 `clientId` + 路径已有实例时后端复用 |
 | 启动意图 | Milkdown 所见即所得编辑器 | 是 | 保存时取 `getMarkdown()` 作为 `intentMarkdown`，由 start 节点写入 task-space |
 | autoConfirm | 复选框 | 否 | 提交到 `autoConfirm`；`true` 时 confirm 节点自动通过 |
 
