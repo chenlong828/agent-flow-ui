@@ -5,7 +5,7 @@ component: CMP-workflow-editor
 requirement: REQ-0017
 scenario: SCN-0019
 status: active
-updated: 2026-10-30
+updated: 2026-11-12
 ---
 
 # 工作流编辑器（B3 live）
@@ -31,11 +31,11 @@ updated: 2026-10-30
 - 预算：页面编排约 28 KB + 三视图约 7 KB + 本规格；远低于 120k token。
 - 单独运行：`npm start` → `/pages/workflow-editor.html?id=<workflowId>`。
 - 删除测试：删除后工作流只能被创建/删除，不能改结构、校验或导出 DSL，编排能力整体消失；故保留独立页面。
-- 已知偏差：元数据与图是两次 PUT，非原子；元数据成功、图失败时列表名称已变、图未变（页面保留编辑态并提示）。无自动保存/草稿/版本历史/发布/运行。现有 B3 测试数据需确认后清理。
+- 已知偏差：2026-11-12 已对齐 B3 七类节点（删除 `fanin`、新增 `split`、`fanout` 唯一前驱必须是 `split`）；元数据与图是两次 PUT，非原子；元数据成功、图失败时列表名称已变、图未变（页面保留编辑态并提示）。无自动保存/草稿/版本历史/发布/运行。现有 B3 测试数据需确认后清理。
 
 ## 1 页面定位
 
-以画布维护「阶段 + 节点 + 有向边」结构，节点绑定专家；评审/确认节点可发回退边；fanout/fanin 表示并行。右栏编辑属性，底部显示校验问题；DSL 只读。
+以画布维护「阶段 + 节点 + 有向边」结构，节点绑定专家；评审/确认节点可发回退边；`split` 负责拆分、`fanout` 负责展开并行（`fanout` 的唯一 seq 前驱必须是 `split`）。右栏编辑属性，底部显示校验问题；DSL 只读。
 
 ## 2 布局
 
@@ -48,8 +48,8 @@ updated: 2026-10-30
 
 ## 3 编辑与约束
 
-- 节点类型：`start|end|agent|review|confirm|fanout|fanin`；边：`seq|rollback`；ID 由 `model.newId` 生成，符合 B3 规则。
-- `start/end/agent/review/fanout/fanin` 必须绑定专家；`confirm` 禁止绑定专家；`fanout` 唯一指向一个 `fanin`，`fanin` 唯一来自 `fanout`；回退只能从 review/confirm 指向 seq 祖先且不能指向 end。
+- 节点类型：`start|end|agent|split|review|confirm|fanout`（与 B3 七类一致，`fanin` 已删除）；边：`seq|rollback`；ID 由 `model.newId` 生成，符合 B3 规则。
+- `start/end/agent/split/review/fanout` 必须绑定专家；`confirm` 禁止绑定专家；`fanout` 的唯一 seq 前驱必须是 `split`；回退只能从 review/confirm 指向 seq 祖先且不能指向 end。
 - 顺序边每个节点最多一进一出；拖出边会替换同源/同目标的旧 seq；回退边每个源最多一条。
 - 保存前本地校验 errors 必须为 0；服务端 400 的 `details.issues` 回填到面板/红框，并保留编辑态。
 

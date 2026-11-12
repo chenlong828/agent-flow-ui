@@ -37,8 +37,8 @@ export function nodeHtml(graph, sel, marked, expertOf) {
     if (node.type === 'confirm') sub = '等待人工确认';
     else if (node.type === 'agent') sub = expert ? expert.role || expert.name : '未绑定专家';
     else if (node.type === 'review') sub = '评审/校验';
-    else if (node.type === 'fanout') sub = 'fan-out 并行';
-    else if (node.type === 'fanin') sub = 'fan-in 聚合';
+    else if (node.type === 'split') sub = '拆分（产物 task.db）';
+    else if (node.type === 'fanout') sub = '展开（前驱必须是 split）';
     else if (node.type === 'start') sub = '开始';
     else sub = '结束';
     return '<div class="cv-node ' + metaNode.cls + (selected ? ' sel' : '') + (bad ? ' has-error' : '') + '" data-node="' + esc(node.id) + '"' +

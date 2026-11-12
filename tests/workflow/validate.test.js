@@ -69,11 +69,11 @@ test('回退目标必须是 seq 祖先且不能回退到结束', () => {
   assert.ok(report.errors.some((e) => e.code === 'rollback_target_not_ancestor' || e.code === 'invalid_rollback'));
 });
 
-test('fanout/fanin 必须成对', () => {
+test('fanout 的唯一 seq 前驱必须是 split', () => {
   const graph = validGraph();
   graph.nodes = [
     { id: 'n1', type: 'start', name: '开始', stageId: null, expertId: EXPERT },
-    { id: 'n2', type: 'fanout', name: '并发', stageId: null, expertId: EXPERT },
+    { id: 'n2', type: 'fanout', name: '展开', stageId: null, expertId: EXPERT },
     { id: 'n3', type: 'agent', name: '执行', stageId: null, expertId: EXPERT },
     { id: 'n4', type: 'end', name: '结束', stageId: null, expertId: EXPERT }
   ];
@@ -83,7 +83,31 @@ test('fanout/fanin 必须成对', () => {
     { id: 'e3', from: 'n3', to: 'n4', kind: 'seq' }
   ];
   const report = validateGraph(graph, [{ id: EXPERT, enabled: true }]);
-  assert.ok(report.errors.some((e) => e.code === 'fanout_fanin_unpaired'));
+  assert.ok(report.errors.some((e) => e.code === 'fanout_requires_split'));
+});
+
+test('split → fanout 是合法链路', () => {
+  const graph = validGraph();
+  graph.nodes = [
+    { id: 'n1', type: 'start', name: '开始', stageId: null, expertId: EXPERT },
+    { id: 'n2', type: 'split', name: '拆分', stageId: null, expertId: EXPERT },
+    { id: 'n3', type: 'fanout', name: '展开', stageId: null, expertId: EXPERT },
+    { id: 'n4', type: 'end', name: '结束', stageId: null, expertId: EXPERT }
+  ];
+  graph.edges = [
+    { id: 'e1', from: 'n1', to: 'n2', kind: 'seq' },
+    { id: 'e2', from: 'n2', to: 'n3', kind: 'seq' },
+    { id: 'e3', from: 'n3', to: 'n4', kind: 'seq' }
+  ];
+  const report = validateGraph(graph, [{ id: EXPERT, enabled: true }]);
+  assert.deepEqual(report.errors, []);
+});
+
+test('fanin 已从节点类型闭集移除', () => {
+  const graph = validGraph();
+  graph.nodes[1].type = 'fanin';
+  const report = validateGraph(graph, [{ id: EXPERT, enabled: true }]);
+  assert.ok(report.errors.some((e) => e.code === 'invalid_node_type'));
 });
 
 test('编辑器图校验前先剥离 x/y/box', () => {

@@ -216,24 +216,18 @@ export function topologyIssues(graph) {
   });
 
   graph.nodes.forEach(function (n) {
-    if (n.type === 'fanout') {
-      const out = seqOut.get(n.id) || [];
-      if (out.length !== 1 || !nodes.get(out[0].to) || nodes.get(out[0].to).type !== 'fanin') {
-        push(issues, 'fanout_fanin_unpaired', nPath(n.id), 'fanout 必须唯一指向一个 fanin');
-      }
-    }
-    if (n.type === 'fanin') {
-      const incoming = seqIn.get(n.id) || [];
-      if (incoming.length !== 1 || !nodes.get(incoming[0].from) || nodes.get(incoming[0].from).type !== 'fanout') {
-        push(issues, 'fanout_fanin_unpaired', nPath(n.id), 'fanin 必须唯一来自一个 fanout');
-      }
+    if (n.type !== 'fanout') return;
+    const incoming = seqIn.get(n.id) || [];
+    const from = incoming.length === 1 ? nodes.get(incoming[0].from) : null;
+    if (!from || from.type !== 'split') {
+      push(issues, 'fanout_requires_split', nPath(n.id), 'fanout 的唯一 seq 前驱必须是 split');
     }
   });
   return issues;
 }
 
 function requiresExpert(type) {
-  return type === 'start' || type === 'end' || type === 'agent' || type === 'review' || type === 'fanout' || type === 'fanin';
+  return type === 'start' || type === 'end' || type === 'agent' || type === 'split' || type === 'review' || type === 'fanout';
 }
 
 /** 绑定矩阵 + 可选的专家状态检查；专家列表不全时只检查类型矩阵。 */

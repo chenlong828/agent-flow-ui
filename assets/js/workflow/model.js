@@ -11,7 +11,7 @@
  *   viewport                   {x,y,zoom}
  */
 
-export const NODE_TYPES = ['start', 'end', 'agent', 'review', 'confirm', 'fanout', 'fanin'];
+export const NODE_TYPES = ['start', 'end', 'agent', 'split', 'review', 'confirm', 'fanout'];
 export const EDGE_KINDS = ['seq', 'rollback'];
 export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,8 +25,8 @@ export const NODE_META = {
   agent: { label: '专家节点', short: '专家', cls: 't-agent', icon: 'user' },
   review: { label: '评审节点', short: '评审', cls: 't-review', icon: 'check' },
   confirm: { label: '人工确认', short: '确认', cls: 't-confirm', icon: 'warn' },
-  fanout: { label: 'fan-out 网关', short: 'fan-out', cls: 't-gateway', icon: 'flow' },
-  fanin: { label: 'fan-in 网关', short: 'fan-in', cls: 't-gateway', icon: 'flow' }
+  split: { label: '拆分节点', short: '拆分', cls: 't-gateway', icon: 'flow' },
+  fanout: { label: '展开节点', short: 'fanout', cls: 't-gateway', icon: 'flow' }
 };
 
 export function isObject(value) {

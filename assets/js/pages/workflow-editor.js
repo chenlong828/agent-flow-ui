@@ -33,7 +33,7 @@ const PALETTE = [
   { group: '基础', types: ['start', 'end', 'stage'] },
   { group: '执行', types: ['agent'] },
   { group: '控制', types: ['review', 'confirm'] },
-  { group: '并行', types: ['fanout', 'fanin'] }
+  { group: '并行', types: ['split', 'fanout'] }
 ];
 
 const state = {

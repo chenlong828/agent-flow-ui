@@ -17,4 +17,4 @@ updated: 2026-10-30
 | 约束 | 同源 BFF；写操作带 `If-Match`；只有合法图可保存；本地校验与服务端规则一致；`layout/viewport` 由前端按 `dsl.schema.json` 自校、后端透传；无 MOCK 回落；桌面优先；无构建、无新增运行时依赖；模块按 ESM（`docs/history/works/2026-10-30-frontend-esm/`）。 |
 | 影响场景 | `SCN-0019`（`design/scenarios/flow/workflow-editor/edit-workflow-live/scenario.md`） |
 | 澄清记录 | 2026-10-30 交互式评审：纯手动保存（取消自动保存/草稿）；保存置灰 + 问题元素红框 + 校验面板 + 图级阻断条；视口不算未保存修改、随保存提交；离开警告；移除发布/版本/运行；新建入口由列表向导/模板复制提供合法起点。契约依据 `history/decisions/2026-10-30-frontend-esm.md` 与 B3 `2026-10-30-workflow-contract-boundary`。 |
-| 状态 | `delivered`（2026-10-30；场景 `verified`） |
+| 状态 | `delivered`（2026-10-30；场景 `verified`；2026-11-12 对齐 B3 七类节点：删除 `fanin`、新增 `split`、`fanout` 的唯一 seq 前驱必须是 `split`，只影响调色板、本地校验与节点副标题） |

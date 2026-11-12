@@ -37,7 +37,7 @@ export function nodeInspector(node, graph, experts) {
     section('专家绑定',
       field('绑定专家', '<select class="inp" id="if-expert"' + (requires ? '' : ' disabled') + '>' +
         expertOptions(node.expertId, !requires, experts) + '</select>',
-      requires ? 'start/end/agent/review/fanout/fanin 必须绑定专家' : 'confirm 节点禁止绑定专家')) +
+      requires ? 'start/end/agent/split/review/fanout 必须绑定专家' : 'confirm 节点禁止绑定专家')) +
     '<button class="btn danger" id="if-del" style="width:100%">' + icon('trash', 14) + '删除节点</button>';
 }
 
