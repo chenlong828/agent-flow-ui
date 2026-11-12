@@ -23,6 +23,7 @@ updated: 2026-11-12
 | M10 | 工作流两页同源接入（B3）：列表 + 编辑器、`workflow/data` 唯一写入口、手动保存与严格校验 | 已完成（2026-10-30；24 纯逻辑 + SCN-0018 14/14 + SCN-0019 11/11；真实 B3 读写） | `REQ-0016` / `REQ-0017` / `SCN-0018` / `SCN-0019` / `works/2026-10-30-workflow-ui/` |
 | M11 | 运行实例 live（B4）：列表/详情/发起运行/终止/人工确认/会话日志；工作流编辑器对齐七类节点 | 已完成（2026-11-12；SCN-0004 5/5、M1 49/49、13 页冒烟、真实后端发起/终止） | `REQ-0004` / `REQ-0017` / `SCN-0004` / `history/works/2026-11-12-run-live-integration/` |
 | M12 | MOCK 演示页临时关闭：导航隐藏 + 直达占位页 + `?demo=1` 演示模式 | 已完成（2026-11-12；SCN-0020 22/22、M1 50/50、13 页冒烟、`npm test` 通过） | `REQ-0018` / `SCN-0020` / `history/works/2026-11-12-mock-pages-off/` |
+| M13 | 真实专家与 Skill 内容提取（旁路）：16 专家 / 30 Skill 入 B1；执行 `catalog.md`、`import-plan.md` | 主体完成（2026-11-02；S4 工作流 9 条、4 工具、4 类知识未做，另立工序） | `history/works/2026-11-01-expert-skill-extraction/` |
 
 > **M1 追溯与验收（2026-10-23 用户要求）**：10 个页面组件已补 `REQ-0002..0011` + M1 场景，组件 frontmatter 反查、`check-docs` 强制。`tools/verify-m1-scenarios.js` 覆盖 10 场景 × 3 正 1 反，40/40 通过；SCN 转 `verified`、REQ 转 `delivered`，R7/R10 关闭。详见 `history/works/2026-10-23-m1-scenario-verification/result.md`。
 
@@ -46,4 +47,3 @@ updated: 2026-11-12
 - `works/2026-10-27-skill-package`：Skill 包形态重构（`REQ-0015`；对齐 B1 v1 契约，施工中）。
 - `works/2026-10-30-workflow-ui`：工作流两页同源接入（`REQ-0016` / `REQ-0017`；实现、fake + 真实写路径与文档已收口，存量测试数据清理待确认）。
 - `works/2026-11-12-list-pagination-proposal`：列表分页统一提案（旁路，待裁；无代码改动，裁定后转 REQ/SCN）。
-- `works/2026-11-01-expert-skill-extraction`：从 `uft-issue`/`web-dev` 提取专家与 Skill 内容（旁路；16 专家 / 24 Skill；24 条 Skill 含 references 已入 API，专家与工作流待做）。
