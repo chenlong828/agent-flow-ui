@@ -3,7 +3,7 @@ layer: design
 module: global
 status: current
 generated: true
-updated: 2026-10-30
+updated: 2026-11-12
 ---
 
 # 场景索引
@@ -13,8 +13,8 @@ updated: 2026-10-30
 ## 统计
 
 - 场景：17
-- 文档用例：72
-- Playwright runner：55
+- 文档用例：73
+- Playwright runner：56
 - 其他执行层：17（引擎 / BFF / 真实 B1）
 
 ## 清单
@@ -22,7 +22,7 @@ updated: 2026-10-30
 | 场景 | 标题 | 领域 / 价值流 | 状态 | 路径 |
 |---|---|---|---|---|
 | SCN-0001 | SCN-0001 顶栏用户区下拉菜单 | shell / topbar | verified | `design/scenarios/shell/topbar/user-menu/scenario.md` |
-| SCN-0004 | SCN-0004 实例监控与运行控制 | operations / instances | verified | `design/scenarios/operations/instances/control-instance/scenario.md` |
+| SCN-0004 | SCN-0004 运行实例监控与发起运行（B4 live） | operations / instances | verified | `design/scenarios/operations/instances/control-instance/scenario.md` |
 | SCN-0005 | SCN-0005 Skill 维护与渐进披露 | assets / skill-library | verified | `design/scenarios/assets/skill-library/manage-skill/scenario.md` |
 | SCN-0006 | SCN-0006 专家注册与组合配置 | assets / expert-registry | verified | `design/scenarios/assets/expert-registry/manage-expert/scenario.md` |
 | SCN-0007 | SCN-0007 Harness 注册与健康治理 | assets / harness-pool | verified | `design/scenarios/assets/harness-pool/manage-harness/scenario.md` |

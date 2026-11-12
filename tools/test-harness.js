@@ -126,7 +126,7 @@ export async function openPage(browser, base, pageName, query = '', opts = {}) {
     const apiPath = url.pathname.replace(/^\/api\/v1/, '') + url.search;
     try {
       const body = await requestBody(req);
-      const result = (opts.b3 && /^\/workflows(?:\/|\?|$)/.test(apiPath))
+      const result = (opts.b3 && /^\/workflows(?:\/|\?|$)/.test(apiPath) && !/\/runs(?:$|\?)/.test(apiPath))
         ? await opts.b3.handle(req.method(), apiPath, body, req.headers())
         : await handle(req.method(), apiPath, body, req.headers());
       await fulfill(route, result);

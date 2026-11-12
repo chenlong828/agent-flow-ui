@@ -22,6 +22,191 @@ for (const k of Object.keys(MOCK)) {
   var revs = Object.create(null);
   var seq = 0;
 
+  /* ---------------- 运行编排夹具（B4 run API 子集） ---------------- */
+  var WORKFLOW_IN_RUNS = '11111111-1111-4111-8111-111111111111';
+  var runs = [];
+  var lastStart = null;
+
+  function resetRuns() {
+    runs = [
+      {
+        runId: 'aaaaaaaa-0000-4000-8000-000000000001',
+        workflowId: WORKFLOW_IN_RUNS,
+        workflowRevision: 3,
+        harnessId: 'h-1',
+        clientId: 'client-stub-01',
+        instanceId: 'bbbbbbbb-0000-4000-8000-000000000001',
+        state: 'done',
+        outcome: 'succeeded',
+        currentNodeId: 'n3',
+        archiveState: 'stored',
+        createdAt: iso(30), startedAt: iso(30), finishedAt: iso(28),
+        workspacePath: '/tmp/fake/ws-1',
+        taskSpacePath: '/tmp/fake/ws-1/.agent-flow/task/aaaaaaaa-0000-4000-8000-000000000001',
+        autoConfirm: false,
+        finalMessage: '完成',
+        error: null,
+        nodes: [
+          { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-1', verdict: null, message: '开始', error: null, dispatchedAt: iso(30), finishedAt: iso(29) },
+          { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'succeeded', taskId: 't-2', verdict: null, message: '执行完成', error: null, dispatchedAt: iso(29), finishedAt: iso(28) },
+          { nodeId: 'n3', nodeType: 'end', visit: 1, state: 'succeeded', taskId: 't-3', verdict: null, message: '完成', error: null, dispatchedAt: iso(28), finishedAt: iso(28) }
+        ]
+      },
+      {
+        runId: 'aaaaaaaa-0000-4000-8000-000000000002',
+        workflowId: WORKFLOW_IN_RUNS,
+        workflowRevision: 3,
+        harnessId: 'h-1',
+        clientId: 'client-stub-01',
+        instanceId: 'bbbbbbbb-0000-4000-8000-000000000002',
+        state: 'waiting_confirm',
+        outcome: null,
+        currentNodeId: 'n2',
+        archiveState: 'none',
+        createdAt: iso(10), startedAt: iso(10), finishedAt: null,
+        workspacePath: '/tmp/fake/ws-2',
+        taskSpacePath: '/tmp/fake/ws-2/.agent-flow/task/aaaaaaaa-0000-4000-8000-000000000002',
+        autoConfirm: false,
+        finalMessage: null,
+        error: null,
+        nodes: [
+          { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-4', verdict: null, message: '开始', error: null, dispatchedAt: iso(10), finishedAt: iso(9) },
+          { nodeId: 'n2', nodeType: 'confirm', visit: 1, state: 'waiting_confirm', taskId: null, verdict: null, message: '请确认方案', error: null, dispatchedAt: null, finishedAt: null }
+        ]
+      },
+      {
+        runId: 'aaaaaaaa-0000-4000-8000-000000000003',
+        workflowId: WORKFLOW_IN_RUNS,
+        workflowRevision: 3,
+        harnessId: 'h-1',
+        clientId: 'client-stub-01',
+        instanceId: 'bbbbbbbb-0000-4000-8000-000000000003',
+        state: 'running',
+        outcome: null,
+        currentNodeId: 'n2',
+        archiveState: 'none',
+        createdAt: iso(3), startedAt: iso(3), finishedAt: null,
+        workspacePath: '/tmp/fake/ws-3',
+        taskSpacePath: '/tmp/fake/ws-3/.agent-flow/task/aaaaaaaa-0000-4000-8000-000000000003',
+        autoConfirm: false,
+        finalMessage: null,
+        error: null,
+        nodes: [
+          { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-5', verdict: null, message: '开始', error: null, dispatchedAt: iso(3), finishedAt: iso(2) },
+          { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'dispatched', taskId: 't-6', verdict: null, message: '', error: null, dispatchedAt: iso(2), finishedAt: null }
+        ]
+      },
+      {
+        runId: 'aaaaaaaa-0000-4000-8000-000000000004',
+        workflowId: WORKFLOW_IN_RUNS,
+        workflowRevision: 3,
+        harnessId: 'h-1',
+        clientId: 'client-stub-01',
+        instanceId: 'bbbbbbbb-0000-4000-8000-000000000004',
+        state: 'done',
+        outcome: 'cancelled',
+        currentNodeId: 'n1',
+        archiveState: 'none',
+        createdAt: iso(90), startedAt: iso(90), finishedAt: iso(89),
+        workspacePath: '/tmp/fake/ws-4',
+        taskSpacePath: '/tmp/fake/ws-4/.agent-flow/task/aaaaaaaa-0000-4000-8000-000000000004',
+        autoConfirm: false,
+        finalMessage: null,
+        error: { code: 'cancelled', message: '运行已取消' },
+        nodes: [
+          { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'failed', taskId: 't-7', verdict: null, message: '', error: { code: 'cancelled', message: '任务已取消' }, dispatchedAt: iso(90), finishedAt: iso(89) }
+        ]
+      }
+    ];
+  }
+  resetRuns();
+
+  function runSummary(run) {
+    return {
+      runId: run.runId, workflowId: run.workflowId, workflowRevision: run.workflowRevision,
+      harnessId: run.harnessId, clientId: run.clientId, instanceId: run.instanceId,
+      state: run.state, outcome: run.outcome, currentNodeId: run.currentNodeId,
+      archiveState: run.archiveState, createdAt: run.createdAt, startedAt: run.startedAt, finishedAt: run.finishedAt
+    };
+  }
+  function runDetail(run) {
+    return Object.assign(runSummary(run), {
+      workspacePath: run.workspacePath, taskSpacePath: run.taskSpacePath, autoConfirm: run.autoConfirm,
+      finalMessage: run.finalMessage, error: run.error, nodes: run.nodes.slice()
+    });
+  }
+  function runNotFound() {
+    return { status: 404, body: { error: { code: 'run_not_found', message: '运行不存在', details: { runId: '' } } } };
+  }
+  function runResource(parts, method, body, headers, query) {
+    var id = parts[1];
+    if (method === 'GET' && parts.length === 1) {
+      var items = runs.slice();
+      if (query.state) items = items.filter(function (r) { return r.state === query.state; });
+      if (query.workflowId) items = items.filter(function (r) { return r.workflowId === query.workflowId; });
+      items.sort(function (a, b) { return Date.parse(b.createdAt) - Date.parse(a.createdAt); });
+      var limit = Math.max(1, Math.min(200, Number(query.limit) || 50));
+      var offset = Math.max(0, Number(query.offset) || 0);
+      return Promise.resolve({ status: 200, body: { items: items.slice(offset, offset + limit).map(runSummary), total: items.length, limit: limit, offset: offset } });
+    }
+    var run = runs.find(function (r) { return r.runId === id; });
+    if (!run) return Promise.resolve(runNotFound());
+    if (method === 'GET' && parts.length === 2) return Promise.resolve({ status: 200, body: runDetail(run) });
+    if (method === 'POST' && parts[2] === 'cancel') {
+      if (run.state !== 'done') {
+        run.state = 'done'; run.outcome = 'cancelled'; run.finishedAt = new Date().toISOString();
+        run.error = run.error || { code: 'cancelled', message: '运行已取消' };
+        run.nodes.forEach(function (n) { if (n.state === 'dispatched' || n.state === 'waiting_confirm') { n.state = 'failed'; n.error = { code: 'cancelled', message: '任务已取消' }; } });
+      }
+      return Promise.resolve({ status: 200, body: runDetail(run) });
+    }
+    if (method === 'POST' && parts[2] === 'nodes' && parts[4] === 'decision') {
+      var nodeId = parts[3];
+      var node = run.nodes.find(function (n) { return n.nodeId === nodeId; });
+      if (!node || node.state !== 'waiting_confirm') {
+        return Promise.resolve({ status: 409, body: { error: { code: 'invalid_state', message: '当前状态不允许该操作', details: { reason: '节点不在等待确认状态' } } } });
+      }
+      var decision = body && body.decision;
+      if (decision !== 'pass' && decision !== 'reject') {
+        return Promise.resolve({ status: 400, body: { error: { code: 'validation_error', message: 'decision 必须是 pass 或 reject' } } });
+      }
+      node.state = decision === 'pass' ? 'succeeded' : 'rejected';
+      node.finishedAt = new Date().toISOString();
+      node.message = (body.comment || node.message || '');
+      node.verdict = { decision: decision, reason: body.comment || '' };
+      run.state = decision === 'pass' ? 'running' : 'running';
+      run.currentNodeId = 'n3';
+      if (decision === 'pass') {
+        run.nodes.push({ nodeId: 'n3', nodeType: 'end', visit: 1, state: 'dispatched', taskId: 't-8', verdict: null, message: '', error: null, dispatchedAt: new Date().toISOString(), finishedAt: null });
+      }
+      return Promise.resolve({ status: 200, body: runDetail(run) });
+    }
+    if (method === 'GET' && parts[2] === 'nodes' && parts[4] === 'session-log') {
+      var target = run.nodes.find(function (n) { return n.nodeId === parts[3]; });
+      if (!target || !target.taskId) return Promise.resolve(notFound());
+      return Promise.resolve({ status: 200, body: null, headers: { 'Content-Type': 'application/x-ndjson', 'Content-Encoding': 'gzip', 'X-Checksum-Sha256': 'x' } });
+    }
+    return Promise.resolve(notFound());
+  }
+  function startRun(workflowId, body) {
+    lastStart = { workflowId: workflowId, body: body };
+    if (!body || !body.harnessId || !body.workspacePath || body.intentMarkdown == null) {
+      return Promise.resolve({ status: 400, body: { error: { code: 'validation_error', message: '缺少必填字段' } } });
+    }
+    var id = 'aaaaaaaa-0000-4000-8000-' + String(100 + (++seq)).padStart(12, '0');
+    var run = {
+      runId: id, workflowId: workflowId, workflowRevision: 1, harnessId: body.harnessId,
+      clientId: 'client-stub-01', instanceId: 'bbbbbbbb-0000-4000-8000-' + String(200 + seq).padStart(12, '0'),
+      state: 'running', outcome: null, currentNodeId: 'n1', archiveState: 'none',
+      createdAt: new Date().toISOString(), startedAt: new Date().toISOString(), finishedAt: null,
+      workspacePath: body.workspacePath, taskSpacePath: body.workspacePath + '/.agent-flow/task/' + id,
+      autoConfirm: Boolean(body.autoConfirm), finalMessage: null, error: null,
+      nodes: [{ nodeId: 'n1', nodeType: 'start', visit: 1, state: 'dispatched', taskId: 't-' + id, verdict: null, message: '', error: null, dispatchedAt: new Date().toISOString(), finishedAt: null }]
+    };
+    runs.unshift(run);
+    return Promise.resolve({ status: 201, body: { runId: id }, headers: { Location: '/api/v1/runs/' + id } });
+  }
+
   var SKILL_MD_LIMIT = 16384;
   var FILE_LIMIT = 20 * 1024 * 1024;
   var PACKAGE_LIMIT = 100 * 1024 * 1024;
@@ -369,7 +554,9 @@ for (const k of Object.keys(MOCK)) {
       id: h.id, name: h.name, kind: KIND[h.type] || h.kind || 'server', address: h.address,
       accessMode: ACCESS[h.accessMode] || h.accessMode || 'agent', description: h.desc || '',
       concurrencyMax: h.max || 1, queuePolicy: h.queuePolicy || 'fifo', tags: (h.tags || []).slice(),
-      enabled: !h._disabled, health: HEALTH[h.health] || 'unknown',
+      enabled: !h._disabled, clientId: h.clientId || null,
+      clientToken: h.clientId ? 'fake-token-' + h.id : null,
+      health: HEALTH[h.health] || 'unknown',
       lastHeartbeatAt: iso(h.heartbeatM), toolCount: h.toolCount || 0,
       revision: rev('harness', h.id), createdAt: createdAt(h), updatedAt: createdAt(h)
     };
@@ -527,6 +714,7 @@ for (const k of Object.keys(MOCK)) {
   }
 
   export const fakeB1 = {
+    lastStartRequest: function () { return lastStart; },
     expireDrafts: function () {
       Object.keys(drafts).forEach(function (id) { drafts[id].expiresAt = Date.now() - 1; });
     },
@@ -553,6 +741,8 @@ for (const k of Object.keys(MOCK)) {
       ] } });
     }
     if (parts[0] === 'skill-drafts') return draftResource(parts, method, body, headers, query);
+    if (parts[0] === 'runs') return runResource(parts, method, body, headers, query);
+    if (parts[0] === 'workflows' && parts[2] === 'runs' && method === 'POST') return startRun(parts[1], body);
     if (parts[0] === 'skills' && parts[2] === 'document' && method === 'GET') {
       var s = find(MOCK.skills, parts[1]);
       if (!s) return Promise.resolve(notFound());
@@ -569,6 +759,7 @@ for (const k of Object.keys(MOCK)) {
 export function resetFakeB1() {
   revs = Object.create(null);
   seq = 0;
+  resetRuns();
   drafts = Object.create(null);
   for (const k of Object.keys(SEED)) MOCK[k] = structuredClone(SEED[k]);
 }

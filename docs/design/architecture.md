@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-30
+updated: 2026-11-12
 ---
 
 # 系统架构（现行真相）
@@ -13,7 +13,7 @@ updated: 2026-10-30
 
 - 形态：agent-flow 前端（13 个 HTML 页面 + 同源 BFF）；原生 HTML/CSS/ESM，无构建步骤；第三方运行时依赖默认零，例外须经准入（`design/dependencies.md`）并自托管到 `assets/vendor/`，禁止 CDN 外链。
 - 模块系统（2026-10-30 完成迁移）：全站原生 ESM，`package.json` 为 `"type":"module"`，Node 侧 `server.js` / `bff/` / `tools/` / `tests/` 同为 ESM；页面只通过显式 `import` 取依赖，无 `window.DF/MOCK/API/WSC`，无构建与 `.cjs` 兼容层。迁移记录见 `history/works/2026-10-30-frontend-esm/`，决策见 `history/decisions/2026-10-30-frontend-esm.md`。
-- 数据：Harness / Tool / Skill / Expert 四页直接消费 B1 DTO（经 `CMP-bff` 同源访问），写操作走 B1 并带 `If-Match`；工作流列表/编辑器经 `workflow/data` 消费 B3 `/api/v1/workflows*`，写操作带 `If-Match`，`layout/viewport` 由前端拥有/后端透传；实例、效能、工作区、Key 等页面仍由 `assets/js/mock-data.js` 的 `MOCK` 具名导出提供，写操作只改内存。前端不直接持有数据库或鉴权态。
+- 数据：Harness / Tool / Skill / Expert 四页直接消费 B1 DTO（经 `CMP-bff` 同源访问），写操作走 B1 并带 `If-Match`；工作流列表/编辑器经 `workflow/data` 消费 B3 `/api/v1/workflows*`；运行列表/详情/发起运行经 `run/data` 消费 B4 `/api/v1/runs` 与 `/api/v1/workflows/{id}/runs`（状态机与节点推进由后端运行编排服务 拥有）；`layout/viewport` 由前端拥有/后端透传。效能、工作区、Key 页面仍由 `assets/js/mock-data.js` 的 `MOCK` 具名导出提供，写操作只改内存。前端不直接持有数据库或鉴权态。
 - 服务：`server.js`（Node 原生 `http`）是组合根，做静态托管、`/` 302 与 `CMP-bff` 挂载；`CMP-bff` 只透明转发 `/api/v1/*` 与 `/healthz`，不承载业务逻辑。
 - 验证：`tools/check-docs.js`（五态文档）、`tools/check-deps.js`（依赖准入）、`tools/check-architecture.js`（ESM import 图与边界）、`tools/check-scenario-trace.js`（核对场景卡 / Playwright runner / 外部执行层；统计以 `design/scenarios/_index.md` 为准）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（Playwright 13 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）、`tools/verify-workflow-list.js` / `tools/verify-workflow-editor.js`（SCN-0018/0019，fake B3 + Playwright）；`npm test` 串联零依赖门禁、BFF 单测、Playwright 业务场景与工作流场景；人工 Safari 走查为发布门禁。
 - 明确不做：真实工作流执行引擎、Agent 运行时、CI/CD 触发、权限体系、密钥加密存储、移动端适配、前端持久化；BFF 不做 CORS、鉴权、TLS、DTO 映射、revision 缓存或聚合。
@@ -27,7 +27,7 @@ updated: 2026-10-30
 | `CMP-ui-shell` | 13 页公共外壳 | `assets/js/ui.js` | 顶栏、左侧导航、面包屑/页头、用户区、待确认角标、字号缩放、`DF.*` 原语 |
 | `CMP-workflow-list` | `pages/workflow-list.html` | `workflow-list.js` | B3 工作流列表、筛选、统计、新建向导/复制/改名/删除/导入导出；无运行入口 |
 | `CMP-workflow-editor` | `pages/workflow-editor.html?id=` | `workflow-editor.js` + `workflow/views/*` | 画布阶段/节点/边编辑、属性抽屉、本地校验、手动保存、DSL 预览与导出；无发布/版本/运行 |
-| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 实例列表、轨迹与留痕、暂停/终止/重试/重跑、人工批准驳回、fan-out 聚合 |
+| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图、发起运行（工作流+Harness+路径+意图）、终止、人工确认、会话日志下载；后端未提供的控制入口置灰 |
 | `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js` | Skill 列表、筛选、启停、删除、引用方；专门页承接查看/编辑/新建，正文用 Milkdown 渲染、编辑走草稿 |
 | `CMP-experts` | `pages/experts.html` | `experts.js` | 专家列表、五区详情/编辑、Skill/工具组合、启停 |
 | `CMP-harnesses` | `pages/harnesses.html` | `harnesses.js` | 设施列表、注册、健康/配额、启停、删除 |
@@ -47,6 +47,8 @@ updated: 2026-10-30
 | 静态服务 | `server.js` | 静态文件 + `/` 302 | 只服务 `pages/` 与 `assets/`，绑定 `127.0.0.1`；拒绝点文件与越界路径 |
 | 同源网关 | `bff/`（`CMP-bff`） | `/api/v1/*`、`/healthz` 透明转发 | 与 `server.js` 同进程；不做 DTO 映射、revision、重试、聚合；详见 `components/bff/spec.md` |
 | 工作流数据服务 | `assets/js/workflow/data.js` | `CMP-workflow-data` §1 的 11 个操作 | B3 工作流唯一读写入口；页面不得直接 `fetch /api/v1/workflows*`；规格见 `components/workflow-data/spec.md` |
+| 运行数据服务 | `assets/js/run/data.js` | `CMP-run-data` §0 的 6 个操作 + 状态词表 | B4 run 唯一读写入口；页面不得直接 `fetch /api/v1/runs*`；规格见 `components/run-data/spec.md` |
+| Markdown 编辑器适配 | `assets/js/shared/markdown-editor.js` | `mountMarkdown/destroyMarkdown` | Milkdown 7.7.0（`DEP-0001`）唯一入口；Skill 正文与运行意图共用；不泄漏第三方类型 |
 | 工作流领域模型/校验 | `assets/js/workflow/model.js`、`validate.js` | 图映射、ID、DSL、B3 规则镜像 | 无 DOM/network；供数据服务与编辑器复用 |
 | 工作流视图 | `assets/js/workflow/views/{canvas,inspector,dsl}.js` | 画布/属性/DSL 纯视图 | 编辑器按领域与视图拆分；交互编排留在页面 |
 | 同源 HTTP 传输 | `assets/js/shared/http.js` | `request/requestText/ApiError` | B3 工作流复用；B1 仍走 `api.js` 的 ETag/文档缓存 |
@@ -61,6 +63,9 @@ updated: 2026-10-30
 | 页面 JS（B1 四类资产） | `API` | `/api/v1` DTO + `/skills/{id}/document` | HTTP，同源 | 四页直接用 DTO；文档视图只用 API-31 原文；不建客户端视图模型；不直连 3100 |
 | 工作流两页 | `workflow/data` | B3 `/api/v1/workflows*` | HTTP，同源 | 唯一读写入口；写带 `If-Match`；不直连 3100 |
 | 工作流两页 | `workflow/model` / `validate` / `views` | 图映射、本地规则、纯视图 | 同步，ESM import | 不碰网络；`validate` 镜像 B3 规则 |
+| 运行两页 | `run/data` | B4 `/api/v1/runs*` 与启动端点 | HTTP，同源 | 唯一读写入口；不推断状态机、不缓存 |
+| 运行两页 | `workflow/data` / `workflow/model` | 工作流图与坐标 | HTTP + 同步 | 详情轨迹只读工作流图，不改图 |
+| Skill 正文 / 运行意图 | `shared/markdown-editor` | `mountMarkdown/destroyMarkdown` | 动态 import vendor | 只经适配层使用 Milkdown，页面不直接 import vendor |
 | `CMP-workspaces` 两页 | `WSC` | 目录树/跨页联动 | 同步，ESM import | 不供其他页面使用 |
 | 页面 ↔ 页面 | — | URL 参数 / sessionStorage 单键 | 跳转或一次性传递 | 禁止互相 `import`/调用 JS |
 | `server.js` | 静态文件 / `CMP-bff` | `/pages/*`、`/assets/*`、`/api/v1/*` | HTTP / 进程内 | 组合根；不承载业务逻辑 |
@@ -70,7 +75,7 @@ updated: 2026-10-30
 
 **禁止边**：
 
-- 页面组件之间不得互相引用 JS 或共享可变模块状态；跨页只允许 URL 与 `df-new-instance` / `df-new-workspace` 两个一次性键。
+- 页面组件之间不得互相引用 JS 或共享可变模块状态；跨页只允许 URL 与 `df-new-workspace` 一次性键（`df-new-instance` 已随运行 live 移除）。
 - `DF` 与 `MOCK` 不得出现业务规则或页面专属逻辑；`MOCK` 不是数据服务，不得新增“写入口 API”来掩盖多写。
 - `server.js` 不得承载业务 API；只允许挂载 `CMP-bff` 做透明转发；页面不得依赖 Node 侧能力。
 - `CMP-bff` 不得 import `DF`/`MOCK`/页面代码，不得做 DTO 映射、revision 缓存、重试、聚合或模拟数据。
@@ -87,7 +92,7 @@ updated: 2026-10-30
 ### 4.1 页面入口契约
 
 - 列表/配置页：`/pages/<name>.html`。
-- 详情页：`/pages/instance-detail.html?id=<instanceId>`、`/pages/workspace-detail.html?id=<workspaceId>`、`/pages/workflow-editor.html?id=<workflowId>`、`/pages/skill-detail.html?id=<skillId>&mode=<view|edit|new>`；MOCK 页缺省时回落到夹具第一条；工作流编辑器与 Skill 专门页缺 `id`/404 显式报错，不回落。
+- 详情页：`/pages/instance-detail.html?id=<runId>`、`/pages/workspace-detail.html?id=<workspaceId>`、`/pages/workflow-editor.html?id=<workflowId>`、`/pages/skill-detail.html?id=<skillId>&mode=<view|edit|new>`；MOCK 页缺省时回落到夹具第一条；工作流编辑器与 Skill 专门页缺 `id`/404 显式报错，不回落。
 - 所有页面加载后由 `DF.renderShell` 生成外壳；页面主体写入 `#page-body`。
 
 ### 4.2 组件操作契约
@@ -97,7 +102,7 @@ updated: 2026-10-30
 | `CMP-ui-shell` | `#renderShell`、`#topbar`、`#nav`、`#font-scale`、`#bell`、`#user-menu` |
 | `CMP-workflow-list` | `#list`、`#create`、`#copy`、`#update`、`#delete`、`#import`、`#export` |
 | `CMP-workflow-editor` | `#open`、`#add-node`、`#connect-edge`、`#inspector`、`#validate`、`#save`、`#dsl` |
-| `CMP-instances` | `#list`、`#start-run`、`#pause-resume`、`#terminate`、`#retry-node`、`#approve-reject` |
+| `CMP-instances` | `#list`、`#launch`、`#detail`、`#cancel`、`#decide`、`#session-log` |
 | `CMP-skills` | `#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#document` |
 | `CMP-experts` | `#list`、`#create`、`#edit`、`#toggle`、`#detail`、`#picker` |
 | `CMP-harnesses` | `#list`、`#register`、`#detail`、`#toggle`、`#delete` |
@@ -119,9 +124,10 @@ updated: 2026-10-30
 
 | 数据 | 写入口 | 读方 | 存储 | 一致性/复位 |
 |---|---|---|---|---|
-| B3 Workflow + Definition | `CMP-workflow-list`、`CMP-workflow-editor`（经 `workflow/data`） | 列表、编辑器 | B3 PostgreSQL | revision + `If-Match`；`layout/viewport` 前端拥有/后端透传 |
+| B3 Workflow + Definition | `CMP-workflow-list`、`CMP-workflow-editor`（经 `workflow/data`） | 列表、编辑器、运行详情（只读图） | B3 PostgreSQL | revision + `If-Match`；`layout/viewport` 前端拥有/后端透传 |
+| B4 Run（列表/详情/决策） | 后端运行编排服务；页面只经 `run/data` 发起/终止/决策 | 运行列表、运行详情 | B4 PostgreSQL | 状态机在后端；页面不推断、不缓存；非终态 5s 轮询 |
 | `MOCK.workflows` | 无（只读夹具） | 实例页（MOCK） | 内存 | 工作流两页已切 B3，不再写夹具 |
-| `MOCK.instances` | `CMP-instances` | 实例、列表统计、外壳角标 | 内存 | 单写；刷新复位 |
+| `MOCK.instances` | 无（运行两页已切 B4） | 其余 MOCK 页的外壳角标演示数据 | 内存 | 只读夹具；刷新复位 |
 | `MOCK.workspaces` | `CMP-workspaces` | 列表、编辑器、实例、Key 绑定 | 内存 | 单写；刷新复位 |
 | B1 Harness/Tool/Skill/Expert | 四个资产页 | 四个资产页 | B1 PostgreSQL | B1 事务 + `If-Match`；不写 `MOCK` |
 | B1 Skill 文档文本/ETag | 无（`API` 派生缓存） | `CMP-skills` 文档视图 | 内存 | 按 skill revision 失效；304 复用上次文本；刷新复位 |
@@ -131,7 +137,6 @@ updated: 2026-10-30
 | `MOCK.knowledgeTree` | —（只读） | 编辑器节点配置 | 内存 | 只读夹具 |
 | `df-font` / `df-collapsed` | `CMP-ui-shell` | 外壳、13 页 | localStorage | UI 偏好；跨页保留 |
 | `wl-view` | `CMP-workflow-list` | 本页 | localStorage | UI 偏好；跨页保留 |
-| `df-new-instance` | `CMP-instances` | 列表 → 详情 | sessionStorage | 一次性；消费后删除 |
 | `df-new-workspace` | `CMP-workspaces`（`WSC`） | 列表 → 详情 | sessionStorage | 一次性；消费后删除 |
 
 > `MOCK` 是夹具而非数据服务：没有事务、没有并发控制、没有跨标签页一致性；工作流两页已不再写 `MOCK.workflows`，写入口统一为 B3 `workflow/data`。
@@ -155,8 +160,9 @@ updated: 2026-10-30
 | `CMP-ui-shell` | ✓ | ✓ | `SCN-0001` verified（45/45） | 待验收（R9） |
 | `CMP-workflow-list` | ✓ | ✓ | `SCN-0018` verified（14/14） | — |
 | `CMP-workflow-editor` | ✓ | ✓ | `SCN-0019` verified（11/11） | — |
-| `CMP-workflow-data` | ✓ | — | `SCN-0018/0019` 页面路径 + 24 条纯逻辑 | — |
-| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（4/4） | — |
+| `CMP-workflow-data` | ✓ | — | `SCN-0018/0019` 页面路径 + 26 条纯逻辑 | — |
+| `CMP-run-data` | ✓ | — | `SCN-0004` 页面路径 | — |
+| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（5/5） | — |
 | `CMP-skills` | ✓ | ✓ | `SCN-0005` 4/4 + `SCN-0014` 5/5 + `SCN-0015` 4/4 + `SCN-0016` 4/4 + `SCN-0017` 4/4；引擎 29/29；`SCN-0013` 已废弃 | — |
 | `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（4/4） | — |
 | `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（4/4） | — |

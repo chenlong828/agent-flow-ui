@@ -10,6 +10,15 @@
 .in-prog{display:flex;align-items:center;gap:8px;min-width:150px;}
 .in-prog .progress{flex:1;}
 .in-new-row{margin-top:6px;}
+/* 发起运行弹窗：所见即所得意图编辑（Milkdown） */
+.rn-editor{border:1px solid var(--c-line);border-radius:6px;height:240px;overflow:auto;padding:10px 12px;background:var(--c-panel);}
+.rn-editor .ProseMirror{outline:none;font-size:13px;line-height:1.75;overflow-wrap:anywhere;}
+.rn-editor .ProseMirror>*{max-width:100%;}
+.rn-editor .ProseMirror h1,.rn-editor .ProseMirror h2,.rn-editor .ProseMirror h3{font-size:15px;margin:8px 0 4px;}
+.rn-editor .ProseMirror p{margin:4px 0;}
+.rn-editor .ProseMirror ul,.rn-editor .ProseMirror ol{margin:4px 0 4px 20px;}
+.rn-editor .ProseMirror:empty:before{content:attr(data-placeholder);color:var(--t-3);}
+.rn-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t-2);margin-top:4px;}
 </style>
 </head>
 <body>

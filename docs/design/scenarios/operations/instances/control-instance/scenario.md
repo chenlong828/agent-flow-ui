@@ -4,39 +4,42 @@ module: instances
 status: verified
 flow: control-instance
 scenario: SCN-0004
-updated: 2026-10-23
+updated: 2026-11-12
 ---
 
-# SCN-0004 实例监控与运行控制
+# SCN-0004 运行实例监控与发起运行（B4 live）
 
 ## 入口
 
-- `CMP-instances/assets/js/pages/instances.js#render`
+- `CMP-instances/assets/js/pages/instances.js#init`
 - `CMP-instances/assets/js/pages/instance-detail.js#init`
-- `CMP-instances/pages/instances.html`、`pages/instance-detail.html?id=<instanceId>`
+- `CMP-instances/pages/instances.html`、`pages/instance-detail.html?id=<runId>`
 
 ## 运行序
 
-1. 列表按状态 Tab 渲染；「已结束」聚合成功/失败/已终止，计数与 `MOCK.instances` 同源。
-2. 进入详情，顶部显示状态、耗时、进度；流程轨迹按节点状态着色，节点抽屉显示输入/输出/留痕。
-3. 运行中可暂停/恢复；终止先确认，确认后状态为「已终止」且节点转失败；等待人工时可批准或驳回。
-4. 失败/已跳过节点可重试或从节点重跑；状态迁移只改 `MOCK.instances` 内存。
+1. 打开列表：并发加载 `GET /runs?limit=200` 与 `GET /workflows?limit=200`；按状态分组渲染四个 Tab（全部 / 进行中 / 等待人工确认 / 已结束），工作流名在页面侧 join；行内操作随状态出现：详情、去确认（`waiting_confirm`）、终止（非终态）。
+2. 发起运行：选工作流（B3 列表）、选执行 Harness（`/harnesses` 中 `enabled && clientId`）、填绝对路径、在 Milkdown 编辑器写启动意图；提交 `POST /workflows/{id}/runs`，成功跳转详情。
+3. 详情：`GET /runs/{id}` + `GET /workflows/{workflowId}`；轨迹图按 `toEditorGraph` 布局，节点状态取 `run.nodes` 中最大 `visit`；右侧面板显示概要与会话日志下载；非终态每 5s 轮询。
+4. 人工确认：`waiting_confirm` 节点出现橙色卡片；批准/驳回提交 `POST /runs/{id}/nodes/{nodeId}/decision`，成功后刷新详情，节点状态与 run 状态由后端推进。
+5. 终止：二次确认后 `POST /runs/{id}/cancel`，成功刷新；终态 run 不再显示终止。
 
-失败路径：终止取消不得改状态；驳回必须填写意见；已终止实例不可恢复运行；暂停/恢复只作用于运行中节点。
+失败路径：取消终止确认不改状态；驳回未填意见被前端拦住；非 `waiting_confirm` 节点不出现确认卡片；`run_not_found` 显示「运行不存在或已删除」且不回落夹具；发起运行缺 Harness/路径/意图时前端不提交。
 
 ## 不可变引用
 
-- 实例状态集合：运行中、等待人工确认、回退重跑中、已暂停、成功、失败、已终止。
-- `DF.renderShell`、`DF.modal`、`DF.tag`、`DF.fmtDur` 的展示语义。
-- `sessionStorage` 键 `df-new-instance`（列表到详情的一次性传递）。
+- B4 `RunSummary` / `RunDetail` / `RunNodeView` 字段与状态闭集（`CMP-run-data` §2）。
+- API-42–API-47 的路径、错误码与 `If-Match` 无关（运行编排不使用 revision 头）。
+- `DF.renderShell`、`DF.modal`、`DF.tag`、`DF.fmtDur`、`DF.fmtClock` 的展示语义。
+- Milkdown 适配层 `shared/markdown-editor.js` 的 `mountMarkdown/destroyMarkdown`。
 
 ## 测试
 
-执行层：Playwright WebKit+ 本地静态 HTTP（恢复 sessionStorage 语义）；可执行：`node tools/verify-m1-scenarios.js`（单场景追加场景号）。最近一次执行：2026-10-30，全量 49/49 通过。
+执行层：Playwright WebKit + 本地静态 HTTP + fake B1/B3（运行接口由 `tools/fake-b1.js` 的 run 夹具提供，工作流由 `tools/fake-b3.js` 提供）。可执行：`node tools/verify-m1-scenarios.js SCN-0004`。最近一次执行：2026-11-12，5/5 通过。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0004-T1 | 正 | 6 个 Tab 计数与状态分组一致；已结束=成功+失败+已终止 | `tools/verify-m1-scenarios.js#SCN-0004-T1` |
-| SCN-0004-T2 | 正 | ?id=INS-2041 轨迹节点数=workflow graph；ok/running 节点计数与 inst.nodes 一致 | `tools/verify-m1-scenarios.js#SCN-0004-T2` |
-| SCN-0004-T3 | 正 | 暂停后状态「已暂停」，恢复后「运行中」；INS-2038 批准后转运行中且等待节点 ok | `tools/verify-m1-scenarios.js#SCN-0004-T3` |
-| SCN-0004-T4 | 反 | 取消终止后仍为运行中；驳回未填意见被拒且状态不变；INS-2019 无暂停/恢复/终止按钮 | `tools/verify-m1-scenarios.js#SCN-0004-T4` |
+| SCN-0004-T1 | 正 | 列表 4 行；Tab 计数 全部4 / 进行中1 / 等待人工确认1 / 已结束2；执行节点列显示 `client-stub-01` | `tools/verify-m1-scenarios.js#scn0004T1` |
+| SCN-0004-T2 | 正 | 详情画布 3 个节点，成功 1 / 等待人工 1；确认卡片与「请确认方案」可见；暂停按钮 disabled | `tools/verify-m1-scenarios.js#scn0004T2` |
+| SCN-0004-T3 | 正 | 空意见驳回被拦（保留卡片）；填意见后批准 → 成功节点 2、运行中节点 1，run 回到「运行中」 | `tools/verify-m1-scenarios.js#scn0004T3` |
+| SCN-0004-T4 | 反 | 取消终止确认后仍为「运行中」且终止入口仍在；再次终止后状态「已终止」且终止入口消失 | `tools/verify-m1-scenarios.js#scn0004T4` |
+| SCN-0004-T5 | 正 | 发起运行提交体 `harnessId`/`workspacePath`/`intentMarkdown` 与表单一致，`autoConfirm=false`，跳转详情 | `tools/verify-m1-scenarios.js#scn0004T5` |

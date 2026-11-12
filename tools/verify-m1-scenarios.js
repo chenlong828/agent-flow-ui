@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { startStaticServer, launchBrowser, openPage } from './test-harness.js';
 import { MOCK } from '../assets/js/mock-data.js';
 import { fakeB1 } from './fake-b1.js';
+import { fakeB3, prepareUuidExperts } from './fake-b3.js';
 
 let BASE = '';
 
@@ -82,87 +83,123 @@ async function clickMenu(page, label) {
 }
 
 /* ----------------------------- SCN-0004 ----------------------------- */
+const RUN_WAIT = 'aaaaaaaa-0000-4000-8000-000000000002';
+const RUN_RUNNING = 'aaaaaaaa-0000-4000-8000-000000000003';
+
+function runFixtures() {
+  prepareUuidExperts();
+  fakeB3.reset();
+  MOCK.harnesses[0].clientId = 'client-stub-01';
+}
+/* 发起运行弹窗里的 Milkdown 用替身，避免测试依赖 vendor 包的真实编辑行为。 */
+function launchEditorInit() {
+  window.__AGENTFLOW_SKILL_MD__ = {
+    mount: function (target, opts) {
+      var ta = document.createElement('textarea');
+      ta.id = 'stub-intent';
+      ta.value = opts.markdown || '';
+      ta.addEventListener('input', function () { if (opts.onChange) opts.onChange(ta.value); });
+      target.appendChild(ta);
+      return Promise.resolve({ getMarkdown: function () { return ta.value; }, setMarkdown: function (v) { ta.value = v; }, destroy: function () { return Promise.resolve(); } });
+    }
+  };
+}
+function openRunPage(browser, page, query) {
+  return open(browser, page, query || '', { b3: fakeB3, setup: runFixtures, wait: 900 });
+}
+
 async function scn0004T1(browser) {
-  const ctx = await open(browser, 'instances');
+  const ctx = await openRunPage(browser, 'instances');
   try {
-    const M = MOCK.instances;
-    const ended = M.filter((i) => ['成功', '失败', '已终止'].includes(i.status)).length;
-    assert.equal(await ctx.page.locator('#page-body tbody tr').count(), M.length);
-    assert.equal(await ctx.page.locator('#in-tabs .tab').count(), 6);
+    assert.equal(await ctx.page.locator('#page-body tbody tr').count(), 4);
     const labels = await ctx.page.locator('#in-tabs .tab').allTextContents();
-    assert.ok(labels.some((x) => x.includes('已结束') && x.includes(String(ended))));
+    assert.ok(labels.some((x) => x.includes('全部') && x.includes('4')), '全部计数: ' + labels.join('|'));
+    assert.ok(labels.some((x) => x.includes('进行中') && x.includes('1')), '进行中计数: ' + labels.join('|'));
+    assert.ok(labels.some((x) => x.includes('等待人工确认') && x.includes('1')), '等待确认计数: ' + labels.join('|'));
+    assert.ok(labels.some((x) => x.includes('已结束') && x.includes('2')), '已结束计数: ' + labels.join('|'));
+    assert.match(await ctx.page.locator('#page-body').textContent(), /client-stub-01/);
     noErrors(ctx);
   } finally { await ctx.page.close(); }
 }
 
 async function scn0004T2(browser) {
-  const ctx = await open(browser, 'instance-detail', 'id=INS-2041', { wait: 400 });
+  const ctx = await openRunPage(browser, 'instance-detail', 'id=' + RUN_WAIT);
   try {
-    const inst = MOCK.instances.find((i) => i.id === 'INS-2041');
-    const wf = MOCK.workflows.find((w) => w.id === inst.wfId);
-    assert.match(await ctx.page.locator('body').textContent(), /INS-2041/);
-    assert.equal(await ctx.page.locator('.cv-node').count(), wf.graph.nodes.length);
-    assert.equal(await ctx.page.locator('.cv-node.st-ok').count(), Object.values(inst.nodes).filter((n) => n.status === 'ok').length);
-    assert.equal(await ctx.page.locator('.cv-node.st-run').count(), Object.values(inst.nodes).filter((n) => n.status === 'running').length);
-    assert.equal(await ctx.page.locator('#id-pause').count(), 1);
+    assert.equal(await ctx.page.locator('.cv-node').count(), 3);
+    assert.equal(await ctx.page.locator('.cv-node.st-ok').count(), 1);
+    assert.equal(await ctx.page.locator('.cv-node.st-wait').count(), 1);
+    assert.equal(await ctx.page.locator('.id-confirm-card').count(), 1);
+    assert.match(await ctx.page.locator('body').textContent(), /请确认方案/);
+    assert.equal(await ctx.page.locator('#id-pause').isDisabled(), true);
+    assert.equal(await ctx.page.locator('#id-stop').count(), 1);
     noErrors(ctx);
   } finally { await ctx.page.close(); }
 }
 
 async function scn0004T3(browser) {
-  const ctx = await open(browser, 'instance-detail', 'id=INS-2041', { wait: 400 });
-  let c2;
+  const ctx = await openRunPage(browser, 'instance-detail', 'id=' + RUN_WAIT);
   try {
-    await ctx.page.locator('#id-pause').click();
-    await ctx.page.locator('#mc-ok').click();
-    await ctx.page.waitForTimeout(100);
-    assert.equal(await ctx.page.locator('#id-resume').count(), 1);
-    await ctx.page.locator('#id-resume').click();
-    await ctx.page.waitForTimeout(100);
-    assert.equal(await ctx.page.locator('#id-pause').count(), 1);
+    await ctx.page.locator('#cf-no').click();
+    await ctx.page.waitForTimeout(120);
+    assert.match(await ctx.page.locator('body').textContent(), /驳回必须填写意见/);
+    assert.equal(await ctx.page.locator('.id-confirm-card').count(), 1);
 
-    c2 = await open(browser, 'instance-detail', 'id=INS-2038', { wait: 400 });
-    assert.match(await c2.page.locator('body').textContent(), /等待人工确认/);
-    await c2.page.locator('#cf-ok').click();
-    await c2.page.waitForTimeout(100);
-    const status = await c2.page.evaluate(async () => {
-      const { MOCK } = await import('/assets/js/mock-data.js');
-      return MOCK.instances.find((i) => i.id === 'INS-2038').status;
+    await ctx.page.locator('#cf-comment').fill('联调通过');
+    await ctx.page.locator('#cf-ok').click();
+    await ctx.page.locator('.id-confirm-card').waitFor({ state: 'detached', timeout: 5000 });
+    await ctx.page.waitForTimeout(200);
+    assert.equal(await ctx.page.locator('.cv-node.st-ok').count(), 2);
+    assert.equal(await ctx.page.locator('.cv-node.st-run').count(), 1);
+    assert.match(await ctx.page.locator('body').textContent(), /运行中/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0004T5(browser) {
+  const ctx = await open(browser, 'instances', '', {
+    b3: fakeB3, setup: runFixtures, initScript: launchEditorInit, wait: 900
+  });
+  let sent = null;
+  try {
+    ctx.page.on('request', (req) => {
+      if (req.method() !== 'POST') return;
+      if (!/\/api\/v1\/workflows\/[^/]+\/runs$/.test(new URL(req.url()).pathname)) return;
+      try { sent = JSON.parse(req.postData() || '{}'); } catch (e) { sent = null; }
     });
-    assert.equal(status, '运行中');
-    noErrors(ctx); noErrors(c2);
-  } finally {
-    if (c2) await c2.page.close();
-    await ctx.page.close();
-  }
+    await ctx.page.locator('#in-launch').click();
+    await ctx.page.locator('#stub-intent').waitFor({ timeout: 5000 });
+    const harnessId = await ctx.page.locator('#rn-harness').inputValue();
+    await ctx.page.fill('#rn-path', '/tmp/scn0004/ws-launch');
+    await ctx.page.fill('#stub-intent', '## 联调目标\n\n- 验证发起运行');
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
+    await ctx.page.waitForURL(/instance-detail\.html\?id=/, { timeout: 8000 });
+    await ctx.page.waitForTimeout(500);
+    assert.ok(sent, '未捕获 start 请求');
+    assert.equal(sent.harnessId, harnessId);
+    assert.equal(sent.workspacePath, '/tmp/scn0004/ws-launch');
+    assert.match(sent.intentMarkdown, /验证发起运行/);
+    assert.equal(sent.autoConfirm, false);
+    assert.match(ctx.page.url(), new RegExp('instance-detail\\.html\\?id='));
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
 }
 
 async function scn0004T4(browser) {
-  const ctx = await open(browser, 'instance-detail', 'id=INS-2041', { wait: 400 });
-  let c2, c3;
+  const ctx = await openRunPage(browser, 'instance-detail', 'id=' + RUN_RUNNING);
   try {
     await ctx.page.locator('#id-stop').click();
     await ctx.page.locator('#mc-no').click();
-    await ctx.page.waitForTimeout(80);
-    assert.equal(await ctx.page.locator('#id-pause').count(), 1);
+    await ctx.page.waitForTimeout(120);
+    assert.equal(await ctx.page.locator('#id-stop').count(), 1);
+    assert.match(await ctx.page.locator('body').textContent(), /运行中/);
 
-    c2 = await open(browser, 'instance-detail', 'id=INS-2038', { wait: 400 });
-    await c2.page.locator('#cf-no').click();
-    await c2.page.waitForTimeout(80);
-    assert.match(await c2.page.locator('body').textContent(), /驳回必须填写意见/);
-    assert.match(await c2.page.locator('body').textContent(), /等待人工确认/);
-
-    c3 = await open(browser, 'instance-detail', 'id=INS-2019', { wait: 400 });
-    assert.match(await c3.page.locator('body').textContent(), /已终止/);
-    assert.equal(await c3.page.locator('#id-resume').count(), 0);
-    assert.equal(await c3.page.locator('#id-pause').count(), 0);
-    assert.equal(await c3.page.locator('#id-stop').count(), 0);
-    noErrors(ctx); noErrors(c2); noErrors(c3);
-  } finally {
-    if (c3) await c3.page.close();
-    if (c2) await c2.page.close();
-    await ctx.page.close();
-  }
+    await ctx.page.locator('#id-stop').click();
+    await ctx.page.locator('#mc-ok').click();
+    await ctx.page.waitForTimeout(500);
+    assert.equal(await ctx.page.locator('#id-stop').count(), 0);
+    assert.match(await ctx.page.locator('body').textContent(), /已终止/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
 }
 
 /* ----------------------------- SCN-0005 ----------------------------- */
@@ -968,10 +1005,11 @@ async function scn0011T4(browser) {
 /* ----------------------------- registry ----------------------------- */
 const SCENARIOS = [
   ['SCN-0004', '实例监控与运行控制', [
-    ['SCN-0004-T1', '正', '列表与已结束口径同源', scn0004T1],
-    ['SCN-0004-T2', '正', '详情轨迹与实例一致', scn0004T2],
-    ['SCN-0004-T3', '正', '暂停后状态迁移', scn0004T3],
-    ['SCN-0004-T4', '反', '终止取消不改状态', scn0004T4]
+    ['SCN-0004-T1', '正', '运行列表计数与状态分组一致', scn0004T1],
+    ['SCN-0004-T2', '正', '详情节点状态来自 run.nodes', scn0004T2],
+    ['SCN-0004-T3', '正', '人工确认后节点推进', scn0004T3],
+    ['SCN-0004-T4', '反', '取消终止不改状态', scn0004T4],
+    ['SCN-0004-T5', '正', '发起运行按 harness/路径/意图提交', scn0004T5]
   ]],
   ['SCN-0005', 'Skill 维护与渐进披露', [
     ['SCN-0005-T1', '正', '列表计数同源', scn0005T1],
