@@ -557,6 +557,11 @@ async function scn0006T1(browser) {
   const ctx = await open(browser, 'experts', '', { wait: 600 });
   try {
     assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), MOCK.experts.length);
+    const ex0 = MOCK.experts[0];
+    const skillN = ex0.skillCount || (ex0.skills || []).length;
+    const cardText = await ctx.page.locator('#ex-grid .item-card').first().textContent();
+    assert.match(cardText, new RegExp('Skill ×' + skillN + ' · 引用 \\d+ 处'), '卡片应显示绑定 Skill 数而非工具数');
+    assert.ok(!cardText.includes('工具 ×'), '卡片不应再显示工具数');
     await ctx.page.locator('#ex-q').fill('评审');
     await ctx.page.waitForTimeout(100);
     assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), 1);

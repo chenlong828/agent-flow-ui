@@ -170,7 +170,7 @@ import { API } from '../api.js';
         }).join('') +
         (more > 0 ? '<span class="chip ex-skill" data-anchor="skill" title="共 ' + count + ' 个 Skill">+' + more + '</span>' : '') +
       '</div>' +
-      '<div class="ex-sub" title="引用数来自专家 DTO 的 refCount；B1 未提供引用方明细">工具 ×' + (e.toolCount || 0) +
+      '<div class="ex-sub" title="Skill 数取 DTO skillCount；引用数来自 refCount，B1 未提供引用方明细">Skill ×' + count +
         ' · 引用 ' + (e.refCount || 0) + ' 处</div>' +
       '<div class="ic-foot">' +
         '<button class="btn sm" data-act="detail">详情</button>' +

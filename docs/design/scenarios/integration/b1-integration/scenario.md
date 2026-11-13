@@ -4,7 +4,7 @@ module: bff
 status: verified
 flow: b1-integration
 scenario: SCN-0012
-updated: 2026-10-28
+updated: 2026-11-13
 ---
 
 # SCN-0012 B1 资产同源接入与四类资产读写
@@ -21,7 +21,7 @@ updated: 2026-10-28
 
 1. 浏览器在 `127.0.0.1:3000` 打开四个资产页，页面通过相对路径 `/api/v1/*` 发起请求。
 2. `CMP-bff` 将 `/api/v1/*` 与 `/healthz` 透明转发到 `API_BASE`（默认 `http://127.0.0.1:3100`），不改写路径、字段、状态码与错误体。
-3. 列表页直接消费 B1 DTO：Harness 的 `kind/accessMode/concurrencyMax/queuePolicy`、Tool 的 `kind/params/usedByCount`、Skill 的 `categoryCode/description/version/refs[].refType`、Expert 的 `skillCount/toolCount/refCount` 与前 3 个 `skills` 预览；详情按需 `GET`。
+3. 列表页直接消费 B1 DTO：Harness 的 `kind/accessMode/concurrencyMax/queuePolicy`、Tool 的 `kind/params/usedByCount`、Skill 的 `categoryCode/description/version/refs[].refType`、Expert 的 `skillCount/refCount` 与前 3 个 `skills` 预览；详情按需 `GET`。
 4. 写操作携带 `If-Match`：创建走 `POST`，资产编辑走 `PUT`/`PATCH`，专家聚合保存走 `PATCH /experts/{id}` 一次提交五区、引用与有序 `skillIds`/`toolIds`。
 5. `409` 冲突在页面提示刷新，不自动覆盖；`400` 字段错误回到对应表单；后端不可用显示连接错误，不落假数据。B1 没有的运行时能力（Harness 任务/心跳历史、Tool 调试、引用方明细、Skill 版本历史）显示「B1 未提供」，不本地模拟。
 6. Skill 专门页可切换「文档」：`GET /skills/{id}/document` 经 BFF 原样返回 Markdown 与 `ETag`；重复请求带 `If-None-Match`，304 由 API 层复用上次文本。

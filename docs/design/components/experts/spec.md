@@ -5,7 +5,7 @@ component: CMP-experts
 requirement: REQ-0006
 scenario: SCN-0006
 status: active
-updated: 2026-10-28
+updated: 2026-11-13
 ---
 
 # 专家管理
@@ -20,9 +20,9 @@ updated: 2026-10-28
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为工作流设计者提供可复用的智能体角色（人格与职责 + Skill 组合 + 工具清单 + 参考知识）；没有它，工作流节点无法指定执行者，「评审/审视视角」也没有承载实体。
 - 负责 / 不负责：负责专家卡片列表（名称/角色搜索 + 启用状态筛选、`refCount` 展示）、新建专家弹窗、五区详情抽屉（只读与编辑态）、Skill/工具装配、启用/停用、删除；不负责 Skill 与工具自身的定义（`CMP-skills` / `CMP-tools`）、工作流节点上的专家绑定与评审要点（`CMP-workflow-editor`）。
-- 内部逻辑：卡片 `+N` 用 `skillCount`；五区结构固定；装配顺序取详情 `skills[].id`/`tools[].id`；聚合 PATCH 提交固定字段与有序 id；引用只读 `refCount`；启停/删除带 revision。
+- 内部逻辑：卡片 `+N` 与「Skill ×N」均用 `skillCount`；五区结构固定；装配顺序取详情 `skills[].id`/`tools[].id`；聚合 PATCH 提交固定字段与有序 id；引用只读 `refCount`；启停/删除带 revision。
 - 数据所有权：页面状态直接保存 B1 `ExpertListItem` / `ExpertDetail` DTO；列表 `GET /experts`（只含前 3 个 Skill 预览与 `skillCount/toolCount/refCount`）、详情 `GET /experts/{id}`（完整 Skill/工具摘要）、创建 `POST`、聚合更新 `PATCH`、启停 `PATCH /enabled`、删除 `DELETE` 均经 `window.API`。不读 `MOCK`，不建第二套视图模型；抽屉编辑草稿由详情 DTO 派生，取消即丢弃。
-- 公开契约：页面入口 `pages/experts.html`；操作 `CMP-experts#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail`、`#picker`；不变量 ①卡片 `+N` 使用 `skillCount`，不用预览数组长度；②详情五区结构固定，Skill/工具装配顺序取详情 `skills[].id` / `tools[].id`，Skill 摘要只读 `description`；③聚合保存 `PATCH /experts/{id}` 提交 `name/color/role/persona/duty/skillOrder/verifyOrder/notes/refs` 与有序 `skillIds/toolIds`，不提交 `enabled/version`；④引用只显示 DTO `refCount`，B1 不提供引用方明细，不遍历 `MOCK.workflows`；⑤启停/删除带 revision，`If-Match` 由 API 层生成。
+- 公开契约：页面入口 `pages/experts.html`；操作 `CMP-experts#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail`、`#picker`；不变量 ①卡片 `+N` 与「Skill ×N」使用 `skillCount`，不用预览数组长度；②详情五区结构固定，Skill/工具装配顺序取详情 `skills[].id` / `tools[].id`，Skill 摘要只读 `description`；③聚合保存 `PATCH /experts/{id}` 提交 `name/color/role/persona/duty/skillOrder/verifyOrder/notes/refs` 与有序 `skillIds/toolIds`，不提交 `enabled/version`；④引用只显示 DTO `refCount`，B1 不提供引用方明细，不遍历 `MOCK.workflows`；⑤启停/删除带 revision，`If-Match` 由 API 层生成。
 - 依赖：`DF`（`renderShell`、`modal`、`toast`、`tag/chip/empty/field/icon/esc`）/ `window.API`；不依赖 `MOCK` 或其他页面组件。
 - 冷热属性：冷（管理面同步请求，无 SLA）。
 - 变化轴：Skill/工具的组合与排序方式（当前有序列表 + 勾选弹窗）最可能演化为带权重/条件的能力编排。
@@ -48,7 +48,7 @@ updated: 2026-10-28
 │ │ 厘清真实需求… │ │ 独立否决视角… │ │ AB交叉…      │               │
 │ │ [严谨][刨根问底]│ │[否决视角][独立]│ │[挑剔][规范控] │               │
 │ │ Skill: CRES…+3│ │ Skill: 审视…+2│ │ Skill: Lint…+2│              │
-│ │ 工具 ×4       │ │ 工具 ×2      │ │ 工具 ×6       │               │
+│ │ Skill ×4      │ │ Skill ×2     │ │ Skill ×6      │               │
 │ │ 引用 3 处      │ │ 引用 4 处     │ │ 引用 2 处      │               │
 │ │ [启用 ⬤]  详情 │ │ [启用 ⬤] 详情 │ │ [启用 ⬤] 详情 │               │
 │ └──────────────┘ └──────────────┘ └──────────────┘               │
@@ -65,7 +65,7 @@ updated: 2026-10-28
 | 卡片 | 角色定位一句话 | 文字截断 | 如「厘清客户真实需求并成体系展开」 |
 | 卡片 | 性格标签 | chips | 如 严谨 / 否决视角 |
 | 卡片 | Skill 组合预览 | chips（前 3 + N） | `N = skillCount - 3` |
-| 卡片 | 工具数、引用数 | 数字 | 引用数取 DTO `refCount`，B1 无明细 |
+| 卡片 | Skill 数、引用数 | 数字 | Skill 数取 DTO `skillCount`；引用数取 DTO `refCount`，B1 无明细 |
 | 卡片 | 状态开关 | switch | 停用需确认 |
 | 卡片 | 详情 | 链接/按钮 | 打开详情抽屉 |
 
