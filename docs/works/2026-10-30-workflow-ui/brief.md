@@ -42,6 +42,7 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 | T-0030-12 | verify | 两组件 | 已完成（2026-10-30） | `tools/verify-workflow-list.js`、`tools/verify-workflow-editor.js`、`npm test`、真实 B3 读写联调 |
 | T-0030-13 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 画布拖动死区修复：`workflow-editor.js`、`pages/workflow-editor.html`、`tools/verify-workflow-editor.js`、`SCN-0019` |
 | T-0030-14 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 连线拖拽预览与非法投放拦截：`workflow-editor.js`、`views/canvas.js`、`validate.js`、`pages/workflow-editor.html`、`tests/workflow/validate.test.js`、`tools/verify-workflow-editor.js`、`SCN-0019-T6` |
+| T-0030-15 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 四向锚点与 layout 选边：`model.js`、`validate.js`、`views/canvas.js`、`workflow-editor.js`、`main.css`、`tests/workflow/*`、`tools/verify-workflow-editor.js`、`SCN-0019-T7` |
 
 ## 装载清单（必读）
 
@@ -101,7 +102,14 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 - 现有 B3 测试工作流与 B1 测试 Skill 未清理，需用户确认后执行。
 - 真实写路径（创建/保存/删除）已用临时记录验证并清理；存量 14 条测试工作流未清理。
 
-## 增量特性（2026-11-13）
+## 增量特性：四向锚点（2026-11-13）
+
+- 每节点上/右/下/左四个锚点；seq 边仍一进一出；回退端口保持独立紫色手柄。
+- 选边写入 `node.layout.inSide/outSide`（top/right/bottom/left），缺省按中心相对位置自动选边；`from/to/kind` 与拓扑校验不变。
+- 边渲染按两端选边取切线方向，横向/纵向/混合都走同一套三次贝塞尔。
+- 验证：SCN-0019 19/19（新增 T7 两条）；`node --test tests/workflow` 31/31。
+
+## 增量特性：连线反馈（2026-11-13）
 
 - 需求：连线入口不可发现、拖拽无反馈。端口拖拽需显示橡皮筋虚线；悬停目标按规则标绿/标红；非法投放提示原因且不建边。
 - 规则判据：`validate.checkNewEdge(graph, from, to, kind)`，与拓扑校验同源（自连、开始入边、结束出边、seq 环、fanout 前驱、回退祖先）；`createEdge` 与拖拽高亮共用。

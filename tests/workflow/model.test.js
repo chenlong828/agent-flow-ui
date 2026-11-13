@@ -84,3 +84,30 @@ test('保存时 layout 只保留 schema 字段，不透传未知键', () => {
   assert.deepEqual(out.nodes[0].layout, { x: 5, y: 6 });
   assert.deepEqual(out.stages[0].layout, { x: 1, y: 2, width: 300, height: 200 });
 });
+
+test('节点选边写入/读出 layout，未知键仍丢弃', () => {
+  const editor = toEditorGraph({
+    stages: [],
+    nodes: [
+      { id: 'n1', type: 'start', name: '开始', expertId: null, layout: { x: 5, y: 6, outSide: 'bottom', inSide: 'left' } },
+      { id: 'n2', type: 'end', name: '结束', expertId: null, layout: { x: 7, y: 8 } }
+    ],
+    edges: [{ id: 'e1', from: 'n1', to: 'n2', kind: 'seq' }],
+    viewport: { x: 0, y: 0, zoom: 0.85 }
+  });
+  assert.equal(editor.nodes[0].outSide, 'bottom');
+  assert.equal(editor.nodes[0].inSide, 'left');
+  const out = toB3Graph(editor);
+  assert.deepEqual(out.nodes[0].layout, { x: 5, y: 6, outSide: 'bottom', inSide: 'left' });
+  assert.deepEqual(out.nodes[1].layout, { x: 7, y: 8 });
+});
+
+test('非法选边读出为 null，不透传', () => {
+  const editor = toEditorGraph({
+    stages: [],
+    nodes: [{ id: 'n1', type: 'start', name: '开始', expertId: null, layout: { x: 5, y: 6, outSide: 'up' } }],
+    edges: []
+  });
+  assert.equal(editor.nodes[0].outSide, null);
+  assert.deepEqual(toB3Graph(editor).nodes[0].layout, { x: 5, y: 6 });
+});

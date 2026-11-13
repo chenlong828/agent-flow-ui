@@ -203,3 +203,12 @@ test('checkNewEdge 校验 fanout 前驱与回退目标', () => {
   assert.equal(checkNewEdge(graph, 'n3', 'n1', 'rollback'), null);
   assert.equal(checkNewEdge(graph, 'n3', 'n2', 'rollback'), null);
 });
+
+test('节点选边只接受 top/right/bottom/left', () => {
+  const graph = validGraph();
+  graph.nodes[0].layout = { x: 1, y: 2, outSide: 'up' };
+  graph.nodes[1].layout = { x: 3, y: 4, inSide: 'left' };
+  const issues = shapeIssues(graph);
+  assert.ok(issues.some((i) => i.path === 'graph.nodes[0].layout.outSide' && i.message === '必须是 top/right/bottom/left'));
+  assert.equal(issues.some((i) => i.path === 'graph.nodes[1].layout.inSide'), false);
+});

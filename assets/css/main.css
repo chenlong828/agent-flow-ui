@@ -249,8 +249,10 @@ textarea.inp { resize:vertical; min-height:64px; }
 @keyframes pulse { 0%,100% { box-shadow:0 0 0 2px rgba(37,99,235,.15);} 50% { box-shadow:0 0 0 5px rgba(37,99,235,.07);} }
 .port { position:absolute; width:10px; height:10px; border-radius:50%; background:#fff; border:2px solid #94a3b8; cursor:crosshair; z-index:3; }
 .port:hover { border-color:var(--c-primary); background:var(--c-primary-bg); }
-.port.in { left:-5px; top:50%; margin-top:-5px; }
-.port.out { right:-5px; top:50%; margin-top:-5px; }
+.port[data-side="top"] { top:-5px; left:50%; margin-left:-5px; }
+.port[data-side="bottom"] { bottom:-5px; left:50%; margin-left:-5px; }
+.port[data-side="left"] { left:-5px; top:50%; margin-top:-5px; }
+.port[data-side="right"] { right:-5px; top:50%; margin-top:-5px; }
 .port.rb { right:-5px; bottom:-5px; border-color:var(--c-rollback); }
 .port.rb:hover { background:#ede9fe; }
 svg.cv-edges { position:absolute; left:0; top:0; pointer-events:none; }

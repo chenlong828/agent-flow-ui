@@ -8,6 +8,7 @@
 import {
   EDGE_KINDS,
   ID_PATTERN,
+  NODE_SIDES,
   MAX_EDGES,
   MAX_NODES,
   MAX_STAGES,
@@ -95,7 +96,14 @@ export function shapeIssues(graph) {
     }
     if (node.layout !== undefined) {
       if (!isObject(node.layout)) push(issues, 'invalid_layout', p + '.layout', '必须是对象');
-      else if (!Number.isFinite(node.layout.x) || !Number.isFinite(node.layout.y)) push(issues, 'invalid_layout', p + '.layout', 'x/y 必须是数字');
+      else {
+        if (!Number.isFinite(node.layout.x) || !Number.isFinite(node.layout.y)) push(issues, 'invalid_layout', p + '.layout', 'x/y 必须是数字');
+        ['inSide', 'outSide'].forEach(function (key) {
+          if (node.layout[key] !== undefined && NODE_SIDES.indexOf(node.layout[key]) < 0) {
+            push(issues, 'invalid_layout', p + '.layout.' + key, '必须是 top/right/bottom/left');
+          }
+        });
+      }
     }
   });
 

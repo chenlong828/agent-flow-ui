@@ -10,13 +10,14 @@ import { API } from '../api.js';
 import { createWorkflowData, errorText } from '../workflow/data.js';
 import {
   NODE_META,
+  NODE_SIDES,
   deepClone,
   newId,
   toB3Graph,
   toDsl,
   toEditorGraph
 } from '../workflow/model.js';
-import { NODE_W, NODE_H, canvasSize, edgeSvg, linkPreviewPath, nodeHtml, portPos, stageHtml } from '../workflow/views/canvas.js';
+import { NODE_W, NODE_H, autoSides, canvasSize, edgeSvg, linkPreviewPath, nodeHtml, portPos, stageHtml } from '../workflow/views/canvas.js';
 import { edgeInspector, nodeInspector, stageInspector } from '../workflow/views/inspector.js';
 import { dslHtml } from '../workflow/views/dsl.js';
 import {
@@ -134,6 +135,7 @@ async function init() {
     state.detail = detail;
     state.originalName = detail.name;
     state.graph = toEditorGraph(detail.graph);
+    syncNodeSides();
     state.loading = false;
     state.fatal = '';
     renderShell();
@@ -388,12 +390,14 @@ function bindCanvas() {
     if (port) {
       const nid = port.getAttribute('data-node');
       const node = state.graph.nodes.find(function (n) { return n.id === nid; });
-      if (node) {
-        const side = port.classList.contains('rb') ? 'rb' : (port.classList.contains('in') ? 'in' : 'out');
+      const isRollback = port.classList.contains('rb');
+      const side = isRollback ? 'rb' : port.getAttribute('data-side');
+      if (node && (isRollback || NODE_SIDES.indexOf(side) >= 0)) {
         state.drag = {
-          mode: side === 'rb' ? 'rblink' : 'link',
-          kind: side === 'rb' ? 'rollback' : 'seq',
+          mode: isRollback ? 'rblink' : 'link',
+          kind: isRollback ? 'rollback' : 'seq',
           from: nid,
+          sourceSide: side,
           start: portPos(node, side),
           target: null
         };
@@ -428,11 +432,6 @@ function bindCanvas() {
   });
 }
 
-function linkNodeAt(clientX, clientY) {
-  const el = document.elementFromPoint(clientX, clientY);
-  return el && el.closest ? el.closest('.cv-node') : null;
-}
-
 function clearLinkPreview() {
   const path = document.querySelector('#cvCanvas svg.cv-edges path.cv-link-preview');
   if (!path) return;
@@ -447,17 +446,32 @@ function clearLinkTarget(drag) {
   drag.target = null;
 }
 
-function highlightLinkTarget(drag, clientX, clientY) {
-  const nodeEl = linkNodeAt(clientX, clientY);
+/** 命中节点及投放边：指针落在端口上取该端口，落在节点主体取朝向源节点的边。 */
+function linkTargetInfo(drag, clientX, clientY) {
+  const el = document.elementFromPoint(clientX, clientY);
+  const nodeEl = el && el.closest ? el.closest('.cv-node') : null;
   const id = nodeEl ? nodeEl.getAttribute('data-node') : null;
-  if (id !== drag.target) {
+  const node = id ? state.graph.nodes.find(function (n) { return n.id === id; }) : null;
+  const source = state.graph.nodes.find(function (n) { return n.id === drag.from; });
+  if (!nodeEl || !node || !source) return { nodeEl: null, id: null, node: null, side: null };
+  const portEl = el.closest ? el.closest('.port[data-side]') : null;
+  const side = portEl && nodeEl.contains(portEl)
+    ? portEl.getAttribute('data-side')
+    : autoSides(source, node).to;
+  return { nodeEl: nodeEl, id: id, node: node, side: side };
+}
+
+function highlightLinkTarget(drag, clientX, clientY) {
+  const hit = linkTargetInfo(drag, clientX, clientY);
+  if (hit.id !== drag.target) {
     clearLinkTarget(drag);
-    drag.target = id;
+    drag.target = hit.id;
   }
-  if (!id || id === drag.from) return;
-  const reason = checkNewEdge(state.graph, drag.from, id, drag.kind);
-  nodeEl.classList.toggle('link-ok', !reason);
-  nodeEl.classList.toggle('link-bad', !!reason);
+  if (!hit.id || hit.id === drag.from) return null;
+  const reason = checkNewEdge(state.graph, drag.from, hit.id, drag.kind);
+  hit.nodeEl.classList.toggle('link-ok', !reason);
+  hit.nodeEl.classList.toggle('link-bad', !!reason);
+  return hit;
 }
 
 document.addEventListener('mousemove', function (event) {
@@ -484,12 +498,16 @@ document.addEventListener('mousemove', function (event) {
     vp.y = drag.vy + event.clientY - drag.oy;
     paint();
   } else if (drag.mode === 'link' || drag.mode === 'rblink') {
+    const hit = highlightLinkTarget(drag, event.clientX, event.clientY);
+    let end = toGraph(event.clientX, event.clientY);
+    if (hit && hit.node && hit.id !== drag.from && drag.kind === 'seq') {
+      end = portPos(hit.node, hit.side);
+    }
     const path = document.querySelector('#cvCanvas svg.cv-edges path.cv-link-preview');
     if (path) {
-      path.setAttribute('d', linkPreviewPath(drag.start, toGraph(event.clientX, event.clientY)));
+      path.setAttribute('d', linkPreviewPath(drag.start, end));
       path.classList.toggle('rb', drag.kind === 'rollback');
     }
-    highlightLinkTarget(drag, event.clientX, event.clientY);
   }
 });
 
@@ -498,13 +516,11 @@ document.addEventListener('mouseup', function (event) {
   if (!drag) return;
   state.drag = null;
   if (drag.mode === 'link' || drag.mode === 'rblink') {
+    const hit = linkTargetInfo(drag, event.clientX, event.clientY);
     clearLinkPreview();
     clearLinkTarget(drag);
-    const nodeEl = linkNodeAt(event.clientX, event.clientY);
-    if (!nodeEl) return;
-    const to = nodeEl.getAttribute('data-node');
-    if (!to || to === drag.from) return;
-    createEdge(drag.from, to, drag.kind);
+    if (!hit.id || hit.id === drag.from) return;
+    createEdge(drag.from, hit.id, drag.kind, drag.sourceSide, hit.side);
   } else if ((drag.mode === 'node' && drag.moved) || drag.mode === 'stage') {
     markDirty();
   }
@@ -571,20 +587,34 @@ function addStage(x, y) {
   renderInspector();
 }
 
-function createEdge(from, to, kind) {
+function createEdge(from, to, kind, fromSide, toSide) {
   const reason = checkNewEdge(state.graph, from, to, kind);
   if (reason) { toast(reason, 'err'); return; }
+  const source = state.graph.nodes.find(function (n) { return n.id === from; });
+  const target = state.graph.nodes.find(function (n) { return n.id === to; });
   if (kind === 'rollback') {
     state.graph.edges = state.graph.edges.filter(function (e) { return !(e.kind === 'rollback' && e.from === from); });
   } else {
     state.graph.edges = state.graph.edges.filter(function (e) {
       return !(e.kind === 'seq' && (e.from === from || e.to === to));
     });
+    if (source) source.outSide = NODE_SIDES.indexOf(fromSide) >= 0 ? fromSide : null;
+    if (target) target.inSide = NODE_SIDES.indexOf(toSide) >= 0 ? toSide : null;
   }
   const edge = { id: newId('e'), from: from, to: to, kind: kind };
   state.graph.edges.push(edge);
+  syncNodeSides();
   state.sel = { type: 'edge', id: edge.id };
   markDirty();
+}
+
+/** 选边是显示字段：没有对应 seq 边时清空，避免删边后残留。 */
+function syncNodeSides() {
+  const seq = state.graph.edges.filter(function (e) { return e.kind === 'seq'; });
+  state.graph.nodes.forEach(function (node) {
+    if (!seq.some(function (e) { return e.from === node.id; })) node.outSide = null;
+    if (!seq.some(function (e) { return e.to === node.id; })) node.inSide = null;
+  });
 }
 
 function deleteSelected() {
@@ -592,6 +622,7 @@ function deleteSelected() {
   if (!sel) return;
   if (sel.type === 'edge') {
     state.graph.edges = state.graph.edges.filter(function (e) { return e.id !== sel.id; });
+    syncNodeSides();
     state.sel = null;
     markDirty();
     renderInspector();
@@ -605,6 +636,7 @@ function deleteSelected() {
       if (!ok) return;
       state.graph.nodes = state.graph.nodes.filter(function (n) { return n.id !== node.id; });
       state.graph.edges = state.graph.edges.filter(function (e) { return e.from !== node.id && e.to !== node.id; });
+      syncNodeSides();
       state.sel = null;
       markDirty();
       renderInspector();

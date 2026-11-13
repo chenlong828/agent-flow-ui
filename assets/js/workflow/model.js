@@ -13,6 +13,7 @@
 
 export const NODE_TYPES = ['start', 'end', 'agent', 'split', 'review', 'confirm', 'fanout'];
 export const EDGE_KINDS = ['seq', 'rollback'];
+export const NODE_SIDES = ['top', 'right', 'bottom', 'left'];
 export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const MAX_STAGES = 100;
@@ -156,6 +157,7 @@ export function toEditorGraph(graph) {
   }) : [];
   const nodes = Array.isArray(src.nodes) ? src.nodes.map(function (node) {
     const pos = nodePos(node);
+    const rawLayout = isObject(node.layout) ? node.layout : null;
     return {
       id: node.id,
       type: node.type,
@@ -164,7 +166,9 @@ export function toEditorGraph(graph) {
       expertId: node.expertId === undefined ? null : node.expertId,
       x: pos ? pos.x : null,
       y: pos ? pos.y : null,
-      _rawLayout: isObject(node.layout) ? deepClone(node.layout) : null
+      inSide: rawLayout && NODE_SIDES.indexOf(rawLayout.inSide) >= 0 ? rawLayout.inSide : null,
+      outSide: rawLayout && NODE_SIDES.indexOf(rawLayout.outSide) >= 0 ? rawLayout.outSide : null,
+      _rawLayout: rawLayout ? deepClone(rawLayout) : null
     };
   }) : [];
   nodes.forEach(function (node) { node._layout = node._rawLayout; });
@@ -211,6 +215,8 @@ export function toB3Graph(editorGraph) {
     };
     if (finiteNumber(raw.width)) layout.width = raw.width;
     if (finiteNumber(raw.height)) layout.height = raw.height;
+    if (NODE_SIDES.indexOf(node.outSide) >= 0) layout.outSide = node.outSide;
+    if (NODE_SIDES.indexOf(node.inSide) >= 0) layout.inSide = node.inSide;
     return {
       id: node.id,
       type: node.type,

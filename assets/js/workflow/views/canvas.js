@@ -1,6 +1,6 @@
 /** 工作流画布纯视图：把 editor graph 渲染为阶段/连线/节点 HTML。 */
 import { DF } from '../../ui.js';
-import { NODE_META } from '../model.js';
+import { NODE_META, NODE_SIDES } from '../model.js';
 
 const { esc, icon } = DF;
 export const NODE_W = 168;
@@ -43,25 +43,51 @@ export function nodeHtml(graph, sel, marked, expertOf) {
     else sub = '结束';
     return '<div class="cv-node ' + metaNode.cls + (selected ? ' sel' : '') + (bad ? ' has-error' : '') + '" data-node="' + esc(node.id) + '"' +
       ' style="left:' + node.x + 'px;top:' + node.y + 'px">' +
-      '<span class="port in" data-node="' + esc(node.id) + '"></span>' +
+      NODE_SIDES.map(function (side) {
+        return '<span class="port" data-node="' + esc(node.id) + '" data-side="' + side + '" title="拖拽连线"></span>';
+      }).join('') +
       '<div class="n-head"><span class="e-dot" style="background:' + (expert && expert.color ? expert.color : '#94a3b8') + '"></span>' + esc(node.name) + '</div>' +
       '<div class="n-sub">' + esc(sub) + '</div>' +
       (expert ? '<div class="n-expert">' + icon('user', 10) + esc(expert.name) + '</div>' : '') +
-      '<span class="port out" data-node="' + esc(node.id) + '"></span>' +
       (node.type === 'review' || node.type === 'confirm' ? '<span class="port rb" data-node="' + esc(node.id) + '" title="拖拽绘制回退边"></span>' : '') +
       '</div>';
   }).join('');
 }
 
 export function portPos(node, side) {
-  if (side === 'out') return { x: node.x + NODE_W, y: node.y + 29 };
-  if (side === 'in') return { x: node.x, y: node.y + 29 };
+  if (side === 'top') return { x: node.x + NODE_W / 2, y: node.y };
+  if (side === 'bottom') return { x: node.x + NODE_W / 2, y: node.y + NODE_H };
+  if (side === 'left') return { x: node.x, y: node.y + NODE_H / 2 };
+  if (side === 'right') return { x: node.x + NODE_W, y: node.y + NODE_H / 2 };
   return { x: node.x + NODE_W - 22, y: node.y + NODE_H };
 }
 
-function curvePath(s, t) {
-  const dx = Math.max(40, Math.abs(t.x - s.x) / 2);
-  return 'M ' + s.x + ' ' + s.y + ' C ' + (s.x + dx) + ' ' + s.y + ', ' + (t.x - dx) + ' ' + t.y + ', ' + t.x + ' ' + t.y;
+const SIDE_NORMALS = {
+  top: { x: 0, y: -1 },
+  right: { x: 1, y: 0 },
+  bottom: { x: 0, y: 1 },
+  left: { x: -1, y: 0 }
+};
+
+/** 两个节点的缺省进出口：横向差更大走左右，否则走上下；平局取横向。 */
+export function autoSides(a, b) {
+  const dx = (b.x + NODE_W / 2) - (a.x + NODE_W / 2);
+  const dy = (b.y + NODE_H / 2) - (a.y + NODE_H / 2);
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? { from: 'right', to: 'left' } : { from: 'left', to: 'right' };
+  }
+  return dy >= 0 ? { from: 'bottom', to: 'top' } : { from: 'top', to: 'bottom' };
+}
+
+function sideCurve(s, sSide, t, tSide) {
+  const ns = SIDE_NORMALS[sSide] || SIDE_NORMALS.right;
+  const nt = SIDE_NORMALS[tSide] || SIDE_NORMALS.left;
+  const distance = Math.sqrt(Math.pow(t.x - s.x, 2) + Math.pow(t.y - s.y, 2));
+  const k = Math.max(36, Math.min(180, distance * 0.45));
+  return 'M ' + s.x + ' ' + s.y +
+    ' C ' + (s.x + ns.x * k) + ' ' + (s.y + ns.y * k) +
+    ', ' + (t.x + nt.x * k) + ' ' + (t.y + nt.y * k) +
+    ', ' + t.x + ' ' + t.y;
 }
 
 /** 拖拽连线的橡皮筋预览：直线跟随指针，不套用边曲线的控制点。 */
@@ -76,7 +102,10 @@ function edgePath(a, b, kind) {
     const sag = Math.max(70, Math.abs(s.y - t.y) * 0.2 + 60);
     return 'M ' + s.x + ' ' + s.y + ' C ' + (s.x + 40) + ' ' + (s.y + sag) + ', ' + (t.x - 40) + ' ' + (t.y + sag) + ', ' + t.x + ' ' + t.y;
   }
-  return curvePath(portPos(a, 'out'), portPos(b, 'in'));
+  const auto = autoSides(a, b);
+  const fromSide = a.outSide || auto.from;
+  const toSide = b.inSide || auto.to;
+  return sideCurve(portPos(a, fromSide), fromSide, portPos(b, toSide), toSide);
 }
 
 export function edgeSvg(graph, sel, marked) {

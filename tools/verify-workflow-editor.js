@@ -47,8 +47,8 @@ async function openEditor(base, browser, b3, id) {
 }
 
 async function connect(page, fromId, toId) {
-  const from = await page.locator('.cv-node[data-node="' + fromId + '"] .port.out').boundingBox();
-  const to = await page.locator('.cv-node[data-node="' + toId + '"] .port.in').boundingBox();
+  const from = await page.locator('.cv-node[data-node="' + fromId + '"] .port[data-side="right"]').boundingBox();
+  const to = await page.locator('.cv-node[data-node="' + toId + '"] .port[data-side="left"]').boundingBox();
   assert.ok(from && to, '端口不可见');
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
@@ -67,6 +67,7 @@ async function main() {
     await scenarioT4(server.base, browser);
     await scenarioT5(server.base, browser);
     await scenarioT6(server.base, browser);
+    await scenarioT7(server.base, browser);
   } finally {
     await browser.close();
     await server.close();
@@ -334,7 +335,7 @@ async function scenarioT6(base, browser) {
   const page = ctx.page;
 
   await check('拖拽端口显示跟随指针的虚线预览', async function () {
-    const port = await page.locator('.cv-node[data-node="n2"] .port.out').boundingBox();
+    const port = await page.locator('.cv-node[data-node="n2"] .port[data-side="right"]').boundingBox();
     const target = await page.locator('.cv-node[data-node="n3"]').boundingBox();
     const preview = page.locator('path.cv-link-preview');
     const start = { x: port.x + port.width / 2, y: port.y + port.height / 2 };
@@ -375,7 +376,7 @@ async function scenarioT6(base, browser) {
     await page.waitForTimeout(120);
 
     async function connect(fromId, toId) {
-      const fromPort = await page.locator('.cv-node[data-node="' + fromId + '"] .port.out').boundingBox();
+      const fromPort = await page.locator('.cv-node[data-node="' + fromId + '"] .port[data-side="right"]').boundingBox();
       const target = await page.locator('.cv-node[data-node="' + toId + '"]').boundingBox();
       await page.mouse.move(fromPort.x + fromPort.width / 2, fromPort.y + fromPort.height / 2);
       await page.mouse.down();
@@ -396,7 +397,7 @@ async function scenarioT6(base, browser) {
 
   await check('非法目标标红并拦截，不新增连线', async function () {
     const before = await page.locator('path.hit').count();
-    const fromPort = await page.locator('.cv-node[data-node="n3"] .port.out').boundingBox();
+    const fromPort = await page.locator('.cv-node[data-node="n3"] .port[data-side="right"]').boundingBox();
     const target = await page.locator('.cv-node[data-node="n1"]').boundingBox();
     await page.mouse.move(fromPort.x + fromPort.width / 2, fromPort.y + fromPort.height / 2);
     await page.mouse.down();
@@ -410,6 +411,69 @@ async function scenarioT6(base, browser) {
     assert.match(await page.locator('.toast').last().textContent(), /结束节点不能有出边/);
     assert.equal(await page.locator('.cv-node.link-ok, .cv-node.link-bad').count(), 0);
     assert.equal(await page.locator('path.cv-link-preview').getAttribute('d'), '');
+  });
+
+  assertNoPageErrors(ctx.errors);
+}
+
+async function scenarioT7(base, browser) {
+  console.log('SCN-0019-T7 四向锚点/选边落库/刷新还原');
+  fakeB3.reset();
+  const rec = recorder();
+  const ctx = await openEditor(base, browser, rec.b3);
+  const page = ctx.page;
+
+  await check('四向锚点可拖拽，选边写入节点 layout', async function () {
+    for (const id of ['n1', 'n2', 'n3']) {
+      assert.equal(await page.locator('.cv-node[data-node="' + id + '"] .port[data-side]').count(), 4, id + ' 应有四向锚点');
+    }
+    const from = await page.locator('.cv-node[data-node="n2"] .port[data-side="bottom"]').boundingBox();
+    const to = await page.locator('.cv-node[data-node="n3"] .port[data-side="top"]').boundingBox();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('.cv-node[data-node="n3"].link-ok').count(), 1);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('path.hit').count(), 2, '替换旧出边后仍为 2 条边');
+    await page.locator('#we-save').click();
+    await page.waitForTimeout(800);
+    const save = rec.calls.find(function (c) { return c.method === 'PUT' && /\/definition$/.test(c.path); });
+    assert.ok(save, '缺少 definition PUT');
+    const nodes = save.body.graph.nodes;
+    assert.equal(nodes.find(function (n) { return n.id === 'n2'; }).layout.outSide, 'bottom');
+    assert.equal(nodes.find(function (n) { return n.id === 'n3'; }).layout.inSide, 'top');
+    assert.equal(nodes.find(function (n) { return n.id === 'n1'; }).layout.outSide, undefined);
+  });
+
+  await check('刷新后按 layout 还原选边，旧边仍自动选边', async function () {
+    const ctx2 = await openPage(browser, base, 'workflow-editor', 'id=' + encodeURIComponent(WF), { b3: rec.b3, wait: 600 });
+    const page2 = ctx2.page;
+    const layout = await page2.evaluate(function () {
+      const nodes = {};
+      document.querySelectorAll('.cv-node').forEach(function (el) {
+        nodes[el.getAttribute('data-node')] = { left: parseFloat(el.style.left), top: parseFloat(el.style.top) };
+      });
+      const paths = Array.prototype.map.call(document.querySelectorAll('path.e-seq'), function (path) {
+        const nums = (path.getAttribute('d').match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+        return { start: [nums[0], nums[1]], end: [nums[nums.length - 2], nums[nums.length - 1]] };
+      });
+      return { nodes: nodes, paths: paths };
+    });
+    function near(point, x, y) {
+      return Math.abs(point[0] - x) <= 1.5 && Math.abs(point[1] - y) <= 1.5;
+    }
+    const n1 = layout.nodes.n1;
+    const n2 = layout.nodes.n2;
+    const n3 = layout.nodes.n3;
+    assert.ok(layout.paths.some(function (p) {
+      return near(p.start, n2.left + 84, n2.top + 58) && near(p.end, n3.left + 84, n3.top);
+    }), 'n2 底部 → n3 顶部的选边未还原');
+    assert.ok(layout.paths.some(function (p) {
+      return near(p.start, n1.left + 168, n1.top + 29) && near(p.end, n2.left, n2.top + 29);
+    }), '旧边应回落到右→左自动选边');
+    await ctx2.page.close();
   });
 
   assertNoPageErrors(ctx.errors);
