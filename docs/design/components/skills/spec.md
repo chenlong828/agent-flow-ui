@@ -5,7 +5,7 @@ component: CMP-skills
 requirement: REQ-0005
 scenario: SCN-0005
 status: active
-updated: 2026-10-29
+updated: 2026-11-13
 ---
 
 # Skill 库
@@ -22,7 +22,7 @@ updated: 2026-10-29
 - 负责 / 不负责：负责 Skill 列表（分类 + 标签 + 搜索 + 计数）、启停、删除、引用计数弹窗；负责专门页 `pages/skill-detail.html` 的查看/编辑/新建：元数据、`SKILL.md` 正文、`scripts/` + `references/` 附件清单、草稿保存、整包下载；不负责专家侧组合与挂载（`CMP-experts`）、工作流节点引用配置（`CMP-workflow-editor`）、外壳/菜单/弹窗原语（`CMP-ui-shell`）、包构建与存储（B1）。
 - 内部逻辑：分类计数与列表同源；`description` 1–400；正文上限 16 KiB（UTF-8 字节，含 frontmatter），编辑态实时计数，超限阻断保存并提示把长内容放进 `references/`；保存必须走草稿：建草稿 → 改元数据/正文 → 上传或整理附件 → `save` 带 `If-Match`；版本由服务端递增；同名附件上传即覆盖；附件支持按钮选择与拖入附件区（同样落到 `scripts/`/`references/`）；取消即丢弃草稿，有未保存修改时先确认；`Ctrl/Cmd+S` 保存；编辑态操作栏吸顶；保存成功草稿被消费，页面重拉详情。
 - 数据所有权：页面状态直接保存 B1 `SkillListItem` / `SkillDetail`（`body` + `files`）/ `SkillDraft` / `SkillCategory` DTO；列表 `GET /skills`、详情 `GET /skills/{id}`、分类 `GET /skill-categories`、引用 `GET /skills/{id}/references`、启停 `PATCH /enabled`、删除 `DELETE`、下载 `GET /skills/{id}/download`、文档原文 `GET /skills/{id}/document`；草稿 `POST /skill-drafts`、`GET/DELETE /skill-drafts/{id}`、`POST/PATCH/DELETE /skill-drafts/{id}/files`、`POST /skill-drafts/{id}/save`，均经 `window.API`。不读 `MOCK`，不建第二套视图模型；草稿是服务端资源（TTL 24 小时），页面只持有 draft id 与文件清单，不做本地深拷贝；版本号由服务端生成，页面不本地递增。
-- 公开契约：页面入口 `pages/skills.html`、`pages/skill-detail.html?id=&mode=`；操作 `CMP-skills#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#draft`、`#download`；不变量 ①分类只使用 API 返回的 `code/label`，`data-cat` 使用 code（全部=`all`）；②保存 body 为 `name/categoryCode/description/tags/body`，不带 `version/enabled`；`description` 必填 1–400 字，页面 trim 后提交；③查看态 = 元数据条 + 正文渲染 + 文件清单 + 下载，不再有结构化五章与「结构化/文档」双 Tab；④编辑/新建 = 草稿，`SKILL.md` 只读，附件只能落在 `scripts/`、`references/`，同名上传覆盖；⑤正文超 16 KiB 阻断保存并提示放 `references/`；⑥引用只显示 `usedByCount`；⑦删除被引用 Skill 由 B1 返回 409 `referenced`，页面提示引用数并保留数据；⑧启停/删除/保存带 revision，`If-Match` 由 API 层生成；⑨不提供单文件下载与附件预览；⑩正文渲染边界：内容最大宽度 860px、长串自动换行、代码块与表格内部自适应，页面不得出现横向滚动；⑪编辑态未保存修改时取消/离开需确认；⑫缺图显示占位而不是裸破图。
+- 公开契约：页面入口 `pages/skills.html`、`pages/skill-detail.html?id=&mode=`；操作 `CMP-skills#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#draft`、`#download`；不变量 ①分类只使用 API 返回的 `code/label`，`data-cat` 使用 code（全部=`all`）；②保存 body 为 `name/categoryCode/description/tags/body`，不带 `version/enabled`；`description` 必填 1–400 字，页面 trim 后提交；③查看态 = 元数据条 + 正文渲染 + 文件清单 + 下载，不再有结构化五章与「结构化/文档」双 Tab；④编辑/新建 = 草稿，`SKILL.md` 只读，附件只能落在 `scripts/`、`references/`，同名上传覆盖；⑤正文超 16 KiB 阻断保存并提示放 `references/`；⑥引用只显示 `usedByCount`；⑦删除被引用 Skill 由 B1 返回 409 `referenced`，页面提示引用数并保留数据；⑧启停/删除/保存带 revision，`If-Match` 由 API 层生成；⑨不提供单文件下载与附件预览；⑩正文渲染边界：内容最大宽度 860px、长串自动换行、代码块与表格内部自适应，页面不得出现横向滚动；⑪编辑态未保存修改时取消/离开需确认；⑫缺图显示占位而不是裸破图；⑬列表行「更多」菜单右对齐触发按钮、向左展开，由 `DF.menu` 钳入视口四边。
 - 依赖：`DF`（`renderShell`、`table`、`empty`、`field`、`modal`、`menu`、`toast`、`tag`、`esc`、`icon`）/ `window.API` / `window.SKILL_MD`（编辑器适配层）/ `DEP-0001`（7.7.0 单包，只读与编辑共用）；不依赖 `MOCK` 或其他页面组件。
 - 冷热属性：冷（管理面用户触发）；编辑器按需加载 `DEP-0001`，不占首屏。
 - 变化轴：正文渲染主题、附件清单策略（大小/排序）、下载与复制、草稿自动保存。

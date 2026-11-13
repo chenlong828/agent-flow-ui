@@ -279,6 +279,43 @@ async function scn0005T4(browser) {
   } finally { await ctx.page.close(); }
 }
 
+async function scn0005T5(browser) {
+  const ctx = await open(browser, 'skills', '', { wait: 600 });
+  try {
+    const page = ctx.page;
+    const more = page.locator('[data-more]');
+    assert.ok(await more.count() >= 2, '列表至少两行');
+    const firstBtn = await more.nth(0).boundingBox();
+    await more.nth(0).click();
+    await page.waitForTimeout(120);
+    assert.equal(await page.locator('.menu').count(), 1, '首次点击应弹出菜单');
+
+    // 重复点击同一触发按钮：上一次的 document 关闭监听器不得吃掉新菜单
+    await more.nth(0).click();
+    await page.waitForTimeout(120);
+    assert.equal(await page.locator('.menu').count(), 1, '再次点击应仍能弹出菜单');
+    assert.equal(await page.locator('.menu').isVisible(), true, '菜单应可见');
+
+    // 右侧行菜单右对齐到触发按钮，整体留在内容区
+    const menuBox = await page.locator('.menu').boundingBox();
+    assert.ok(Math.abs((menuBox.x + menuBox.width) - (firstBtn.x + firstBtn.width)) <= 2,
+      '菜单应右对齐触发按钮，实际 ' + Math.round(menuBox.x + menuBox.width) + ' vs ' + Math.round(firstBtn.x + firstBtn.width));
+
+    // 最后一行：菜单向下展开时不得落到视口外
+    await more.last().scrollIntoViewIfNeeded();
+    await page.waitForTimeout(80);
+    await more.last().click();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('.menu').count(), 1, '最后一行应弹出菜单');
+    const box = await page.locator('.menu').boundingBox();
+    const vp = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+    assert.ok(box.x >= 8 && box.y >= 8, '菜单位置越出视口左上（' + box.x + ',' + box.y + '）');
+    assert.ok(box.x + box.width <= vp.w - 8, '菜单越出视口右侧（' + (box.x + box.width) + ' > ' + (vp.w - 8) + '）');
+    assert.ok(box.y + box.height <= vp.h - 8, '菜单越出视口底部（' + (box.y + box.height) + ' > ' + (vp.h - 8) + '）');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
 /* ----------------------------- SCN-0014 ----------------------------- */
 async function scn0014T1(browser) {
   const ctx = await openSkill(browser, 'sk-cres');
@@ -1030,7 +1067,8 @@ const SCENARIOS = [
     ['SCN-0005-T1', '正', '列表计数同源', scn0005T1],
     ['SCN-0005-T2', '正', '查看态渲染正文且无结构化 Tab', scn0005T2],
     ['SCN-0005-T3', '正', '保存走草稿且版本递增', scn0005T3],
-    ['SCN-0005-T4', '反', '被引用 Skill 禁止删除', scn0005T4]
+    ['SCN-0005-T4', '反', '被引用 Skill 禁止删除', scn0005T4],
+    ['SCN-0005-T5', '正', '行菜单可重复打开且不越出视口', scn0005T5]
   ]],
   ['SCN-0006', '专家注册与组合配置', [
     ['SCN-0006-T1', '正', '卡片计数与搜索', scn0006T1],

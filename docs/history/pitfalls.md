@@ -97,6 +97,12 @@ updated: 2026-11-13
 - **存续条件**：测试脚本用 `el.click()` 验证 clientX 起源的弹层时必然发生；真实用户点击不受影响。
 - **对策落点**：《调试方案》§4 规则四（必须派发带坐标的 `new MouseEvent('click', { clientX, clientY })`）。
 
+### JS-9 · 延迟挂载的 document 一次性关闭监听器未摘除 → 连续点同一触发器菜单不再弹出
+- **现象**：Skill 库行「更多」菜单第一次能弹出，之后再点同一按钮（或换一行按钮）菜单不再出现，也没有报错。
+- **根因**：`DF.menu` 用 `setTimeout` 在当前点击派发结束后 `document.addEventListener('click', closeMenu, { once: true })`；Skill 行菜单没有 `stopPropagation`，打开新菜单时上一次的 once 监听器仍挂在 document 上，本次点击冒泡就把它刚打开的新菜单关掉；旧菜单被替换时旧监听器也从未摘除。
+- **存续条件**：任何「延迟挂到 document 的 once 关闭监听 + 打开新菜单前不清理旧监听 + 触发器不 `stopPropagation`」的弹层都会复发。
+- **对策落点**：`assets/js/ui.js` 的 `menu()/closeMenu()` 把关闭监听器保存为单例，`closeMenu()` 先 `removeEventListener`；同轮定位改为按实际宽高钳入视口四边（含底边）；`SCN-0005-T5` 断言同一按钮连续点击仍能弹出、最后一行菜单不越出视口。
+
 ## 接口契约类
 
 ### API-1 · BFF 请求头白名单漏掉条件请求头 → 文档永远拿不到 304

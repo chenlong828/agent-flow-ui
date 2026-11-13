@@ -337,7 +337,8 @@ import { SK } from './skill-common.js';
       { label: '删除', icon: 'trash', danger: true, onClick: function () { deleteSkill(id); } }
     ];
     var r = e.currentTarget.getBoundingClientRect();
-    DF.menu(items, r.left, r.bottom + 4);
+    // 右对齐触发按钮，向左展开进内容区；共享 DF.menu 负责视口四边钳制
+    DF.menu(items, r.right, r.bottom + 4, { alignRight: true });
   }
 
   function openUsedBy(id) {

@@ -523,6 +523,7 @@
 
   /* ---------------- 右键/更多菜单 ---------------- */
   let menuEl = null;
+  let menuCloseHandler = null;
   function menu(items, x, y, opts) {
     closeMenu();
     /* 调用方统一传视觉坐标（clientX / rect 均是视觉值）：zoom 路径下 fixed 弹层随内容缩放，需除以
@@ -530,7 +531,6 @@
     const zK = zoomOnFixed ? (zoomK() || 1) : 1;
     x = x / zK; y = y / zK;
     menuEl = document.createElement('div'); menuEl.className = 'menu';
-    menuEl.style.left = Math.min(x, innerWidth - 160) + 'px'; menuEl.style.top = y + 'px';
     items.forEach(it => {
       const mi = document.createElement('div');
       mi.className = 'mi' + (it.danger ? ' danger' : '');
@@ -539,12 +539,32 @@
       menuEl.appendChild(mi);
     });
     document.body.appendChild(menuEl);
-    /* opts.alignRight：锚定下拉以右缘坐标 x 对齐——先钳右缘坐标入视口（8px 边距），再量实际宽度反推 left。
-     * 默认 x 语义仍为左缘 + innerWidth-160 防溢出钳制，右键菜单等旧调用不受影响。 */
-    if (opts && opts.alignRight) menuEl.style.left = Math.max(8, Math.min(x, innerWidth - 8) - menuEl.offsetWidth) + 'px';
-    setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
+    /* 先挂 DOM 再按实际尺寸定位：四边各留 16px，菜单宽高随文案变化也不会贴住窗口。
+     * opts.alignRight：x 为右缘坐标（菜单右缘对齐后向左展开）；默认 x 为左缘。 */
+    const margin = 16;
+    const boxW = menuEl.offsetWidth;
+    const boxH = menuEl.offsetHeight;
+    const left = Math.max(margin, Math.min(opts && opts.alignRight ? x - boxW : x, innerWidth - boxW - margin));
+    const top = Math.max(margin, Math.min(y, innerHeight - boxH - margin));
+    menuEl.style.left = left + 'px';
+    menuEl.style.top = top + 'px';
+
+    const menuRef = menuEl;
+    const onDocClick = function () { closeMenu(); };
+    menuCloseHandler = onDocClick;
+    /* 延迟到本次点击派发结束后再挂关闭监听；打开新菜单前 closeMenu() 会先摘掉旧监听，
+     * 否则连续点同一触发按钮时，上一次的 once 监听器会把刚打开的新菜单关掉。 */
+    setTimeout(function () {
+      if (menuEl === menuRef) document.addEventListener('click', onDocClick, { once: true });
+    }, 0);
   }
-  function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
+  function closeMenu() {
+    if (menuCloseHandler) {
+      document.removeEventListener('click', menuCloseHandler);
+      menuCloseHandler = null;
+    }
+    if (menuEl) { menuEl.remove(); menuEl = null; }
+  }
 
   function copyText(t) {
     const done = () => toast('已复制到剪贴板', 'ok');
