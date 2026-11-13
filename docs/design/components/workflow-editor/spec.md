@@ -5,7 +5,7 @@ component: CMP-workflow-editor
 requirement: REQ-0017
 scenario: SCN-0019
 status: active
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # 工作流编辑器（B3 live）
@@ -14,7 +14,7 @@ updated: 2026-11-12
 
 ## 0 模块卡
 
-> 追溯：`REQ-0017` / `SCN-0019`（verified；Playwright 11/11）。
+> 追溯：`REQ-0017` / `SCN-0019`（verified；Playwright 14/14）。
 
 - 状态：active（2026-10-30 从 MOCK 原型切到 B3 live）
 - 单元 / 层：组件 / L2 页面组件
@@ -26,12 +26,12 @@ updated: 2026-11-12
 - 依赖：`DF`（外壳、抽屉、弹窗、Toast、下载）、`API`（仅专家列表）、`workflow/model`、`workflow/validate`、`workflow/data`、`workflow/views/{canvas,inspector,dsl}`；不依赖列表页 JS；跨页只走 URL。
 - 冷热属性：冷；单详情加载 + 用户编辑，无轮询。
 - 变化轴：节点类型/边类型/校验矩阵；`layout/viewport` 结构变化集中在 `model`；三块视图分别演进。
-- 验证入口：`node tools/verify-workflow-editor.js`（SCN-0019，11/11）；`npm run test:workflow`；真实 B3 只读走查 `/pages/workflow-editor.html?id=<真实 id>`。
-- 验证计划：T1 加载/layout/viewport/未知 id；T2 编辑与保存（含元数据、If-Match、layout/viewport）；T3 非法图阻断与服务端 400 回填；T4 409/428、离开警告、无发布/版本/运行。
+- 验证入口：`node tools/verify-workflow-editor.js`（SCN-0019，14/14）；`npm run test:workflow`；真实 B3 只读走查 `/pages/workflow-editor.html?id=<真实 id>`。
+- 验证计划：T1 加载/layout/viewport/未知 id；T2 编辑与保存（含元数据、If-Match、layout/viewport）；T3 非法图阻断与服务端 400 回填；T4 409/428、离开警告、无发布/版本/运行；T5 节点拖动可达画布左上边缘（80% 与 45% 缩放）、`fit` 含负坐标。
 - 预算：页面编排约 28 KB + 三视图约 7 KB + 本规格；远低于 120k token。
 - 单独运行：`npm start` → `/pages/workflow-editor.html?id=<workflowId>`。
 - 删除测试：删除后工作流只能被创建/删除，不能改结构、校验或导出 DSL，编排能力整体消失；故保留独立页面。
-- 已知偏差：2026-11-12 已对齐 B3 七类节点（删除 `fanin`、新增 `split`、`fanout` 唯一前驱必须是 `split`）；元数据与图是两次 PUT，非原子；元数据成功、图失败时列表名称已变、图未变（页面保留编辑态并提示）。无自动保存/草稿/版本历史/发布/运行。现有 B3 测试数据需确认后清理。
+- 已知偏差：2026-11-12 已对齐 B3 七类节点（删除 `fanin`、新增 `split`、`fanout` 唯一前驱必须是 `split`）；元数据与图是两次 PUT，非原子；元数据成功、图失败时列表名称已变、图未变（页面保留编辑态并提示）。无自动保存/草稿/版本历史/发布/运行。现有 B3 测试数据需确认后清理。2026-11-13 修复画布拖动死区：`#cvScaler` 曾按默认中心缩放、节点/阶段坐标被 `Math.max(0, …)` 钳在原点右侧下方，开始节点在 80% 缩放下距画布左边 116px / 上边 65px 即停，45% 缩放下约 498px / 264px；现改为左上变换原点、允许负坐标并还原滚动偏移，`fit` 按包围盒平移（`SCN-0019-T5`）。
 
 ## 1 页面定位
 
@@ -58,7 +58,7 @@ updated: 2026-11-12
 - 名称/类型/描述有变更：先 `PUT /workflows/{id}`（`If-Match` 当前 revision），成功后用返回 revision 再 `PUT /definition`。
 - 图保存：`PUT /workflows/{id}/definition`，body `{graph}`，`If-Match` 当前 revision；成功清 dirty、刷新 revision/warnings。
 - 409：提示刷新/版本冲突，不覆盖；428：提示缺少版本条件；404：提示已删除。
-- 视口/布局：pan/zoom 只改本地 viewport，不置 dirty；保存时提交当前 viewport 与节点/阶段 layout。
+- 视口/布局：pan/zoom 只改本地 viewport，不置 dirty；保存时提交当前 viewport 与节点/阶段 layout。画布以左上为变换原点（`#cvScaler{transform-origin:0 0}`），节点/阶段可拖到可视区任意位置，越过原点记负坐标（B3 `layout.x/y` 为 number、无下界）；指针坐标换算需还原画布 `scrollLeft/scrollTop`；「适应画布」按内容包围盒（含负坐标）平移。
 
 ## 5 DSL
 

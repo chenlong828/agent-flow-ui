@@ -2,7 +2,7 @@
 layer: history
 module: global
 status: frozen
-updated: 2026-10-26
+updated: 2026-11-13
 ---
 
 # 坑档案
@@ -41,6 +41,12 @@ updated: 2026-10-26
 - **现象**：`80vw`、`96vw` 这类宽度在存在缩放（zoom 或 transform 兜底）时，"视口的百分之八十"究竟是换算前还是换算后，各引擎不一致。
 - **存续条件**：任何使用缩放方案的界面，永久需要面对。
 - **对策落点**：`assets/js/ui.js` `DF.modal.open` 的 `resolveW()`——字符串宽度在 zoom 路径下除以缩放系数换算为像素，兜底路径下不换算；规则集中在这一处，新增宽度逻辑必须走它。
+
+### CSS-7 · transform 默认按中心缩放，与左上坐标原点叠加出画布死区
+- **现象**：工作流画布在 80% 缩放时，开始节点最多只能拖到距画布左边 116px、上边 65px；45% 缩放时约 498px / 264px，左上大片区域放不了节点。用户报告「开始节点移动范围有限，鼠标不能拖动到边缘区，造成大量区域浪费」。
+- **根因**：`#cvScaler` 的 `transform: translate(...) scale(...)` 没有设置 `transform-origin`，默认按元素中心缩放，整张图向右下偏移；节点坐标以画布左上为原点且被 `Math.max(0, …)` 钳住，偏移出来的左上区域永远不可达；`toGraph()` 又按变换前坐标反算，未还原缩放原点与滚动偏移。
+- **存续条件**：任何「绝对定位子元素 + 外层 transform 缩放/平移」的画布，只要坐标原点与变换原点不一致，或对坐标做 ≥0 钳制，就会复发。
+- **对策落点**：`pages/workflow-editor.html` 的 `#cvScaler{transform-origin:0 0}`；`workflow-editor.js` 拖动不加坐标钳制、`toGraph`/`zoomAt` 还原 `scrollLeft/scrollTop`、`fitCanvas` 按内容包围盒平移；`SCN-0019-T5` 在 80%/45% 缩放下断言节点可达左上边缘。
 
 ## JavaScript / DOM 类
 

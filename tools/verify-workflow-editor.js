@@ -65,6 +65,7 @@ async function main() {
     await scenarioT2(server.base, browser);
     await scenarioT3(server.base, browser);
     await scenarioT4(server.base, browser);
+    await scenarioT5(server.base, browser);
   } finally {
     await browser.close();
     await server.close();
@@ -268,6 +269,59 @@ async function scenarioT4(base, browser) {
     const text = await page.locator('#page-body').textContent();
     assert.doesNotMatch(text, /发布|运行/);
   });
+  assertNoPageErrors(ctx.errors);
+}
+
+async function scenarioT5(base, browser) {
+  console.log('SCN-0019-T5 拖动可达画布边缘（左上无死区）');
+  fakeB3.reset();
+  const rec = recorder();
+  const ctx = await openEditor(base, browser, rec.b3);
+  const page = ctx.page;
+  const wrap = await page.locator('#cvWrap').boundingBox();
+
+  async function dragStartNodeToCorner() {
+    const node = await page.locator('.cv-node[data-node="n1"]').boundingBox();
+    assert.ok(node, '开始节点不可见');
+    await page.mouse.move(node.x + 20, node.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(wrap.x + 1, wrap.y + 1, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    const after = await page.locator('.cv-node[data-node="n1"]').boundingBox();
+    return { gapLeft: Math.round(after.x - wrap.x), gapTop: Math.round(after.y - wrap.y) };
+  }
+
+  await check('80% 缩放下开始节点可拖到画布左上边缘', async function () {
+    const gap = await dragStartNodeToCorner();
+    assert.ok(gap.gapLeft <= 5, '左侧死区 ' + gap.gapLeft + 'px（应可达边缘）');
+    assert.ok(gap.gapTop <= 5, '顶部死区 ' + gap.gapTop + 'px（应可达边缘）');
+    const pos = await page.locator('.cv-node[data-node="n1"]').evaluate(function (el) {
+      return { left: el.style.left, top: el.style.top };
+    });
+    assert.ok(parseFloat(pos.left) < 0 || parseFloat(pos.top) < 0, '越过画布原点时应使用负坐标，实际 left=' + pos.left + ' top=' + pos.top);
+  });
+
+  await check('45% 缩放下仍可拖到左上边缘', async function () {
+    for (let i = 0; i < 6; i++) await page.evaluate(function () { document.getElementById('z-out').click(); });
+    await page.waitForTimeout(150);
+    assert.match(await page.locator('#z-val').textContent(), /45%/);
+    const gap = await dragStartNodeToCorner();
+    assert.ok(gap.gapLeft <= 5, '45% 左侧死区 ' + gap.gapLeft + 'px（应可达边缘）');
+    assert.ok(gap.gapTop <= 5, '45% 顶部死区 ' + gap.gapTop + 'px（应可达边缘）');
+  });
+
+  await check('适应画布后负坐标节点仍在可视区', async function () {
+    await page.evaluate(function () { document.getElementById('z-fit').click(); });
+    await page.waitForTimeout(200);
+    const inside = await page.evaluate(function () {
+      const wrapRect = document.getElementById('cvWrap').getBoundingClientRect();
+      const node = document.querySelector('.cv-node[data-node="n1"]').getBoundingClientRect();
+      return node.left >= wrapRect.left - 2 && node.top >= wrapRect.top - 2;
+    });
+    assert.ok(inside, '负坐标节点被「适应画布」裁到可视区外');
+  });
+
   assertNoPageErrors(ctx.errors);
 }
 

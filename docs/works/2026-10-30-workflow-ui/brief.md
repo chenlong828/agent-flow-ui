@@ -2,7 +2,7 @@
 layer: works
 module: workflow
 status: active
-updated: 2026-10-30
+updated: 2026-11-13
 ---
 
 # 工序：工作流列表与编辑器同源接入（B3）
@@ -40,6 +40,7 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 | T-0030-10 | change | `CMP-workflow-editor` | 已完成（2026-10-30） | `workflow-editor.js`、`workflow/model.js`、`validate.js`、`data.js`、`SCN-0019` |
 | T-0030-11 | change | `CMP-workflow-list` + `CMP-workflow-editor` | 已完成（2026-10-30） | 两页移除 MOCK/发布/版本/运行引用；新增 fake-b3 与场景脚本 |
 | T-0030-12 | verify | 两组件 | 已完成（2026-10-30） | `tools/verify-workflow-list.js`、`tools/verify-workflow-editor.js`、`npm test`、真实 B3 读写联调 |
+| T-0030-13 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 画布拖动死区修复：`workflow-editor.js`、`pages/workflow-editor.html`、`tools/verify-workflow-editor.js`、`SCN-0019` |
 
 ## 装载清单（必读）
 
@@ -98,3 +99,9 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 - 列表类型 Tab 计数为当前页分布（B3 无独立 count 端点）。
 - 现有 B3 测试工作流与 B1 测试 Skill 未清理，需用户确认后执行。
 - 真实写路径（创建/保存/删除）已用临时记录验证并清理；存量 14 条测试工作流未清理。
+
+## 增量修复（2026-11-13）
+
+- 缺陷：开始节点拖不到画布左上边缘，缩放后死区更大（80% 缩放 116/65px，45% 约 498/264px）。
+- 根因与修复：`#cvScaler` 默认按中心缩放 + 节点/阶段坐标被钳在 `x/y≥0` + `toGraph` 未还原滚动偏移；改为左上变换原点、允许负坐标、补滚动偏移与 `fit` 包围盒。
+- 验证：SCN-0019 14/14（新增 T5 三条断言）；任务 `T-0030-13`。

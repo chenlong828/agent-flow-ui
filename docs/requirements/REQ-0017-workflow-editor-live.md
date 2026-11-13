@@ -2,7 +2,7 @@
 layer: requirements
 module: workflow-editor
 status: delivered
-updated: 2026-10-30
+updated: 2026-11-13
 ---
 
 # REQ-0017 工作流编辑器同源接入（B3）
@@ -16,5 +16,5 @@ updated: 2026-10-30
 | 非目标 | 不做自动保存、本地草稿、版本历史、发布/运行；不做多人协同/实时合并；不做执行配置（skills/harness/knowledge/tools/inputs）；不做旧图迁移；不把 `layout/viewport` 的字段语义交给后端校验。 |
 | 约束 | 同源 BFF；写操作带 `If-Match`；只有合法图可保存；本地校验与服务端规则一致；`layout/viewport` 由前端按 `dsl.schema.json` 自校、后端透传；无 MOCK 回落；桌面优先；无构建、无新增运行时依赖；模块按 ESM（`docs/history/works/2026-10-30-frontend-esm/`）。 |
 | 影响场景 | `SCN-0019`（`design/scenarios/flow/workflow-editor/edit-workflow-live/scenario.md`） |
-| 澄清记录 | 2026-10-30 交互式评审：纯手动保存（取消自动保存/草稿）；保存置灰 + 问题元素红框 + 校验面板 + 图级阻断条；视口不算未保存修改、随保存提交；离开警告；移除发布/版本/运行；新建入口由列表向导/模板复制提供合法起点。契约依据 `history/decisions/2026-10-30-frontend-esm.md` 与 B3 `2026-10-30-workflow-contract-boundary`。 |
-| 状态 | `delivered`（2026-10-30；场景 `verified`；2026-11-12 对齐 B3 七类节点：删除 `fanin`、新增 `split`、`fanout` 的唯一 seq 前驱必须是 `split`，只影响调色板、本地校验与节点副标题） |
+| 澄清记录 | 2026-10-30 交互式评审：纯手动保存（取消自动保存/草稿）；保存置灰 + 问题元素红框 + 校验面板 + 图级阻断条；视口不算未保存修改、随保存提交；离开警告；移除发布/版本/运行；新建入口由列表向导/模板复制提供合法起点。契约依据 `history/decisions/2026-10-30-frontend-esm.md` 与 B3 `2026-10-30-workflow-contract-boundary`。<br>2026-11-13 用户报告画布拖动死区（开始节点拖不到边缘、区域浪费）；按用户裁定并入本卡、不新建 REQ。实测 80% 缩放死区 116/65px、45% 约 498/264px；根因 `#cvScaler` 默认中心缩放、节点/阶段坐标被钳在 `x/y≥0`、指针换算未还原滚动。修复为左上变换原点 + 允许负坐标 + 滚动偏移 + `fit` 包围盒；新增 `SCN-0019-T5`。 |
+| 状态 | `delivered`（2026-10-30；场景 `verified`；2026-11-12 对齐 B3 七类节点：删除 `fanin`、新增 `split`、`fanout` 的唯一 seq 前驱必须是 `split`，只影响调色板、本地校验与节点副标题；2026-11-13 修复画布拖动死区，SCN-0019 14/14） |

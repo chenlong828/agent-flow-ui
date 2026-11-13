@@ -299,7 +299,11 @@ function toGraph(clientX, clientY) {
   const wrap = document.getElementById('cvWrap');
   const rect = wrap.getBoundingClientRect();
   const vp = state.graph.viewport;
-  return { x: (clientX - rect.left - vp.x) / vp.zoom, y: (clientY - rect.top - vp.y) / vp.zoom };
+  // #cvScaler 以左上角为变换原点；画布可滚动，指针坐标先还原滚动偏移再换算成图坐标。
+  return {
+    x: (clientX - rect.left + wrap.scrollLeft - vp.x) / vp.zoom,
+    y: (clientY - rect.top + wrap.scrollTop - vp.y) / vp.zoom
+  };
 }
 
 function bindPalette() {
@@ -338,19 +342,28 @@ function zoomAt(factor, clientX, clientY) {
   const oldZoom = vp.zoom;
   const newZoom = Math.max(0.35, Math.min(1.6, oldZoom * factor));
   if (clientX === undefined) { clientX = rect.left + rect.width / 2; clientY = rect.top + rect.height / 2; }
-  const gx = (clientX - rect.left - vp.x) / oldZoom;
-  const gy = (clientY - rect.top - vp.y) / oldZoom;
+  const px = clientX - rect.left + wrap.scrollLeft;
+  const py = clientY - rect.top + wrap.scrollTop;
+  const gx = (px - vp.x) / oldZoom;
+  const gy = (py - vp.y) / oldZoom;
   vp.zoom = newZoom;
-  vp.x = clientX - rect.left - gx * newZoom;
-  vp.y = clientY - rect.top - gy * newZoom;
+  vp.x = px - gx * newZoom;
+  vp.y = py - gy * newZoom;
   paint();
 }
 
 function fitCanvas() {
   const wrap = document.getElementById('cvWrap');
-  const size = canvasSize();
-  const zoom = Math.max(0.35, Math.min(1.2, Math.min(wrap.clientWidth / (size.w + 80), wrap.clientHeight / (size.h + 80))));
-  state.graph.viewport = { x: 20, y: 20, zoom: zoom };
+  const size = canvasSize(state.graph);
+  // 允许负坐标后，内容可能落在画布原点左上，fit 需要按整体包围盒平移。
+  let minX = 0;
+  let minY = 0;
+  state.graph.nodes.forEach(function (n) { minX = Math.min(minX, n.x); minY = Math.min(minY, n.y); });
+  state.graph.stages.forEach(function (s) { if (s.box) { minX = Math.min(minX, s.box.x); minY = Math.min(minY, s.box.y); } });
+  const spanW = size.w - minX;
+  const spanH = size.h - minY;
+  const zoom = Math.max(0.35, Math.min(1.2, Math.min(wrap.clientWidth / (spanW + 80), wrap.clientHeight / (spanH + 80))));
+  state.graph.viewport = { x: 20 - minX * zoom, y: 20 - minY * zoom, zoom: zoom };
   paint();
 }
 
@@ -424,16 +437,16 @@ document.addEventListener('mousemove', function (event) {
     const p0 = toGraph(drag.ox, drag.oy);
     const p1 = toGraph(event.clientX, event.clientY);
     const node = state.graph.nodes.find(function (n) { return n.id === drag.id; });
-    node.x = Math.max(0, Math.round(drag.nx + p1.x - p0.x));
-    node.y = Math.max(0, Math.round(drag.ny + p1.y - p0.y));
+    node.x = Math.round(drag.nx + p1.x - p0.x);
+    node.y = Math.round(drag.ny + p1.y - p0.y);
     drag.moved = true;
     paint();
   } else if (drag.mode === 'stage') {
     const p0 = toGraph(drag.ox, drag.oy);
     const p1 = toGraph(event.clientX, event.clientY);
     const stage = state.graph.stages.find(function (s) { return s.id === drag.id; });
-    stage.box.x = Math.max(0, Math.round(drag.box.x + p1.x - p0.x));
-    stage.box.y = Math.max(0, Math.round(drag.box.y + p1.y - p0.y));
+    stage.box.x = Math.round(drag.box.x + p1.x - p0.x);
+    stage.box.y = Math.round(drag.box.y + p1.y - p0.y);
     paint();
   } else if (drag.mode === 'pan') {
     const vp = state.graph.viewport;
@@ -501,8 +514,8 @@ function addType(type, x, y) {
     name: (NODE_META[type] || {}).label || type,
     stageId: null,
     expertId: type === 'confirm' ? null : (firstExpert ? firstExpert.id : null),
-    x: Math.max(0, Math.round(x || 80)),
-    y: Math.max(0, Math.round(y || 80))
+    x: Math.round(x || 80),
+    y: Math.round(y || 80)
   };
   state.graph.nodes.push(node);
   state.sel = { type: 'node', id: node.id };
@@ -516,7 +529,7 @@ function addStage(x, y) {
     id: newId('s'),
     name: '新阶段',
     description: '',
-    box: { x: Math.max(0, Math.round(x || 60)), y: Math.max(0, Math.round(y || 60)), w: 460, h: 200 }
+    box: { x: Math.round(x || 60), y: Math.round(y || 60), w: 460, h: 200 }
   };
   state.graph.stages.push(stage);
   state.sel = { type: 'stage', id: stage.id };
