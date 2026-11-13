@@ -349,6 +349,7 @@ async function scenarioT6(base, browser) {
     });
     assert.ok(first.length > 20, '预览线长度应大于 20，实际 ' + first.length);
     assert.notEqual(first.dash, 'none', '预览线应为虚线');
+    assert.match(await preview.getAttribute('d'), /^M [^ ]+ [^ ]+ L [^ ]+ [^ ]+$/, '预览应为直线跟随，不套用边曲线');
     await page.mouse.move(start.x + 120, start.y + 70, { steps: 4 });
     await page.waitForTimeout(80);
     const second = await preview.evaluate(function (el) {

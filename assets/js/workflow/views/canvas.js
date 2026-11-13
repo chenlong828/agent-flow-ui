@@ -64,9 +64,9 @@ function curvePath(s, t) {
   return 'M ' + s.x + ' ' + s.y + ' C ' + (s.x + dx) + ' ' + s.y + ', ' + (t.x - dx) + ' ' + t.y + ', ' + t.x + ' ' + t.y;
 }
 
-/** 拖拽连线的橡皮筋预览：与 seq 边同一条三次贝塞尔，终点跟随指针。 */
+/** 拖拽连线的橡皮筋预览：直线跟随指针，不套用边曲线的控制点。 */
 export function linkPreviewPath(a, b) {
-  return curvePath(a, b);
+  return 'M ' + a.x + ' ' + a.y + ' L ' + b.x + ' ' + b.y;
 }
 
 function edgePath(a, b, kind) {

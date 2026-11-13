@@ -51,7 +51,7 @@ updated: 2026-11-13
 - 节点类型：`start|end|agent|split|review|confirm|fanout`（与 B3 七类一致，`fanin` 已删除）；边：`seq|rollback`；ID 由 `model.newId` 生成，符合 B3 规则。
 - `start/end/agent/split/review/fanout` 必须绑定专家；`confirm` 禁止绑定专家；`fanout` 的唯一 seq 前驱必须是 `split`；回退只能从 review/confirm 指向 seq 祖先且不能指向 end。
 - 顺序边每个节点最多一进一出；拖出边会替换同源/同目标的旧 seq；回退边每个源最多一条。
-- 端口拖拽连线：源端口到指针画虚线橡皮筋；悬停目标由 `validate.checkNewEdge` 判定，合法绿框、非法红框；非法投放 Toast 原因且不建边（自连、开始入边、结束出边、seq 环、fanout 前驱、回退祖先）；合法投放才进入替换与建边。
+- 端口拖拽连线：源端口到指针画虚线橡皮筋（直线跟随，不套用边曲线）；悬停目标由 `validate.checkNewEdge` 判定，合法绿框、非法红框；非法投放 Toast 原因且不建边（自连、开始入边、结束出边、seq 环、fanout 前驱、回退祖先）；合法投放才进入替换与建边。
 - 保存前本地校验 errors 必须为 0；服务端 400 的 `details.issues` 回填到面板/红框，并保留编辑态。
 
 ## 4 保存与并发

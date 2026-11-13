@@ -105,7 +105,7 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 
 - 需求：连线入口不可发现、拖拽无反馈。端口拖拽需显示橡皮筋虚线；悬停目标按规则标绿/标红；非法投放提示原因且不建边。
 - 规则判据：`validate.checkNewEdge(graph, from, to, kind)`，与拓扑校验同源（自连、开始入边、结束出边、seq 环、fanout 前驱、回退祖先）；`createEdge` 与拖拽高亮共用。
-- 视图：`views/canvas.js#linkPreviewPath` 生成预览曲线；页面在 SVG 内更新 `.cv-link-preview`，投放目标加 `.link-ok`/`.link-bad`；结束后清除预览与高亮。
+- 视图：`views/canvas.js#linkPreviewPath` 生成预览直线（跟随指针，不套用边曲线）；页面在 SVG 内更新 `.cv-link-preview`，投放目标加 `.link-ok`/`.link-bad`；结束后清除预览与高亮。
 - 验证：SCN-0019 17/17（新增 T6 三条）；`node --test tests/workflow` 28/28（新增 `checkNewEdge` 两条）。
 
 ## 增量修复（2026-11-13）
