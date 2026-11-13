@@ -3,7 +3,7 @@ layer: design
 module: global
 status: current
 generated: true
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # 场景索引

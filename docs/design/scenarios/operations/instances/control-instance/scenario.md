@@ -4,10 +4,12 @@ module: instances
 status: verified
 flow: control-instance
 scenario: SCN-0004
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # SCN-0004 运行实例监控与发起运行（B4 live）
+
+> 需求：`REQ-0019`（取代 `REQ-0004`）。
 
 ## 入口
 

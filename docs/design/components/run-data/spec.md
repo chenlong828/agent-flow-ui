@@ -2,7 +2,7 @@
 layer: design
 module: run-data
 component: CMP-run-data
-requirement: REQ-0004
+requirement: REQ-0019
 scenario: SCN-0004
 status: active
 updated: 2026-11-12

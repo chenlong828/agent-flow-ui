@@ -2,7 +2,7 @@
 layer: design
 module: instances
 component: CMP-instances
-requirement: REQ-0004
+requirement: REQ-0019
 scenario: SCN-0004
 status: active
 updated: 2026-11-12
@@ -14,7 +14,7 @@ updated: 2026-11-12
 
 ## 0 模块卡
 
-> 追溯：`REQ-0004` / `SCN-0004`（verified；Playwright 5 条）。
+> 追溯：`REQ-0019`（原 `REQ-0004`）/ `SCN-0004`（verified；Playwright 5 条）。
 
 - 状态：active（2026-11-12 从 MOCK 原型切到 B4 `/runs` live）
 - 单元 / 层：组件 / L2 页面组件（列表 + 详情两个页面入口）
