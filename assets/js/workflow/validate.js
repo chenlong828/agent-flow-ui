@@ -226,6 +226,49 @@ export function topologyIssues(graph) {
   return issues;
 }
 
+/**
+ * 新增/替换一条边的即时检查。拖拽高亮与投放拦截共用，规则与 topologyIssues 的硬约束一致；
+ * 返回 null 表示允许，否则返回可直接展示的原因。调用方负责替换同源/同目标的旧边。
+ */
+export function checkNewEdge(graph, fromId, toId, kind) {
+  if (!isObject(graph) || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) return '图数据不完整';
+  if (EDGE_KINDS.indexOf(kind) < 0) return '连线类型非法';
+  if (fromId === toId) return '起点与终点不能相同';
+  const source = graph.nodes.find(function (n) { return n.id === fromId; });
+  const target = graph.nodes.find(function (n) { return n.id === toId; });
+  if (!source || !target) return '连线端点不存在';
+
+  const seqIn = new Map();
+  graph.nodes.forEach(function (n) { seqIn.set(n.id, []); });
+  graph.edges.forEach(function (e) {
+    if (e.kind === 'seq' && seqIn.has(e.to)) seqIn.get(e.to).push(e);
+  });
+  function ancestorsOf(id) {
+    const ancestors = new Set();
+    const queue = [id];
+    while (queue.length) {
+      const current = queue.shift();
+      (seqIn.get(current) || []).forEach(function (e) {
+        if (!ancestors.has(e.from)) { ancestors.add(e.from); queue.push(e.from); }
+      });
+    }
+    return ancestors;
+  }
+
+  if (kind === 'seq') {
+    if (source.type === 'end') return '结束节点不能有出边';
+    if (target.type === 'start') return '开始节点不能有入边';
+    if (target.type === 'fanout' && source.type !== 'split') return 'fanout 的唯一 seq 前驱必须是 split';
+    if (ancestorsOf(fromId).has(toId)) return 'seq 子图存在环';
+    return null;
+  }
+
+  if (source.type !== 'review' && source.type !== 'confirm') return '只有 review/confirm 可以发起回退';
+  if (target.type === 'end') return '不能回退到结束节点';
+  if (!ancestorsOf(fromId).has(toId)) return '回退目标不是 seq 路径上的祖先';
+  return null;
+}
+
 function requiresExpert(type) {
   return type === 'start' || type === 'end' || type === 'agent' || type === 'split' || type === 'review' || type === 'fanout';
 }

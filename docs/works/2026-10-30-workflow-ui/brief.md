@@ -41,6 +41,7 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 | T-0030-11 | change | `CMP-workflow-list` + `CMP-workflow-editor` | 已完成（2026-10-30） | 两页移除 MOCK/发布/版本/运行引用；新增 fake-b3 与场景脚本 |
 | T-0030-12 | verify | 两组件 | 已完成（2026-10-30） | `tools/verify-workflow-list.js`、`tools/verify-workflow-editor.js`、`npm test`、真实 B3 读写联调 |
 | T-0030-13 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 画布拖动死区修复：`workflow-editor.js`、`pages/workflow-editor.html`、`tools/verify-workflow-editor.js`、`SCN-0019` |
+| T-0030-14 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 连线拖拽预览与非法投放拦截：`workflow-editor.js`、`views/canvas.js`、`validate.js`、`pages/workflow-editor.html`、`tests/workflow/validate.test.js`、`tools/verify-workflow-editor.js`、`SCN-0019-T6` |
 
 ## 装载清单（必读）
 
@@ -99,6 +100,13 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 - 列表类型 Tab 计数为当前页分布（B3 无独立 count 端点）。
 - 现有 B3 测试工作流与 B1 测试 Skill 未清理，需用户确认后执行。
 - 真实写路径（创建/保存/删除）已用临时记录验证并清理；存量 14 条测试工作流未清理。
+
+## 增量特性（2026-11-13）
+
+- 需求：连线入口不可发现、拖拽无反馈。端口拖拽需显示橡皮筋虚线；悬停目标按规则标绿/标红；非法投放提示原因且不建边。
+- 规则判据：`validate.checkNewEdge(graph, from, to, kind)`，与拓扑校验同源（自连、开始入边、结束出边、seq 环、fanout 前驱、回退祖先）；`createEdge` 与拖拽高亮共用。
+- 视图：`views/canvas.js#linkPreviewPath` 生成预览曲线；页面在 SVG 内更新 `.cv-link-preview`，投放目标加 `.link-ok`/`.link-bad`；结束后清除预览与高亮。
+- 验证：SCN-0019 17/17（新增 T6 三条）；`node --test tests/workflow` 28/28（新增 `checkNewEdge` 两条）。
 
 ## 增量修复（2026-11-13）
 

@@ -59,6 +59,16 @@ export function portPos(node, side) {
   return { x: node.x + NODE_W - 22, y: node.y + NODE_H };
 }
 
+function curvePath(s, t) {
+  const dx = Math.max(40, Math.abs(t.x - s.x) / 2);
+  return 'M ' + s.x + ' ' + s.y + ' C ' + (s.x + dx) + ' ' + s.y + ', ' + (t.x - dx) + ' ' + t.y + ', ' + t.x + ' ' + t.y;
+}
+
+/** 拖拽连线的橡皮筋预览：与 seq 边同一条三次贝塞尔，终点跟随指针。 */
+export function linkPreviewPath(a, b) {
+  return curvePath(a, b);
+}
+
 function edgePath(a, b, kind) {
   if (kind === 'rollback') {
     const s = portPos(a, 'rb');
@@ -66,10 +76,7 @@ function edgePath(a, b, kind) {
     const sag = Math.max(70, Math.abs(s.y - t.y) * 0.2 + 60);
     return 'M ' + s.x + ' ' + s.y + ' C ' + (s.x + 40) + ' ' + (s.y + sag) + ', ' + (t.x - 40) + ' ' + (t.y + sag) + ', ' + t.x + ' ' + t.y;
   }
-  const s = portPos(a, 'out');
-  const t = portPos(b, 'in');
-  const dx = Math.max(40, Math.abs(t.x - s.x) / 2);
-  return 'M ' + s.x + ' ' + s.y + ' C ' + (s.x + dx) + ' ' + s.y + ', ' + (t.x - dx) + ' ' + t.y + ', ' + t.x + ' ' + t.y;
+  return curvePath(portPos(a, 'out'), portPos(b, 'in'));
 }
 
 export function edgeSvg(graph, sel, marked) {
@@ -91,5 +98,6 @@ export function edgeSvg(graph, sel, marked) {
   return '<svg class="cv-edges" width="100%" height="100%">' +
     '<defs><marker id="arw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">' +
     '<path d="M0 0L8 4L0 8" fill="#94a3b8"/></marker></defs>' +
-    paths.join('').replace(/class="e-seq"/g, 'class="e-seq" marker-end="url(#arw)"') + labels.join('') + '</svg>';
+    paths.join('').replace(/class="e-seq"/g, 'class="e-seq" marker-end="url(#arw)"') +
+    '<path class="cv-link-preview" d=""/>' + labels.join('') + '</svg>';
 }

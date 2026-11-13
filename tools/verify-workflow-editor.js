@@ -66,6 +66,7 @@ async function main() {
     await scenarioT3(server.base, browser);
     await scenarioT4(server.base, browser);
     await scenarioT5(server.base, browser);
+    await scenarioT6(server.base, browser);
   } finally {
     await browser.close();
     await server.close();
@@ -320,6 +321,94 @@ async function scenarioT5(base, browser) {
       return node.left >= wrapRect.left - 2 && node.top >= wrapRect.top - 2;
     });
     assert.ok(inside, '负坐标节点被「适应画布」裁到可视区外');
+  });
+
+  assertNoPageErrors(ctx.errors);
+}
+
+async function scenarioT6(base, browser) {
+  console.log('SCN-0019-T6 连线拖拽预览/目标高亮/非法投放');
+  fakeB3.reset();
+  const rec = recorder();
+  const ctx = await openEditor(base, browser, rec.b3);
+  const page = ctx.page;
+
+  await check('拖拽端口显示跟随指针的虚线预览', async function () {
+    const port = await page.locator('.cv-node[data-node="n2"] .port.out').boundingBox();
+    const target = await page.locator('.cv-node[data-node="n3"]').boundingBox();
+    const preview = page.locator('path.cv-link-preview');
+    const start = { x: port.x + port.width / 2, y: port.y + port.height / 2 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 50, start.y + 30, { steps: 4 });
+    await page.waitForTimeout(80);
+    assert.equal(await preview.count(), 1);
+    const first = await preview.evaluate(function (el) {
+      const end = el.getPointAtLength(el.getTotalLength());
+      return { x: end.x, y: end.y, length: el.getTotalLength(), dash: getComputedStyle(el).strokeDasharray };
+    });
+    assert.ok(first.length > 20, '预览线长度应大于 20，实际 ' + first.length);
+    assert.notEqual(first.dash, 'none', '预览线应为虚线');
+    await page.mouse.move(start.x + 120, start.y + 70, { steps: 4 });
+    await page.waitForTimeout(80);
+    const second = await preview.evaluate(function (el) {
+      const end = el.getPointAtLength(el.getTotalLength());
+      return { x: end.x, y: end.y };
+    });
+    assert.ok(second.x > first.x && second.y > first.y, '预览终点未跟随指针');
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('.cv-node[data-node="n3"].link-ok').count(), 1);
+    await page.mouse.up();
+    await page.waitForTimeout(120);
+    assert.equal(await preview.getAttribute('d'), '');
+    assert.equal(await page.locator('.cv-node.link-ok, .cv-node.link-bad').count(), 0);
+    assert.equal(await page.locator('path.hit').count(), 2);
+  });
+
+  await check('合法目标高亮且松开后建立连线', async function () {
+    await page.locator('.we-pitem[data-type="agent"]').click();
+    await page.waitForTimeout(150);
+    const newNode = await page.locator('.cv-node').last().getAttribute('data-node');
+    await page.locator('#we-drawer-close').click();
+    await page.waitForTimeout(120);
+
+    async function connect(fromId, toId) {
+      const fromPort = await page.locator('.cv-node[data-node="' + fromId + '"] .port.out').boundingBox();
+      const target = await page.locator('.cv-node[data-node="' + toId + '"]').boundingBox();
+      await page.mouse.move(fromPort.x + fromPort.width / 2, fromPort.y + fromPort.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
+      await page.waitForTimeout(100);
+      assert.equal(await page.locator('.cv-node[data-node="' + toId + '"].link-ok').count(), 1, '目标节点未高亮为可投放');
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+    }
+
+    assert.equal(await page.locator('path.hit').count(), 2);
+    await connect('n2', newNode);
+    assert.equal(await page.locator('path.hit').count(), 2, '替换同源旧边后连线数应保持 2');
+    await connect(newNode, 'n3');
+    assert.equal(await page.locator('path.hit').count(), 3);
+    assert.equal(await page.locator('#we-save').isDisabled(), false);
+  });
+
+  await check('非法目标标红并拦截，不新增连线', async function () {
+    const before = await page.locator('path.hit').count();
+    const fromPort = await page.locator('.cv-node[data-node="n3"] .port.out').boundingBox();
+    const target = await page.locator('.cv-node[data-node="n1"]').boundingBox();
+    await page.mouse.move(fromPort.x + fromPort.width / 2, fromPort.y + fromPort.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('.cv-node[data-node="n1"].link-bad').count(), 1);
+    assert.equal(await page.locator('.cv-node[data-node="n1"].link-ok').count(), 0);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('path.hit').count(), before);
+    assert.match(await page.locator('.toast').last().textContent(), /结束节点不能有出边/);
+    assert.equal(await page.locator('.cv-node.link-ok, .cv-node.link-bad').count(), 0);
+    assert.equal(await page.locator('path.cv-link-preview').getAttribute('d'), '');
   });
 
   assertNoPageErrors(ctx.errors);

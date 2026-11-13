@@ -6,7 +6,8 @@ import {
   validateEditorGraph,
   issueTarget,
   normalizeIssues,
-  shapeIssues
+  shapeIssues,
+  checkNewEdge
 } from '../../assets/js/workflow/validate.js';
 
 const EXPERT = '11111111-1111-4111-8111-111111111111';
@@ -160,4 +161,45 @@ test('未知字段按 graph_shape 报错（对齐 B3 unknownFields）', () => {
   const issues = shapeIssues(graph);
   assert.ok(issues.some((i) => i.path === 'graph.nodes[0].x' && i.message === '未知字段'));
   assert.ok(issues.some((i) => i.path === 'graph.edges[0].extra' && i.message === '未知字段'));
+});
+
+function chainGraph() {
+  return {
+    stages: [],
+    nodes: [
+      { id: 'n1', type: 'start', name: '开始', stageId: null, expertId: EXPERT },
+      { id: 'n2', type: 'agent', name: '执行', stageId: null, expertId: EXPERT },
+      { id: 'n3', type: 'review', name: '评审', stageId: null, expertId: EXPERT },
+      { id: 'n4', type: 'end', name: '结束', stageId: null, expertId: EXPERT }
+    ],
+    edges: [
+      { id: 'e1', from: 'n1', to: 'n2', kind: 'seq' },
+      { id: 'e2', from: 'n2', to: 'n3', kind: 'seq' },
+      { id: 'e3', from: 'n3', to: 'n4', kind: 'seq' }
+    ]
+  };
+}
+
+test('checkNewEdge 拦截自连、起止方向与 seq 环', () => {
+  const graph = chainGraph();
+  assert.equal(checkNewEdge(graph, 'n2', 'n2', 'seq'), '起点与终点不能相同');
+  assert.equal(checkNewEdge(graph, 'n4', 'n2', 'seq'), '结束节点不能有出边');
+  assert.equal(checkNewEdge(graph, 'n2', 'n1', 'seq'), '开始节点不能有入边');
+  assert.equal(checkNewEdge(graph, 'n3', 'n2', 'seq'), 'seq 子图存在环');
+  assert.equal(checkNewEdge(graph, 'n2', 'n4', 'seq'), null);
+  assert.equal(checkNewEdge(graph, 'n2', 'missing', 'seq'), '连线端点不存在');
+});
+
+test('checkNewEdge 校验 fanout 前驱与回退目标', () => {
+  const graph = chainGraph();
+  graph.nodes.push({ id: 'n5', type: 'fanout', name: '展开', stageId: null, expertId: EXPERT });
+  assert.equal(checkNewEdge(graph, 'n2', 'n5', 'seq'), 'fanout 的唯一 seq 前驱必须是 split');
+  graph.nodes.push({ id: 'n6', type: 'split', name: '拆分', stageId: null, expertId: EXPERT });
+  assert.equal(checkNewEdge(graph, 'n6', 'n5', 'seq'), null);
+
+  assert.equal(checkNewEdge(graph, 'n2', 'n1', 'rollback'), '只有 review/confirm 可以发起回退');
+  assert.equal(checkNewEdge(graph, 'n3', 'n4', 'rollback'), '不能回退到结束节点');
+  assert.equal(checkNewEdge(graph, 'n3', 'n5', 'rollback'), '回退目标不是 seq 路径上的祖先');
+  assert.equal(checkNewEdge(graph, 'n3', 'n1', 'rollback'), null);
+  assert.equal(checkNewEdge(graph, 'n3', 'n2', 'rollback'), null);
 });

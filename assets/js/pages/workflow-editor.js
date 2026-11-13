@@ -16,10 +16,11 @@ import {
   toDsl,
   toEditorGraph
 } from '../workflow/model.js';
-import { NODE_W, NODE_H, canvasSize, edgeSvg, nodeHtml, stageHtml } from '../workflow/views/canvas.js';
+import { NODE_W, NODE_H, canvasSize, edgeSvg, linkPreviewPath, nodeHtml, portPos, stageHtml } from '../workflow/views/canvas.js';
 import { edgeInspector, nodeInspector, stageInspector } from '../workflow/views/inspector.js';
 import { dslHtml } from '../workflow/views/dsl.js';
 import {
+  checkNewEdge,
   hasErrors,
   issueTarget,
   normalizeIssues,
@@ -386,11 +387,17 @@ function bindCanvas() {
     const stageEl = event.target.closest('.cv-stage');
     if (port) {
       const nid = port.getAttribute('data-node');
-      state.drag = {
-        mode: port.classList.contains('rb') ? 'rblink' : 'link',
-        from: nid,
-        temp: tempPath()
-      };
+      const node = state.graph.nodes.find(function (n) { return n.id === nid; });
+      if (node) {
+        const side = port.classList.contains('rb') ? 'rb' : (port.classList.contains('in') ? 'in' : 'out');
+        state.drag = {
+          mode: side === 'rb' ? 'rblink' : 'link',
+          kind: side === 'rb' ? 'rollback' : 'seq',
+          from: nid,
+          start: portPos(node, side),
+          target: null
+        };
+      }
       event.preventDefault();
     } else if (stageLabel) {
       const sid = stageLabel.getAttribute('data-stage');
@@ -421,13 +428,36 @@ function bindCanvas() {
   });
 }
 
-function tempPath() {
-  const svg = document.querySelector('#cvCanvas svg.cv-edges');
-  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  p.setAttribute('stroke', '#2563eb'); p.setAttribute('stroke-width', '2');
-  p.setAttribute('stroke-dasharray', '5 3'); p.setAttribute('fill', 'none');
-  svg.appendChild(p);
-  return p;
+function linkNodeAt(clientX, clientY) {
+  const el = document.elementFromPoint(clientX, clientY);
+  return el && el.closest ? el.closest('.cv-node') : null;
+}
+
+function clearLinkPreview() {
+  const path = document.querySelector('#cvCanvas svg.cv-edges path.cv-link-preview');
+  if (!path) return;
+  path.setAttribute('d', '');
+  path.classList.remove('rb');
+}
+
+function clearLinkTarget(drag) {
+  if (!drag || !drag.target) return;
+  const el = document.querySelector('.cv-node[data-node="' + drag.target + '"]');
+  if (el) el.classList.remove('link-ok', 'link-bad');
+  drag.target = null;
+}
+
+function highlightLinkTarget(drag, clientX, clientY) {
+  const nodeEl = linkNodeAt(clientX, clientY);
+  const id = nodeEl ? nodeEl.getAttribute('data-node') : null;
+  if (id !== drag.target) {
+    clearLinkTarget(drag);
+    drag.target = id;
+  }
+  if (!id || id === drag.from) return;
+  const reason = checkNewEdge(state.graph, drag.from, id, drag.kind);
+  nodeEl.classList.toggle('link-ok', !reason);
+  nodeEl.classList.toggle('link-bad', !!reason);
 }
 
 document.addEventListener('mousemove', function (event) {
@@ -454,8 +484,12 @@ document.addEventListener('mousemove', function (event) {
     vp.y = drag.vy + event.clientY - drag.oy;
     paint();
   } else if (drag.mode === 'link' || drag.mode === 'rblink') {
-    const p = toGraph(event.clientX, event.clientY);
-    drag.temp.setAttribute('d', 'M ' + p.x + ' ' + p.y + ' L ' + p.x + ' ' + p.y);
+    const path = document.querySelector('#cvCanvas svg.cv-edges path.cv-link-preview');
+    if (path) {
+      path.setAttribute('d', linkPreviewPath(drag.start, toGraph(event.clientX, event.clientY)));
+      path.classList.toggle('rb', drag.kind === 'rollback');
+    }
+    highlightLinkTarget(drag, event.clientX, event.clientY);
   }
 });
 
@@ -463,14 +497,14 @@ document.addEventListener('mouseup', function (event) {
   const drag = state.drag;
   if (!drag) return;
   state.drag = null;
-  if (drag.temp) drag.temp.remove();
   if (drag.mode === 'link' || drag.mode === 'rblink') {
-    const el = document.elementFromPoint(event.clientX, event.clientY);
-    const nodeEl = el && el.closest ? el.closest('.cv-node') : null;
+    clearLinkPreview();
+    clearLinkTarget(drag);
+    const nodeEl = linkNodeAt(event.clientX, event.clientY);
     if (!nodeEl) return;
     const to = nodeEl.getAttribute('data-node');
-    if (to === drag.from) return;
-    createEdge(drag.from, to, drag.mode === 'rblink' ? 'rollback' : 'seq');
+    if (!to || to === drag.from) return;
+    createEdge(drag.from, to, drag.kind);
   } else if ((drag.mode === 'node' && drag.moved) || drag.mode === 'stage') {
     markDirty();
   }
@@ -538,15 +572,9 @@ function addStage(x, y) {
 }
 
 function createEdge(from, to, kind) {
-  if (from === to) return;
-  const source = state.graph.nodes.find(function (n) { return n.id === from; });
-  const target = state.graph.nodes.find(function (n) { return n.id === to; });
-  if (!source || !target) return;
+  const reason = checkNewEdge(state.graph, from, to, kind);
+  if (reason) { toast(reason, 'err'); return; }
   if (kind === 'rollback') {
-    if (source.type !== 'review' && source.type !== 'confirm') {
-      toast('只有评审/人工确认节点可以发起回退', 'err');
-      return;
-    }
     state.graph.edges = state.graph.edges.filter(function (e) { return !(e.kind === 'rollback' && e.from === from); });
   } else {
     state.graph.edges = state.graph.edges.filter(function (e) {
