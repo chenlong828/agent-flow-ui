@@ -256,7 +256,7 @@ textarea.inp { resize:vertical; min-height:64px; }
 .port.rb { right:-5px; bottom:-5px; border-color:var(--c-rollback); }
 .port.rb:hover { background:#ede9fe; }
 svg.cv-edges { position:absolute; left:0; top:0; pointer-events:none; }
-svg.cv-edges path { fill:none; stroke-width:1.8; }
+svg.cv-edges > path { fill:none; stroke-width:1.8; }
 .e-seq { stroke:#94a3b8; }
 .e-par { stroke:var(--c-teal); stroke-width:2.4; stroke-dasharray:2 4; }
 .e-rb { stroke:var(--c-rollback); stroke-dasharray:6 4; }

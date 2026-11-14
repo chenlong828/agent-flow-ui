@@ -70,6 +70,7 @@ async function main() {
     await scenarioT7(server.base, browser);
     await scenarioT8(server.base, browser);
     await scenarioT9(server.base, browser);
+    await scenarioT10(server.base, browser);
   } finally {
     await browser.close();
     await server.close();
@@ -476,6 +477,28 @@ async function scenarioT7(base, browser) {
       return near(p.start, n1.left + 168, n1.top + 29) && near(p.end, n2.left, n2.top + 29);
     }), '旧边应回落到右→左自动选边');
     await ctx2.page.close();
+  });
+
+  assertNoPageErrors(ctx.errors);
+}
+
+async function scenarioT10(base, browser) {
+  console.log('SCN-0019-T10 连线终点箭头');
+  fakeB3.reset();
+  const rec = recorder();
+  const ctx = await openEditor(base, browser, rec.b3);
+  const page = ctx.page;
+
+  await check('seq/rollback 连线带可见箭头', async function () {
+    assert.equal(await page.locator('path.e-seq').count(), 2);
+    const markers = await page.locator('path.e-seq').evaluateAll(function (nodes) {
+      return nodes.map(function (n) { return n.getAttribute('marker-end'); });
+    });
+    assert.deepEqual(markers, ['url(#arw)', 'url(#arw)']);
+    const seqFill = await page.locator('marker#arw path').evaluate(function (el) { return getComputedStyle(el).fill; });
+    assert.equal(seqFill, 'rgb(148, 163, 184)');
+    const rbFill = await page.locator('marker#arw-rb path').evaluate(function (el) { return getComputedStyle(el).fill; });
+    assert.equal(rbFill, 'rgb(124, 58, 237)');
   });
 
   assertNoPageErrors(ctx.errors);

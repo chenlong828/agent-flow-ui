@@ -26,8 +26,8 @@ updated: 2026-11-14
 - 依赖：`DF`（外壳、抽屉、弹窗、Toast、下载）、`API`（仅专家列表）、`workflow/model`、`workflow/validate`（含 `checkNewEdge`）、`workflow/data`、`workflow/views/{canvas,inspector,dsl}`；不依赖列表页 JS；跨页只走 URL。
 - 冷热属性：冷；单详情加载 + 用户编辑，无轮询。
 - 变化轴：节点类型/边类型/校验矩阵；`layout/viewport` 结构变化集中在 `model`；三块视图分别演进。
-- 验证入口：`node tools/verify-workflow-editor.js`（SCN-0019，22/22）；`npm run test:workflow`；真实 B3 只读走查 `/pages/workflow-editor.html?id=<真实 id>`。
-- 验证计划：T1 加载/layout/viewport/未知 id；T2 编辑与保存（含元数据、If-Match、layout/viewport）；T3 非法图阻断与服务端 400 回填；T4 409/428、离开警告、无发布/版本/运行；T5 节点拖动可达画布左上边缘（80% 与 45% 缩放）、`fit` 含负坐标；T6 连线拖拽预览、目标合法性高亮与非法投放拦截；T7 四向锚点、选边写入 layout、刷新后还原；T8 同一节点进出锚点相同被拦截；T9 旧数据同侧进出加载后自动拆开。
+- 验证入口：`node tools/verify-workflow-editor.js`（SCN-0019，23/23）；`npm run test:workflow`；真实 B3 只读走查 `/pages/workflow-editor.html?id=<真实 id>`。
+- 验证计划：T1 加载/layout/viewport/未知 id；T2 编辑与保存（含元数据、If-Match、layout/viewport）；T3 非法图阻断与服务端 400 回填；T4 409/428、离开警告、无发布/版本/运行；T5 节点拖动可达画布左上边缘（80% 与 45% 缩放）、`fit` 含负坐标；T6 连线拖拽预览、目标合法性高亮与非法投放拦截；T7 四向锚点、选边写入 layout、刷新后还原；T8 同一节点进出锚点相同被拦截；T9 旧数据同侧进出加载后自动拆开；T10 连线终点箭头可见。
 - 预算：页面编排约 28 KB + 三视图约 7 KB + 本规格；远低于 120k token。
 - 单独运行：`npm start` → `/pages/workflow-editor.html?id=<workflowId>`。
 - 删除测试：删除后工作流只能被创建/删除，不能改结构、校验或导出 DSL，编排能力整体消失；故保留独立页面。
@@ -54,6 +54,7 @@ updated: 2026-11-14
 - 顺序边每个节点最多一进一出；拖出边会替换同源/同目标的旧 seq；回退边每个源最多一条。
 - 端口拖拽连线：每节点上/右/下/左四个锚点；从哪边拖出写 `outSide`，投放到目标哪边写 `inSide`，落在节点主体取朝向源节点的一侧；选边存入 `node.layout.inSide/outSide`（`top|right|bottom|left`），缺省按两节点中心相对位置自动选边（横向差 ≥ 纵向差走左右，否则上下）。
 - 同一节点的入边和出边必须落在不同锚点：创建时若出口与已有入边同侧、或入口与已有出边同侧，拒绝并提示换端口；旧数据加载时若 `inSide === outSide` 则清空出口回落自动；自动算出的两侧相同时，按目标方向把自动的一侧错到未占用边。
+- 连线渲染：seq 边终点灰色箭头、rollback 边终点紫色箭头，按曲线切线自动定向；箭头由 `<marker>` 提供，连线样式改用 `svg.cv-edges > path` 直接子选择器，避免 `fill:none` 命中 marker 内部路径。
 - 拖拽反馈：源端口到指针/目标锚点画虚线橡皮筋（直线跟随，不套用边曲线）；悬停目标由 `validate.checkNewEdge` 判定，合法绿框、非法红框；非法投放 Toast 原因且不建边（自连、开始入边、结束出边、seq 环、fanout 前驱、回退祖先）；合法投放才进入替换与建边。选边只影响渲染贴边，不进入 `from/to/kind` 或拓扑校验。
 - 保存前本地校验 errors 必须为 0；服务端 400 的 `details.issues` 回填到面板/红框，并保留编辑态。
 

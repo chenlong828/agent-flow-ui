@@ -172,15 +172,18 @@ export function edgeSvg(graph, sel, marked) {
     const selected = sel && sel.type === 'edge' && sel.id === edge.id;
     const bad = marked('edge', edge.id);
     const cls = (edge.kind === 'rollback' ? 'e-rb' : 'e-seq') + (selected ? ' esel' : '') + (bad ? ' has-error' : '');
+    const marker = edge.kind === 'rollback' ? 'arw-rb' : 'arw';
     const d = edgePath(a, b, edge.kind, sides.get(edge.id));
-    paths.push('<path class="' + cls + '" d="' + d + '"/><path class="hit" data-edge="' + esc(edge.id) + '" d="' + d + '"/>');
+    paths.push('<path class="' + cls + '" d="' + d + '" marker-end="url(#' + marker + ')"/><path class="hit" data-edge="' + esc(edge.id) + '" d="' + d + '"/>');
     if (edge.kind === 'rollback') {
       labels.push('<text class="edge-label" x="' + (a.x + NODE_W / 2) + '" y="' + (Math.max(a.y, b.y) + NODE_H + 26) + '" text-anchor="middle">↺ 回退</text>');
     }
   });
   return '<svg class="cv-edges" width="100%" height="100%">' +
-    '<defs><marker id="arw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">' +
-    '<path d="M0 0L8 4L0 8" fill="#94a3b8"/></marker></defs>' +
-    paths.join('').replace(/class="e-seq"/g, 'class="e-seq" marker-end="url(#arw)"') +
+    '<defs><marker id="arw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto">' +
+    '<path d="M0 0L8 4L0 8" fill="#94a3b8"/></marker>' +
+    '<marker id="arw-rb" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto">' +
+    '<path d="M0 0L8 4L0 8" fill="#7c3aed"/></marker></defs>' +
+    paths.join('') +
     '<path class="cv-link-preview" d=""/>' + labels.join('') + '</svg>';
 }

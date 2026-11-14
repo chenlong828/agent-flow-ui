@@ -2,7 +2,7 @@
 layer: history
 module: global
 status: frozen
-updated: 2026-11-13
+updated: 2026-11-14
 ---
 
 # 坑档案
@@ -47,6 +47,12 @@ updated: 2026-11-13
 - **根因**：`#cvScaler` 的 `transform: translate(...) scale(...)` 没有设置 `transform-origin`，默认按元素中心缩放，整张图向右下偏移；节点坐标以画布左上为原点且被 `Math.max(0, …)` 钳住，偏移出来的左上区域永远不可达；`toGraph()` 又按变换前坐标反算，未还原缩放原点与滚动偏移。
 - **存续条件**：任何「绝对定位子元素 + 外层 transform 缩放/平移」的画布，只要坐标原点与变换原点不一致，或对坐标做 ≥0 钳制，就会复发。
 - **对策落点**：`pages/workflow-editor.html` 的 `#cvScaler{transform-origin:0 0}`；`workflow-editor.js` 拖动不加坐标钳制、`toGraph`/`zoomAt` 还原 `scrollLeft/scrollTop`、`fitCanvas` 按内容包围盒平移；`SCN-0019-T5` 在 80%/45% 缩放下断言节点可达左上边缘。
+
+### CSS-8 · SVG marker 被 `svg.cv-edges path { fill:none }` 命中，箭头不可见
+- **现象**：画布连线终点没有箭头，`<marker>` 与 `marker-end` 都在，但屏幕上只见线不见箭头。
+- **根因**：连线样式用后代选择器 `svg.cv-edges path { fill:none }`，同时命中 `<defs><marker><path>`；CSS 的 `fill:none` 覆盖 marker path 的 `fill` 表现属性，箭头整体透明。
+- **存续条件**：只要连线样式继续以 `svg.cv-edges path` 命中 marker 内部路径就会复发；改为 `svg.cv-edges > path` 后消失（2026-11-14 实测 SCN-0019-T10）。
+- **对策落点**：`assets/css/main.css` 画布连线样式限定直接子路径；`workflow/views/canvas.js` 直接给可见 path 写 `marker-end`；SCN-0019-T10 断言 marker 填充非 none。
 
 ## JavaScript / DOM 类
 

@@ -44,6 +44,7 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 | T-0030-14 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 连线拖拽预览与非法投放拦截：`workflow-editor.js`、`views/canvas.js`、`validate.js`、`pages/workflow-editor.html`、`tests/workflow/validate.test.js`、`tools/verify-workflow-editor.js`、`SCN-0019-T6` |
 | T-0030-15 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 四向锚点与 layout 选边：`model.js`、`validate.js`、`views/canvas.js`、`workflow-editor.js`、`main.css`、`tests/workflow/*`、`tools/verify-workflow-editor.js`、`SCN-0019-T7` |
 | T-0030-16 | change | `CMP-workflow-editor` | 已完成（2026-11-14） | 同一节点进出锚点不能相同：`views/canvas.js`、`workflow-editor.js`、`validate.js`、`tests/workflow/validate.test.js`、`tools/verify-workflow-editor.js`、`SCN-0019-T8/T9` |
+| T-0030-17 | fix | `CMP-workflow-editor` | 已完成（2026-11-14） | 连线终点箭头：`main.css`、`views/canvas.js`、`tools/verify-workflow-editor.js`、`history/pitfalls.md`、`SCN-0019-T10` |
 
 ## 装载清单（必读）
 
@@ -102,6 +103,13 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 - 列表类型 Tab 计数为当前页分布（B3 无独立 count 端点）。
 - 现有 B3 测试工作流与 B1 测试 Skill 未清理，需用户确认后执行。
 - 真实写路径（创建/保存/删除）已用临时记录验证并清理；存量 14 条测试工作流未清理。
+
+## 增量修复：连线终点箭头（2026-11-14）
+
+- 现象：画布连线没有终点箭头，流向只能靠曲率判断。
+- 根因：`svg.cv-edges path { fill:none }` 同时命中 `<marker><path>`，覆盖了箭头 `fill`；箭头存在但透明。
+- 修复：连线样式改直接子选择器 `svg.cv-edges > path`；`edgeSvg` 按边类型直接写 `marker-end`（seq `arw`、rollback `arw-rb`），不再依赖字符串替换，选中/报错边也有箭头。
+- 验证：SCN-0019 23/23（新增 T10 断言 marker 属性与填充）。
 
 ## 增量特性：进出锚点互斥（2026-11-14）
 

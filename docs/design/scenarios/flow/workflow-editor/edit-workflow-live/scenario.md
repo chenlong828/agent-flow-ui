@@ -40,7 +40,7 @@ updated: 2026-11-14
 
 执行层：Playwright WebKit（DOM + 网络拦截/ B3 stub）；可执行：`node tools/verify-workflow-editor.js`（Playwright WebKit + fake B3/B1）。
 
-最近一次执行：2026-11-14，22/22 通过（T1 2 / T2 2 / T3 3 / T4 4 / T5 3 / T6 3 / T7 2 / T8 2 / T9 1）。
+最近一次执行：2026-11-14，23/23 通过（T1 2 / T2 2 / T3 3 / T4 4 / T5 3 / T6 3 / T7 2 / T8 2 / T9 1 / T10 1）。
 
 真实 B3 写路径追加验证（2026-10-30）：从列表创建临时工作流进入本页，改名后保存（元数据 PUT + definition PUT，revision 2），`layout`/`viewport` 落库；随后由列表删除，GET 404。
 
@@ -55,3 +55,4 @@ updated: 2026-11-14
 | SCN-0019-T7 | 正 | 四向锚点：每节点 4 个锚点；从底部拖到顶部后 `outSide=bottom`/`inSide=top` 写入节点 layout；刷新后按 layout 还原贴边，旧边（无选边）回落右→左自动选边 | `tools/verify-workflow-editor.js` |
 | SCN-0019-T8 | 反 | 同一节点进出同锚点被拦截：源出口与已有入口相同、目标入口与已有出口相同，均红框提示且不新增/替换连线 | `tools/verify-workflow-editor.js` |
 | SCN-0019-T9 | 正 | 旧数据 `inSide === outSide` 加载后清空 `outSide`，保存请求不再携带同侧出口，图恢复可保存 | `tools/verify-workflow-editor.js` |
+| SCN-0019-T10 | 正 | 连线终点箭头：seq 路径带 `marker-end=url(#arw)` 且 marker 填充可见，rollback 使用紫色 `arw-rb` | `tools/verify-workflow-editor.js` |
