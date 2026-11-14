@@ -43,6 +43,7 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 | T-0030-13 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 画布拖动死区修复：`workflow-editor.js`、`pages/workflow-editor.html`、`tools/verify-workflow-editor.js`、`SCN-0019` |
 | T-0030-14 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 连线拖拽预览与非法投放拦截：`workflow-editor.js`、`views/canvas.js`、`validate.js`、`pages/workflow-editor.html`、`tests/workflow/validate.test.js`、`tools/verify-workflow-editor.js`、`SCN-0019-T6` |
 | T-0030-15 | change | `CMP-workflow-editor` | 已完成（2026-11-13） | 四向锚点与 layout 选边：`model.js`、`validate.js`、`views/canvas.js`、`workflow-editor.js`、`main.css`、`tests/workflow/*`、`tools/verify-workflow-editor.js`、`SCN-0019-T7` |
+| T-0030-16 | change | `CMP-workflow-editor` | 已完成（2026-11-14） | 同一节点进出锚点不能相同：`views/canvas.js`、`workflow-editor.js`、`validate.js`、`tests/workflow/validate.test.js`、`tools/verify-workflow-editor.js`、`SCN-0019-T8/T9` |
 
 ## 装载清单（必读）
 
@@ -101,6 +102,14 @@ B3 已冻结「结构/拓扑/专家绑定归后端，`layout/viewport` 纯透传
 - 列表类型 Tab 计数为当前页分布（B3 无独立 count 端点）。
 - 现有 B3 测试工作流与 B1 测试 Skill 未清理，需用户确认后执行。
 - 真实写路径（创建/保存/删除）已用临时记录验证并清理；存量 14 条测试工作流未清理。
+
+## 增量特性：进出锚点互斥（2026-11-14）
+
+- 同一节点的一进一出不能落在同一个锚点。
+- 创建/替换时：源节点出口与已有入边同侧、或目标入口与已有出边同侧，红框提示并拒绝。
+- 旧数据：加载时若 `inSide === outSide`，清空 `outSide` 回落自动；保存前校验也拦截同侧。
+- 自动选边两侧相同时，按目标方向把自动的一侧错到未占用边。
+- 验证：SCN-0019 22/22（新增 T8/T9）；`node --test tests/workflow` 32/32。
 
 ## 增量特性：四向锚点（2026-11-13）
 

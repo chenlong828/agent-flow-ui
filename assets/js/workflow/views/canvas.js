@@ -79,6 +79,59 @@ export function autoSides(a, b) {
   return dy >= 0 ? { from: 'bottom', to: 'top' } : { from: 'top', to: 'bottom' };
 }
 
+/** 选取与目标方向最接近、且不是 banned 的一条边。 */
+function pickAlternativeSide(node, target, banned) {
+  const dx = (target.x + NODE_W / 2) - (node.x + NODE_W / 2);
+  const dy = (target.y + NODE_H / 2) - (node.y + NODE_H / 2);
+  let best = 'right';
+  let bestScore = -Infinity;
+  NODE_SIDES.forEach(function (side) {
+    if (side === banned) return;
+    const normal = SIDE_NORMALS[side];
+    const score = normal.x * dx + normal.y * dy;
+    if (score > bestScore) { bestScore = score; best = side; }
+  });
+  return best;
+}
+
+/**
+ * 计算每条 seq 边的实际贴边。节点只有一进一出：
+ * 两侧都手写相同、或自动算出相同时，保持入边/手动边不动，把另一侧错到未占用的边。
+ */
+export function edgeSides(graph) {
+  const map = new Map();
+  const incoming = new Map();
+  const outgoing = new Map();
+  graph.edges.forEach(function (edge) {
+    if (edge.kind !== 'seq') return;
+    const a = graph.nodes.find(function (n) { return n.id === edge.from; });
+    const b = graph.nodes.find(function (n) { return n.id === edge.to; });
+    if (!a || !b) return;
+    const auto = autoSides(a, b);
+    map.set(edge.id, { from: a.outSide || auto.from, to: b.inSide || auto.to });
+    incoming.set(edge.to, edge);
+    outgoing.set(edge.from, edge);
+  });
+  graph.nodes.forEach(function (node) {
+    const inEdge = incoming.get(node.id);
+    const outEdge = outgoing.get(node.id);
+    if (!inEdge || !outEdge) return;
+    const inSides = map.get(inEdge.id);
+    const outSides = map.get(outEdge.id);
+    if (!inSides || !outSides || inSides.to !== outSides.from) return;
+    const inSource = graph.nodes.find(function (n) { return n.id === inEdge.from; });
+    const outTarget = graph.nodes.find(function (n) { return n.id === outEdge.to; });
+    if (!node.outSide && outTarget) {
+      outSides.from = pickAlternativeSide(node, outTarget, inSides.to);
+    } else if (!node.inSide && inSource) {
+      inSides.to = pickAlternativeSide(node, inSource, outSides.from);
+    } else if (outTarget) {
+      outSides.from = pickAlternativeSide(node, outTarget, inSides.to);
+    }
+  });
+  return map;
+}
+
 function sideCurve(s, sSide, t, tSide) {
   const ns = SIDE_NORMALS[sSide] || SIDE_NORMALS.right;
   const nt = SIDE_NORMALS[tSide] || SIDE_NORMALS.left;
@@ -95,7 +148,7 @@ export function linkPreviewPath(a, b) {
   return 'M ' + a.x + ' ' + a.y + ' L ' + b.x + ' ' + b.y;
 }
 
-function edgePath(a, b, kind) {
+function edgePath(a, b, kind, sides) {
   if (kind === 'rollback') {
     const s = portPos(a, 'rb');
     const t = { x: b.x + NODE_W / 2, y: b.y + NODE_H };
@@ -103,14 +156,15 @@ function edgePath(a, b, kind) {
     return 'M ' + s.x + ' ' + s.y + ' C ' + (s.x + 40) + ' ' + (s.y + sag) + ', ' + (t.x - 40) + ' ' + (t.y + sag) + ', ' + t.x + ' ' + t.y;
   }
   const auto = autoSides(a, b);
-  const fromSide = a.outSide || auto.from;
-  const toSide = b.inSide || auto.to;
+  const fromSide = (sides && sides.from) || a.outSide || auto.from;
+  const toSide = (sides && sides.to) || b.inSide || auto.to;
   return sideCurve(portPos(a, fromSide), fromSide, portPos(b, toSide), toSide);
 }
 
 export function edgeSvg(graph, sel, marked) {
   const paths = [];
   const labels = [];
+  const sides = edgeSides(graph);
   graph.edges.forEach(function (edge) {
     const a = graph.nodes.find(function (n) { return n.id === edge.from; });
     const b = graph.nodes.find(function (n) { return n.id === edge.to; });
@@ -118,7 +172,7 @@ export function edgeSvg(graph, sel, marked) {
     const selected = sel && sel.type === 'edge' && sel.id === edge.id;
     const bad = marked('edge', edge.id);
     const cls = (edge.kind === 'rollback' ? 'e-rb' : 'e-seq') + (selected ? ' esel' : '') + (bad ? ' has-error' : '');
-    const d = edgePath(a, b, edge.kind);
+    const d = edgePath(a, b, edge.kind, sides.get(edge.id));
     paths.push('<path class="' + cls + '" d="' + d + '"/><path class="hit" data-edge="' + esc(edge.id) + '" d="' + d + '"/>');
     if (edge.kind === 'rollback') {
       labels.push('<text class="edge-label" x="' + (a.x + NODE_W / 2) + '" y="' + (Math.max(a.y, b.y) + NODE_H + 26) + '" text-anchor="middle">↺ 回退</text>');

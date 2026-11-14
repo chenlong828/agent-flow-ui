@@ -212,3 +212,10 @@ test('节点选边只接受 top/right/bottom/left', () => {
   assert.ok(issues.some((i) => i.path === 'graph.nodes[0].layout.outSide' && i.message === '必须是 top/right/bottom/left'));
   assert.equal(issues.some((i) => i.path === 'graph.nodes[1].layout.inSide'), false);
 });
+
+test('同一节点的入边和出边不能落在同一个锚点', () => {
+  const graph = validGraph();
+  graph.nodes[0].layout = { x: 1, y: 2, inSide: 'top', outSide: 'top' };
+  const issues = shapeIssues(graph);
+  assert.ok(issues.some((i) => i.path === 'graph.nodes[0].layout.outSide' && i.message === '入边和出边不能使用同一个锚点'));
+});

@@ -468,7 +468,9 @@ function highlightLinkTarget(drag, clientX, clientY) {
     drag.target = hit.id;
   }
   if (!hit.id || hit.id === drag.from) return null;
-  const reason = checkNewEdge(state.graph, drag.from, hit.id, drag.kind);
+  const source = state.graph.nodes.find(function (n) { return n.id === drag.from; });
+  const reason = checkNewEdge(state.graph, drag.from, hit.id, drag.kind) ||
+    (drag.kind === 'seq' ? sideConflict(source, hit.node, drag.sourceSide, hit.side) : null);
   hit.nodeEl.classList.toggle('link-ok', !reason);
   hit.nodeEl.classList.toggle('link-bad', !!reason);
   return hit;
@@ -592,6 +594,10 @@ function createEdge(from, to, kind, fromSide, toSide) {
   if (reason) { toast(reason, 'err'); return; }
   const source = state.graph.nodes.find(function (n) { return n.id === from; });
   const target = state.graph.nodes.find(function (n) { return n.id === to; });
+  if (kind === 'seq') {
+    const conflict = sideConflict(source, target, fromSide, toSide);
+    if (conflict) { toast(conflict, 'err'); return; }
+  }
   if (kind === 'rollback') {
     state.graph.edges = state.graph.edges.filter(function (e) { return !(e.kind === 'rollback' && e.from === from); });
   } else {
@@ -614,7 +620,19 @@ function syncNodeSides() {
   state.graph.nodes.forEach(function (node) {
     if (!seq.some(function (e) { return e.from === node.id; })) node.outSide = null;
     if (!seq.some(function (e) { return e.to === node.id; })) node.inSide = null;
+    if (node.inSide && node.outSide && node.inSide === node.outSide) node.outSide = null;
   });
+}
+
+/** 同一节点的一进一出不能落在同一个锚点；返回给用户的原因。 */
+function sideConflict(source, target, fromSide, toSide) {
+  if (source && source.inSide && source.inSide === fromSide) {
+    return '「' + source.name + '」的入边和出边不能使用同一个锚点，请换一个出口';
+  }
+  if (target && target.outSide && target.outSide === toSide) {
+    return '「' + target.name + '」的入边和出边不能使用同一个锚点，请换一个入口';
+  }
+  return null;
 }
 
 function deleteSelected() {

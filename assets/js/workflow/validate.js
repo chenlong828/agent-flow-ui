@@ -103,6 +103,9 @@ export function shapeIssues(graph) {
             push(issues, 'invalid_layout', p + '.layout.' + key, '必须是 top/right/bottom/left');
           }
         });
+        if (NODE_SIDES.indexOf(node.layout.inSide) >= 0 && node.layout.inSide === node.layout.outSide) {
+          push(issues, 'invalid_layout', p + '.layout.outSide', '入边和出边不能使用同一个锚点');
+        }
       }
     }
   });

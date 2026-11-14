@@ -68,6 +68,8 @@ async function main() {
     await scenarioT5(server.base, browser);
     await scenarioT6(server.base, browser);
     await scenarioT7(server.base, browser);
+    await scenarioT8(server.base, browser);
+    await scenarioT9(server.base, browser);
   } finally {
     await browser.close();
     await server.close();
@@ -474,6 +476,85 @@ async function scenarioT7(base, browser) {
       return near(p.start, n1.left + 168, n1.top + 29) && near(p.end, n2.left, n2.top + 29);
     }), '旧边应回落到右→左自动选边');
     await ctx2.page.close();
+  });
+
+  assertNoPageErrors(ctx.errors);
+}
+
+async function scenarioT9(base, browser) {
+  console.log('SCN-0019-T9 旧数据同侧进出加载后自动拆开');
+  fakeB3.reset();
+  prepareUuidExperts();
+  const detail = (await fakeB3.handle('GET', '/workflows/' + WF)).body;
+  const n2 = detail.graph.nodes.find(function (n) { return n.id === 'n2'; });
+  n2.layout.inSide = 'top';
+  n2.layout.outSide = 'top';
+  const rec = recorder(async function (method, path) {
+    if (method === 'GET' && path === '/workflows/' + WF) return { status: 200, body: detail };
+    return null;
+  });
+  const ctx = await openPage(browser, base, 'workflow-editor', 'id=' + WF, {
+    b3: rec.b3, setup: prepareUuidExperts, wait: 600
+  });
+  const page = ctx.page;
+
+  await check('同侧旧数据加载后清空出口并恢复可保存', async function () {
+    assert.equal(await page.locator('#we-save').isDisabled(), false);
+    await page.locator('#we-save').click();
+    await page.waitForTimeout(800);
+    const save = rec.calls.find(function (c) { return c.method === 'PUT' && /\/definition$/.test(c.path); });
+    assert.ok(save, '缺少 definition PUT');
+    const saved = save.body.graph.nodes.find(function (n) { return n.id === 'n2'; });
+    assert.equal(saved.layout.inSide, 'top');
+    assert.equal(saved.layout.outSide, undefined);
+  });
+
+  assertNoPageErrors(ctx.errors);
+}
+
+async function scenarioT8(base, browser) {
+  console.log('SCN-0019-T8 同一节点进出锚点不能相同');
+  fakeB3.reset();
+  const rec = recorder();
+  const ctx = await openEditor(base, browser, rec.b3);
+  const page = ctx.page;
+
+  async function drag(fromId, fromSide, toId, toSide) {
+    const from = await page.locator('.cv-node[data-node="' + fromId + '"] .port[data-side="' + fromSide + '"]').boundingBox();
+    const to = await page.locator('.cv-node[data-node="' + toId + '"] .port[data-side="' + toSide + '"]').boundingBox();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+    await page.waitForTimeout(100);
+    return { from: from, to: to };
+  }
+
+  await check('源节点出口与已有入口相同时拦截', async function () {
+    await drag('n1', 'right', 'n2', 'left');
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    const before = await page.locator('path.hit').count();
+    await drag('n2', 'left', 'n3', 'top');
+    assert.equal(await page.locator('.cv-node[data-node="n3"].link-bad').count(), 1);
+    assert.equal(await page.locator('.cv-node[data-node="n3"].link-ok').count(), 0);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('path.hit').count(), before);
+    assert.match(await page.locator('.toast').last().textContent(), /不能使用同一个锚点/);
+  });
+
+  await check('目标节点入口与已有出口相同时拦截', async function () {
+    await drag('n2', 'right', 'n3', 'left');
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    const before = await page.locator('path.hit').count();
+    await drag('n1', 'right', 'n2', 'right');
+    assert.equal(await page.locator('.cv-node[data-node="n2"].link-bad').count(), 1);
+    assert.equal(await page.locator('.cv-node[data-node="n2"].link-ok').count(), 0);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('path.hit').count(), before);
+    assert.match(await page.locator('.toast').last().textContent(), /不能使用同一个锚点/);
   });
 
   assertNoPageErrors(ctx.errors);
