@@ -30,7 +30,7 @@ import { SKILL_MD } from './skill-detail-markdown.js';
     saving: false,
     dirty: false,
     body: '',
-    form: { name: '', categoryCode: '', description: '', tags: [] },
+    form: { name: '', slug: '', categoryCode: '', description: '', tags: [] },
     editor: null,
     editorToken: 0,
     bodyErr: '',
@@ -115,6 +115,7 @@ import { SKILL_MD } from './skill-detail-markdown.js';
         state.body = String(dto.body == null ? '' : dto.body);
         state.form = {
           name: dto.name || '',
+          slug: dto.slug || '',
           categoryCode: dto.categoryCode || '',
           description: dto.description || '',
           tags: (dto.tags || []).slice()
@@ -200,6 +201,7 @@ import { SKILL_MD } from './skill-detail-markdown.js';
     state.body = String((state.skill && state.skill.body) || '');
     state.form = {
       name: state.skill.name || '',
+      slug: state.skill.slug || '',
       categoryCode: state.skill.categoryCode || '',
       description: state.skill.description || '',
       tags: (state.skill.tags || []).slice()
@@ -310,6 +312,7 @@ import { SKILL_MD } from './skill-detail-markdown.js';
     body.innerHTML =
       '<div class="skd-card">' +
         '<div class="skd-kv"><span class="skd-k">描述</span><span>' + DF.esc(s.description || '') + '</span></div>' +
+        '<div class="skd-kv"><span class="skd-k">英文名</span><span class="mono">' + DF.esc(s.slug || '—') + '</span></div>' +
         '<div class="skd-kv"><span class="skd-k">类别</span><span>' +
           DF.tag(s.categoryLabel || catLabelOf(s.categoryCode), catColorOf(s.categoryCode)) + '</span></div>' +
         '<div class="skd-kv"><span class="skd-k">标签</span><span>' +
@@ -432,6 +435,8 @@ import { SKILL_MD } from './skill-detail-markdown.js';
     body.innerHTML =
       '<div class="skd-card">' +
         DF.field('名称', '<input class="inp" id="sk-name" maxlength="80" value="' + DF.esc(d.name) + '" placeholder="如：CRES 技能">', { required: true }) +
+        DF.field('英文名', '<input class="inp mono" id="sk-slug" maxlength="64" value="' + DF.esc(d.slug || '') + '" placeholder="如 cres-skill" autocomplete="off" spellcheck="false">',
+          { hint: '系统标识（kebab-case），写入 SKILL.md 的 name；留空自动生成，编辑时留空保持原值' }) +
         DF.field('类别', '<select class="inp" id="sk-cat">' +
           (state.cats.length ? catOptionsHtml(d.categoryCode) : '') +
           '</select>' +
@@ -474,10 +479,12 @@ import { SKILL_MD } from './skill-detail-markdown.js';
   function bindForm() {
     var d = state.form;
     var nameEl = document.getElementById('sk-name');
+    var slugEl = document.getElementById('sk-slug');
     var catEl = document.getElementById('sk-cat');
     var descEl = document.getElementById('sk-desc');
     var descn = document.getElementById('sk-descn');
     if (nameEl) nameEl.oninput = function () { d.name = nameEl.value; updateBytes(); markDirty(); };
+    if (slugEl) slugEl.oninput = function () { d.slug = slugEl.value; markDirty(); };
     if (catEl) catEl.onchange = function () { d.categoryCode = catEl.value; markDirty(); };
     if (descEl) descEl.oninput = function () {
       d.description = descEl.value;
@@ -593,6 +600,11 @@ import { SKILL_MD } from './skill-detail-markdown.js';
   function validate() {
     var d = state.form;
     if (!d.name.trim()) { DF.toast('请填写 Skill 名称', 'err'); return false; }
+    var slug = (d.slug || '').trim();
+    if (slug && (slug.length > 64 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug))) {
+      DF.toast('英文名需为 kebab-case（小写字母、数字、连字符），如 cres-skill', 'err');
+      return false;
+    }
     if (descLen(d.description) < SK.DESC_MIN) { DF.toast('请填写 Skill 描述', 'err'); return false; }
     if (descLen(d.description) > SK.DESC_MAX) { DF.toast('描述需在 1–400 字之间', 'err'); return false; }
     if (!d.categoryCode || !state.cats.some(function (c) { return c.code === d.categoryCode; })) {
@@ -618,6 +630,8 @@ import { SKILL_MD } from './skill-detail-markdown.js';
       tags: state.form.tags.slice(),
       body: state.body
     };
+    var slug = (state.form.slug || '').trim();
+    if (slug) payload.slug = slug;
     API.draftSave(state.draft.id, payload, state.skill ? state.skill.revision : null).then(function (res) {
       state.saving = false;
       state.draft = null;

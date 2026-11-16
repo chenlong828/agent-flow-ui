@@ -57,7 +57,7 @@ import { SK } from './skill-common.js';
       if (state.cat !== 'all' && s.categoryCode !== state.cat) return false;
       if (state.tags.length && !(s.tags || []).some(function (t) { return state.tags.indexOf(t) >= 0; })) return false;
       if (kw) {
-        var hay = [s.name, s.description, (s.tags || []).join(' ')].join(' ').toLowerCase();
+        var hay = [s.name, s.slug, s.description, (s.tags || []).join(' ')].join(' ').toLowerCase();
         if (hay.indexOf(kw) < 0) return false;
       }
       return true;
@@ -78,7 +78,7 @@ import { SK } from './skill-common.js';
         '<aside class="card sk-side" id="sk-side"></aside>' +
         '<section class="sk-main">' +
           '<div class="toolbar">' +
-            DF.searchBox('sk-q', '搜索名称 / 描述 / 标签', state.kw) +
+            DF.searchBox('sk-q', '搜索名称 / 英文名 / 描述 / 标签', state.kw) +
             '<span class="sp"></span><span class="sk-n" id="sk-count"></span>' +
           '</div>' +
           '<div id="sk-tblbox"></div>' +
@@ -182,7 +182,8 @@ import { SK } from './skill-common.js';
   /* ---------------- 主列表 ---------------- */
   function rowHtml(s) {
     return '<tr>' +
-      '<td><span class="rowlink" data-view="' + DF.esc(s.id) + '">' + DF.esc(s.name) + '</span></td>' +
+      '<td><span class="rowlink" data-view="' + DF.esc(s.id) + '">' + DF.esc(s.name) + '</span>' +
+        '<div class="sub mono sk-slug" title="系统标识（SKILL.md name）">' + DF.esc(s.slug || '—') + '</div></td>' +
       '<td>' + DF.tag(s.categoryLabel || SK.catLabel(state.cats, s.categoryCode), SK.catColor(state.cats, s.categoryCode)) + '</td>' +
       '<td><div class="ellipsis" style="max-width:360px" title="' + DF.esc(s.description || '') + '">' + DF.esc(s.description || '') + '</div></td>' +
       '<td style="text-align:right"><a href="javascript:;" class="sk-uref" data-used="' + DF.esc(s.id) +

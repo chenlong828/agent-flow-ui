@@ -2,7 +2,7 @@
 layer: works
 module: skills
 status: active
-updated: 2026-10-29
+updated: 2026-11-17
 ---
 
 # 工序：Skill 包形态重构（SKILL.md + scripts/ + references/）
@@ -38,6 +38,7 @@ B1（`agent-flow-orchaster`）已按自己的 v1 契约重建 Skill：**zip 包�
 | T-0027-06 | change | `CMP-bff` | 已完成（2026-10-29：body 上限 25 MiB、下载头透传、BFF 12/12） | `bff/index.js`、`tests/bff/bff.test.js`、`SCN-0017` |
 | T-0027-07 | change | `CMP-skills` | 已完成（2026-10-29：7.7.0 单包、适配层、渲染 9/9） | `editor-reuse.md`、`dependencies.md`、`assets/vendor/`、编辑器适配层 |
 | T-0027-08 | verify | `CMP-skills` + `CMP-bff` | 已完成（2026-10-29：五场景 verified、BFF 12/12、全量 57/57、live 读 4/4 + 写 4/4） | `verify-m1-scenarios.js`、`verify-skill-page-*.js`、`verify-b1-*.js`、`check-deps`、场景卡 |
+| T-0027-09 | change | `CMP-skills` | 已完成（2026-11-17） | 英文名 `slug` 展示与输入：`skills.js`、`pages/skills.html`、`skill-detail.js`、`tools/fake-b1.js`、`verify-m1-scenarios.js`、`skills/spec.md`、`SCN-0005-T6` |
 
 ## 装载清单（必读）
 
@@ -57,6 +58,13 @@ B1（`agent-flow-orchaster`）已按自己的 v1 契约重建 Skill：**zip 包�
 - 附件**不含图片**；只接收 `scripts/`、`references/` 下文件；脚本作为附件保留以便执行。
 - 不做数据迁移（Skill 未实际使用）；不做版本历史、在线执行、鉴权。
 - 编辑器统一 **7.7.0**、仓外构建、单包替换 `DEP-0001`；体积为观测阈值（只 WARN）。
+
+## 增量特性：Skill 英文名（2026-11-17）
+
+- 列表名称下展示 `slug`，搜索匹配名称/英文名/描述/标签。
+- 查看态元数据条展示英文名；编辑/新建提供英文名输入，按 kebab-case 校验（1–64）。
+- 保存 body 按 B1 契约携带可选 `slug`；留空由服务端派生，编辑时留空保持原值。
+- 验证：SCN-0005 6/6（新增 T6 展示、搜索、非法拦截、保存回写）。
 
 ## 待确认
 

@@ -262,6 +262,35 @@ async function scn0005T3(browser) {
   } finally { await ctx.page.close(); }
 }
 
+async function scn0005T6(browser) {
+  const list = await open(browser, 'skills', '', { wait: 600 });
+  try {
+    const first = MOCK.skills[0];
+    const slug = first.slug || first.id;
+    assert.match(await list.page.locator('#sk-tblbox tbody tr').first().textContent(), new RegExp(slug));
+    await list.page.locator('#sk-q').fill('sk-callchain');
+    await list.page.waitForTimeout(120);
+    assert.equal(await list.page.locator('#sk-tblbox tbody tr').count(), 1, '英文名应参与列表搜索');
+  } finally { await list.page.close(); }
+
+  const ctx = await openSkill(browser, 'sk-cres', 'edit');
+  try {
+    assert.equal(await ctx.page.locator('#sk-slug').inputValue(), 'sk-cres');
+    await ctx.page.locator('#sk-slug').fill('CRES Skill');
+    await ctx.page.locator('#sk-save').click();
+    await ctx.page.waitForTimeout(150);
+    assert.match(await ctx.page.locator('.toast').last().textContent(), /kebab-case/);
+    const target = MOCK.skills.find((x) => x.id === 'sk-cres');
+    assert.equal(target.slug, undefined);
+
+    await ctx.page.locator('#sk-slug').fill('cres-skill');
+    await ctx.page.locator('#sk-save').click();
+    await ctx.page.waitForTimeout(300);
+    assert.equal(target.slug, 'cres-skill');
+    assert.match(await ctx.page.locator('#page-body').textContent(), /cres-skill/);
+  } finally { await ctx.page.close(); }
+}
+
 async function scn0005T4(browser) {
   const ctx = await open(browser, 'skills', '', { wait: 600 });
   try {
@@ -1073,7 +1102,8 @@ const SCENARIOS = [
     ['SCN-0005-T2', '正', '查看态渲染正文且无结构化 Tab', scn0005T2],
     ['SCN-0005-T3', '正', '保存走草稿且版本递增', scn0005T3],
     ['SCN-0005-T4', '反', '被引用 Skill 禁止删除', scn0005T4],
-    ['SCN-0005-T5', '正', '行菜单可重复打开且不越出视口', scn0005T5]
+    ['SCN-0005-T5', '正', '行菜单可重复打开且不越出视口', scn0005T5],
+    ['SCN-0005-T6', '正', 'Skill 英文名展示、搜索与编辑保存', scn0005T6]
   ]],
   ['SCN-0006', '专家注册与组合配置', [
     ['SCN-0006-T1', '正', '卡片计数与搜索', scn0006T1],

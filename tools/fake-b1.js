@@ -323,7 +323,7 @@ for (const k of Object.keys(MOCK)) {
 
   function skillSummary(s) {
     return {
-      id: s.id, name: s.name, categoryCode: CAT_CODE[s.category] || s.categoryCode || 'coding',
+      id: s.id, name: s.name, slug: s.slug || s.id, categoryCode: CAT_CODE[s.category] || s.categoryCode || 'coding',
       categoryLabel: s.category, description: s.description, version: s.version,
       enabled: s.enabled !== false, tags: (s.tags || []).slice(),
       usedByCount: s.usedBy || 0, revision: rev('skill', s.id),
@@ -472,6 +472,13 @@ for (const k of Object.keys(MOCK)) {
 
     var others = MOCK.skills.filter(function (x) { return x.id !== d.skillId && x.name === body.name.trim(); });
     if (others.length) return saveError(409, 'name_conflict', '名称已存在');
+    var slug = typeof body.slug === 'string' ? body.slug.trim() : '';
+    if (slug && (slug.length > 64 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug))) {
+      return saveError(400, 'validation_error', 'slug 必须是 kebab-case', { field: 'slug' });
+    }
+    if (slug && MOCK.skills.some(function (x) { return x.id !== d.skillId && (x.slug || x.id) === slug; })) {
+      return saveError(409, 'name_conflict', '英文名已存在', { field: 'slug' });
+    }
 
     var version = skill ? nextVersion(skill.version) : 'v1.0';
     var fm = { name: body.name.trim(), description: description, version: version };
@@ -487,6 +494,7 @@ for (const k of Object.keys(MOCK)) {
       if (String(raw).replace(/^"|"$/g, '') !== String(rev('skill', skill.id))) return conflict();
       if (d.baseRevision !== rev('skill', skill.id)) return conflict();
       skill.name = fm.name; skill.description = fm.description;
+      skill.slug = slug || skill.slug || skill.id;
       skill.category = CAT_LABEL[body.categoryCode] || body.categoryCode || skill.category;
       skill.tags = (body.tags || []).slice();
       skill.version = version;
@@ -497,7 +505,8 @@ for (const k of Object.keys(MOCK)) {
     }
 
     var created = {
-      id: 'sk-fake-' + (++seq), name: fm.name, category: CAT_LABEL[body.categoryCode] || body.categoryCode || '编码',
+      id: 'sk-fake-' + (++seq), name: fm.name, slug: slug || ('skill-fake-' + seq),
+      category: CAT_LABEL[body.categoryCode] || body.categoryCode || '编码',
       categoryCode: body.categoryCode || 'coding', description: fm.description, version: version,
       enabled: true, tags: (body.tags || []).slice(), usedBy: 0, updatedM: 0,
       _pkg: { body: String(body.body == null ? '' : body.body), files: d.files.map(function (f) { return { path: f.path, content: f.content }; }) }
