@@ -9,11 +9,13 @@
 .id-layout{display:flex;gap:12px;align-items:stretch;}
 .id-trace{flex:1;min-width:0;display:flex;flex-direction:column;}
 .id-trace .cv-wrap{flex:1;min-height:430px;}
-.id-panel{width:410px;flex-shrink:0;display:flex;flex-direction:column;gap:0;}
 .id-tabs{display:flex;border-bottom:1px solid var(--c-line);background:var(--c-panel);border-radius:8px 8px 0 0;border:1px solid var(--c-line);border-bottom:none;padding:0 6px;}
 .id-tabs .tab{padding:9px 12px;font-size:12px;cursor:pointer;color:var(--t-2);border-bottom:2px solid transparent;margin-bottom:-1px;}
 .id-tabs .tab.active{color:var(--c-primary);border-bottom-color:var(--c-primary);font-weight:600;}
 .id-body{flex:1;overflow-y:auto;border:1px solid var(--c-line);border-radius:0 0 8px 8px;background:var(--c-panel);padding:14px 16px;max-height:calc(100vh - 250px);}
+/* 节点详情在 90% 弹层内展示：滚动交给弹层主体，内层不再限高 */
+.modal .id-body{max-height:none;border:none;padding:0;background:transparent;}
+.modal .id-tabs{border-radius:0;}
 .id-node-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
 .id-node-h b{font-size:15px;}
 .id-confirm-card{border:1px solid #fdba74;background:#fff7ed;border-radius:8px;padding:14px;margin-bottom:12px;}
@@ -51,12 +53,7 @@
 .md-body a{color:var(--c-primary);}
 .md-body hr{border:none;border-top:1px solid var(--c-line);margin:10px 0;}
 .id-confirm-card .md-body{max-height:220px;overflow:auto;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 10px;}
-/* 整屏查看 */
-.id-full{position:fixed;inset:0;z-index:240;background:var(--c-bg);display:flex;flex-direction:column;}
-.id-full-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;background:var(--c-panel);border-bottom:1px solid var(--c-line);font-size:15px;flex-shrink:0;}
-.id-full-head b{font-weight:700;}
-.id-full-body{flex:1;overflow:auto;padding:24px 28px;width:100%;max-width:1080px;margin:0 auto;}
-.id-full-body .md-body{font-size:14px;line-height:1.85;}
+
 </style>
 </head>
 <body>

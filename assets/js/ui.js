@@ -393,14 +393,21 @@
     modal.close();
     const ov = document.createElement('div'); ov.className = 'overlay';
     const w = document.createElement('div'); w.className = 'modal-wrap';
-    const m = document.createElement('div'); m.className = 'modal';
+    const m = document.createElement('div'); m.className = 'modal' + (opt.size === 'screen' ? ' modal-screen' : '');
     const zK0 = zoomOnFixed ? (zoomK() || 1) : 1; // 兜底模式下弹层不缩放，不除系数
-    const resolveW = v => { // vw/% 期望的"视觉"宽度 → 除以 zoom 得 CSS px（html zoom 会再放大）
-      if (typeof v !== 'string') return (v || 480) + 'px';
-      const mm = /^([\d.]+)(?:vw|%)$/.exec(v);
-      return mm ? (parseFloat(mm[1]) / 100 * window.innerWidth / (zK0 || 1)) + 'px' : v;
+    const resolveDim = (v, base) => { // vw/vh/% 期望的"视觉"尺寸 → 除以 zoom 得 CSS px（html zoom 会再放大）
+      if (typeof v !== 'string') return (v || base) + 'px';
+      const mm = /^([\d.]+)(vw|vh|%)$/.exec(v);
+      const unitBase = mm && mm[2] === 'vh' ? window.innerHeight : base;
+      return mm ? (parseFloat(mm[1]) / 100 * unitBase / (zK0 || 1)) + 'px' : v;
     };
-    m.style.width = resolveW(opt.width);
+    /* size:'screen' = 视口 90% × 90%，头部/底部固定、内容区滚动；opt.width/height 可覆盖 */
+    const screen = opt.size === 'screen';
+    const applySize = () => {
+      m.style.width = resolveDim(screen ? (opt.width || '90vw') : (opt.width || 480), window.innerWidth);
+      if (screen || opt.height) m.style.height = resolveDim(screen ? (opt.height || '90vh') : opt.height, window.innerHeight);
+    };
+    applySize();
     m.innerHTML = '<div class="d-head">' + esc(opt.title || '') +
       '<button class="icon-btn x">' + icon('x') + '</button></div>' +
       '<div class="d-body"></div>' + (opt.footer ? '<div class="d-foot">' + opt.footer + '</div>' : '');
@@ -426,7 +433,7 @@
           document.body.style.userSelect = 'none';
           document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
         });
-        g.addEventListener('dblclick', () => { m.style.width = resolveW(opt.width); });
+        g.addEventListener('dblclick', () => { m.style.width = resolveDim(opt.width || 480, window.innerWidth); });
         m.appendChild(g);
       };
       addGrip('l'); addGrip('r');
@@ -435,7 +442,21 @@
     document.body.appendChild(w);
     const body = m.querySelector('.d-body');
     if (typeof opt.body === 'string') body.innerHTML = opt.body; else if (opt.body) body.appendChild(opt.body);
-    const close = () => { w.remove(); if (opt.onClose) opt.onClose(); };
+    let closed = false;
+    const escClose = screen || opt.closeOnEsc === true;
+    const onKey = e => { if (e.key === 'Escape') close(); };
+    const onResize = () => applySize();
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      w.remove();
+      if (escClose) document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onResize);
+      if (modal._close === close) modal._close = null;
+      if (opt.onClose) opt.onClose();
+    };
+    if (escClose) document.addEventListener('keydown', onKey);
+    if (screen) window.addEventListener('resize', onResize);
     ov.onclick = close; m.querySelector('.x').onclick = close;
     if (opt.onMount) opt.onMount(body, close);
     modal._close = close;

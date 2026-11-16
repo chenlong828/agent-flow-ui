@@ -135,14 +135,39 @@ async function scn0004T2(browser) {
     assert.equal(await ctx.page.locator('.cv-node').count(), 3);
     assert.equal(await ctx.page.locator('.cv-node.st-ok').count(), 1);
     assert.equal(await ctx.page.locator('.cv-node.st-wait').count(), 1);
+    assert.equal(await ctx.page.locator('#id-panel').count(), 0, '详情不再使用右侧面板');
+    assert.equal(await ctx.page.locator('.id-confirm-card').count(), 0, '未双击前不打开节点详情');
+
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(250);
+    const modal = ctx.page.locator('.modal-screen');
+    assert.equal(await modal.count(), 1);
+    const box = await modal.boundingBox();
+    const vp = ctx.page.viewportSize();
+    assert.ok(Math.abs(box.width - vp.width * 0.9) <= 2, '弹层宽度应为视口 90%，实际 ' + box.width);
+    assert.ok(Math.abs(box.height - vp.height * 0.9) <= 2, '弹层高度应为视口 90%，实际 ' + box.height);
     assert.equal(await ctx.page.locator('.id-confirm-card').count(), 1);
-    assert.match(await ctx.page.locator('body').textContent(), /请确认方案/);
+    assert.match(await modal.innerText(), /请确认方案/);
     assert.equal(await ctx.page.locator('.id-confirm-card .md-body').count(), 1);
-    await ctx.page.locator('.id-confirm-card [data-md]').click();
-    assert.equal(await ctx.page.locator('.id-full').count(), 1);
-    assert.match(await ctx.page.locator('.id-full').innerText(), /请确认方案/);
+    assert.equal(await ctx.page.locator('[data-md], .id-full').count(), 0, '90% 弹层内不再提供二次全屏');
+
+    await ctx.page.locator('.modal-screen .id-tabs .tab[data-t="log"]').click();
+    await ctx.page.waitForTimeout(120);
+    assert.match(await modal.innerText(), /会话日志/);
+
+    // 视口压到 500px 后，90% 弹层内容超出，滚动条落在弹层主体内部
+    await ctx.page.setViewportSize({ width: 1440, height: 500 });
+    await ctx.page.waitForTimeout(150);
+    await ctx.page.locator('.modal-screen .id-tabs .tab[data-t="summary"]').click();
+    await ctx.page.waitForTimeout(120);
+    const scroll = await ctx.page.locator('.modal-screen .d-body').evaluate(function (el) {
+      return { sh: el.scrollHeight, ch: el.clientHeight, overflow: getComputedStyle(el).overflowY };
+    });
+    assert.ok(scroll.sh > scroll.ch, '内容超高时应由弹层主体滚动');
+    assert.equal(scroll.overflow, 'auto');
+
     await ctx.page.keyboard.press('Escape');
-    assert.equal(await ctx.page.locator('.id-full').count(), 0);
+    assert.equal(await ctx.page.locator('.modal-screen').count(), 0);
     assert.equal(await ctx.page.locator('#id-pause').isDisabled(), true);
     assert.equal(await ctx.page.locator('#id-stop').count(), 1);
     noErrors(ctx);
@@ -152,6 +177,8 @@ async function scn0004T2(browser) {
 async function scn0004T3(browser) {
   const ctx = await openRunPage(browser, 'instance-detail', 'id=' + RUN_WAIT);
   try {
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(200);
     await ctx.page.locator('#cf-no').click();
     await ctx.page.waitForTimeout(120);
     assert.match(await ctx.page.locator('body').textContent(), /驳回必须填写意见/);
@@ -200,8 +227,13 @@ async function scn0004T5(browser) {
 async function scn0004T4(browser) {
   const ctx = await openRunPage(browser, 'instance-detail', 'id=' + RUN_RUNNING);
   try {
-    assert.equal(await ctx.page.locator('#id-panel .md-body h2').innerText(), '执行中');
-    assert.equal(await ctx.page.locator('#id-panel .md-body li').count(), 2);
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(250);
+    assert.equal(await ctx.page.locator('.modal-screen .md-body h2').innerText(), '执行中');
+    assert.equal(await ctx.page.locator('.modal-screen .md-body li').count(), 2);
+    await ctx.page.locator('.modal-screen [id="id-modal-close"]').click();
+    await ctx.page.waitForTimeout(120);
+    assert.equal(await ctx.page.locator('.modal-screen').count(), 0);
     await ctx.page.locator('#id-stop').click();
     await ctx.page.locator('#mc-no').click();
     await ctx.page.waitForTimeout(120);

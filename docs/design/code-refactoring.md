@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-13
+updated: 2026-11-17
 ---
 
 # 代码重构要点（本项目前端的防御性规则）
@@ -19,7 +19,7 @@ updated: 2026-10-13
    const foot = b.closest('.modal').querySelector('.d-foot');   // 弹窗（b 为弹窗主体容器）
    const foot = d.closest('.drawer').querySelector('.d-foot');  // 抽屉
    ```
-3. **同一 id 全文档唯一**。属性抽屉等内容动态注入的容器（如 `#we-inspector`）在关闭旧实例后才能创建新实例；用「`document.getElementById('we-inspector')` 是否存在」判断抽屉是否已打开，依赖的就是这条唯一性。
+3. **同一 id 全文档唯一**。属性弹层等内容动态注入的容器（如 `#we-inspector`）在关闭旧实例后才能创建新实例；用「`document.getElementById('we-inspector')` 是否存在」判断弹层是否已打开，依赖的就是这条唯一性。编辑器属性已从抽屉改为 `DF.modal size:'screen'` 弹层，弹层容器随 `DF.modal.open` 创建/销毁。
 
 ## 2. 函数拆分时的闭包变量断链
 
@@ -35,8 +35,8 @@ updated: 2026-10-13
 
 弹窗/抽屉的通用能力一律在 `assets/js/ui.js` 的 `DF.modal` / `DF.drawer` 实现，页面代码只传选项，禁止在页面里复制粘贴弹层管理逻辑。已下沉的能力清单（改造时扩展这里，不要另起炉灶）：
 
-- `DF.modal.open`：`width` 支持数字（像素）或字符串（`'80vw'` 等，内部按当前缩放系数换算为视觉宽度）；`resizable: true` 启用左右拖宽把手（对称展开，范围钳制，双击恢复默认宽）；
-- `DF.drawer.open`：`noOverlay: true` 表示不加暗色遮罩（用于"抽屉打开时背景仍需可操作"的场景，如编辑器属性抽屉）；
+- `DF.modal.open`：`width`/`height` 支持数字（像素）或字符串（`'80vw'`/`'90vh'`/`'90%'`，内部按当前缩放系数换算为视觉尺寸）；`size: 'screen'` 表示视口 90% × 90% 大弹层（头部/底部固定、主体内滚动、resize 重算、Esc/遮罩/× 关闭）；`resizable: true` 启用左右拖宽把手（对称展开，范围钳制，双击恢复默认宽）；普通弹窗默认只响应遮罩/×，需要 Esc 时传 `closeOnEsc: true`；
+- `DF.drawer.open`：`noOverlay: true` 表示不加暗色遮罩（用于"抽屉打开时背景仍需可操作"的场景）；工作流编辑器与运行实例详情已不再使用抽屉，改为双击大弹层；
 - `DF.modal.confirm`：Promise 化确认框，内部有 settled 标志防重复解析——不要在页面里再包一层自定义确认逻辑。
 - `DF.menu(items, x, y, opts)`：右键/更多菜单（fixed 弹层，z-index 250）。调用方统一传**视觉坐标**（`clientX` 与 `rect` 均是视觉值），内部按缩放路径归一（zoom 路径除以 `zoomK`，兜底路径原样）；`opts.alignRight` 为锚定下拉语义：x 视作右缘坐标，量实际宽度反推 left（防溢出钳制 `innerWidth-160` 只作用于默认左缘语义，会破坏右缘锚定）——顶栏用户区下拉用此语义。
 

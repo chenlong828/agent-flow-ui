@@ -2,7 +2,7 @@
 layer: history
 module: global
 status: frozen
-updated: 2026-11-14
+updated: 2026-11-17
 ---
 
 # 坑档案
@@ -40,7 +40,7 @@ updated: 2026-11-14
 ### CSS-6 · 视口单位与缩放叠加的语义歧义
 - **现象**：`80vw`、`96vw` 这类宽度在存在缩放（zoom 或 transform 兜底）时，"视口的百分之八十"究竟是换算前还是换算后，各引擎不一致。
 - **存续条件**：任何使用缩放方案的界面，永久需要面对。
-- **对策落点**：`assets/js/ui.js` `DF.modal.open` 的 `resolveW()`——字符串宽度在 zoom 路径下除以缩放系数换算为像素，兜底路径下不换算；规则集中在这一处，新增宽度逻辑必须走它。
+- **对策落点**：`assets/js/ui.js` `DF.modal.open` 的 `resolveDim()`——字符串宽/高（`vw`/`vh`/`%`）在 zoom 路径下除以缩放系数换算为像素，兜底路径下不换算；`size:'screen'` 的 90% × 90% 与 resize 重算也走这一处，新增尺寸逻辑必须走它。
 
 ### CSS-7 · transform 默认按中心缩放，与左上坐标原点叠加出画布死区
 - **现象**：工作流画布在 80% 缩放时，开始节点最多只能拖到距画布左边 116px、上边 65px；45% 缩放时约 498px / 264px，左上大片区域放不了节点。用户报告「开始节点移动范围有限，鼠标不能拖动到边缘区，造成大量区域浪费」。
@@ -108,6 +108,12 @@ updated: 2026-11-14
 - **根因**：`DF.menu` 用 `setTimeout` 在当前点击派发结束后 `document.addEventListener('click', closeMenu, { once: true })`；Skill 行菜单没有 `stopPropagation`，打开新菜单时上一次的 once 监听器仍挂在 document 上，本次点击冒泡就把它刚打开的新菜单关掉；旧菜单被替换时旧监听器也从未摘除。
 - **存续条件**：任何「延迟挂到 document 的 once 关闭监听 + 打开新菜单前不清理旧监听 + 触发器不 `stopPropagation`」的弹层都会复发。
 - **对策落点**：`assets/js/ui.js` 的 `menu()/closeMenu()` 把关闭监听器保存为单例，`closeMenu()` 先 `removeEventListener`；同轮定位改为按实际宽高钳入视口四边（含底边）；`SCN-0005-T5` 断言同一按钮连续点击仍能弹出、最后一行菜单不越出视口。
+
+### JS-10 · 单击处理器重绘目标节点 → dblclick 永远不触发；阶段单击即置 dirty
+- **现象**：改为「双击节点/阶段打开属性弹层」后，引擎层双击节点没有任何反应；双击阶段标题同样打不开弹层；单击一次阶段标题就把编辑器标成「未保存」。
+- **根因**：节点的单击/选中路径会 `paint()` 重建整个画布 DOM，第二次点击的目标已被替换，浏览器无法在同一元素上派发 `dblclick`；阶段拖拽的 `mouseup` 无条件调用 `markDirty()`，即使没有拖动也会重绘并置 dirty，进一步打断双击。
+- **存续条件**：任何「单击处理器重建事件目标 + 依赖原生 dblclick」的交互都会复发；任何拖拽处理器缺少 `moved` 标记、在 mouseup 无条件提交/重绘时也会复发。
+- **对策落点**：`workflow-editor.js` 的 `select()` 在同选中项上跳过 `paint()`，`openInspectorFor()` 由 `dblclick` 驱动；阶段拖拽增加 `moved` 标记，只有实际移动才 `markDirty()`。`SCN-0019-T1` 断言单击不弹层、双击节点/阶段/连线打开弹层。
 
 ## 接口契约类
 

@@ -63,8 +63,7 @@ const state = {
   timer: null,
   version: 0,
   pending: 0,
-  md: {},
-  full: null
+  modal: null
 };
 
 function shortId(id) {
@@ -193,12 +192,11 @@ function render() {
         '<div class="cv-legend">' +
           '<b>' + dot('green') + '成功</b><b>' + dot('blue') + '运行中</b><b>' + dot('orange') + '等待人工</b>' +
           '<b>' + dot('red') + '失败</b><b>' + dot('purple') + '已驳回</b><b>' + dot('gray') + '待执行</b>' +
-          '<b>点击节点查看详情</b></div>' +
+          '<b>双击节点查看详情</b></div>' +
       '</div>' +
-      '<div class="id-panel" id="id-panel"></div>' +
     '</div>';
   paint();
-  renderPanel();
+  if (state.modal) renderNodeModal();
   syncBell();
 }
 
@@ -250,10 +248,17 @@ function paint() {
   canvas.innerHTML = stagesHTML() + edgesHTML() + nodesHTML();
   canvas.onclick = function (e) {
     const el = e.target.closest('.cv-node');
-    if (!el) return;
+    if (!el || state.selectedId === el.dataset.node) return;
     state.selectedId = el.dataset.node;
     paint();
-    renderPanel();
+  };
+  canvas.ondblclick = function (e) {
+    const el = e.target.closest('.cv-node');
+    if (!el) return;
+    const nodeId = el.dataset.node;
+    state.selectedId = nodeId;
+    paint();
+    openNodeModal(nodeId);
   };
 }
 
@@ -307,7 +312,7 @@ function edgesHTML() {
   return '<svg class="cv-edges" width="' + size.w + '" height="' + size.h + '">' + out + '</svg>';
 }
 
-/* ---------------- 右侧面板 ---------------- */
+/* ---------------- 节点详情弹层 ---------------- */
 
 function selectedNode() {
   return state.graph && state.selectedId
@@ -315,19 +320,55 @@ function selectedNode() {
     : null;
 }
 
-function renderPanel() {
-  const panel = document.getElementById('id-panel');
-  if (!panel) return;
+function nodeModalTitle(node) {
+  const meta = NODE_META[node.type] || { label: node.type };
+  return node.name + ' · ' + meta.label;
+}
+
+function closeNodeModal() {
+  if (!state.modal) return;
+  const handle = state.modal.handle;
+  state.modal = null;
+  handle.close();
+}
+
+/** 双击节点打开 90% × 90% 弹层；首次打开挂 DOM，后续切 Tab 只重绘内容。 */
+function openNodeModal(nodeId) {
+  const node = state.graph && state.graph.nodes.find(function (n) { return n.id === nodeId; });
+  if (!node) return;
+  if (state.modal && state.modal.nodeId === node.id) return;
+  state.selectedId = node.id;
+  state.tab = 'summary';
+  let handle = null;
+  handle = DF.modal.open({
+    title: nodeModalTitle(node),
+    size: 'screen',
+    body: '<div id="id-modal-body"></div>',
+    footer: '<button class="btn" id="id-modal-close">关闭</button>',
+    onMount: function (body, close) {
+      const btn = body.closest('.modal').querySelector('#id-modal-close');
+      if (btn) btn.onclick = close;
+    },
+    onClose: function () {
+      if (state.modal && state.modal.handle === handle) state.modal = null;
+    }
+  });
+  state.modal = { nodeId: node.id, handle: handle };
+  renderNodeModal();
+}
+
+function renderNodeModal() {
+  const host = document.getElementById('id-modal-body');
+  if (!host) return;
   const node = selectedNode();
-  if (!node) {
-    panel.innerHTML = '<div class="card" style="padding:16px;color:var(--t-3);flex:1">' + icon('panel') + ' 在左侧轨迹图中点击节点，查看执行状态、结论与会话日志。</div>';
-    return;
-  }
+  if (!node) { closeNodeModal(); return; }
   const st = nodeState(node.id);
   const runNode = st.run;
   const confirmable = runNode && runNode.state === 'waiting_confirm';
-  state.md = {};
-  panel.innerHTML =
+  const root = host.closest('.modal');
+  const head = root ? root.querySelector('.d-head') : null;
+  if (head && head.firstChild) head.firstChild.textContent = nodeModalTitle(node);
+  host.innerHTML =
     (confirmable ? confirmCard(node, runNode) : '') +
     '<div class="id-tabs">' +
       [['summary', '概要'], ['log', '会话日志']].map(function (t) {
@@ -335,55 +376,22 @@ function renderPanel() {
       }).join('') +
     '</div>' +
     '<div class="id-body" id="id-body"></div>';
-  panel.querySelector('.id-tabs').onclick = function (e) {
+  host.querySelector('.id-tabs').onclick = function (e) {
     const t = e.target.closest('.tab');
     if (!t) return;
     state.tab = t.dataset.t;
-    renderPanel();
+    renderNodeModal();
   };
-  const bodyEl = panel.querySelector('#id-body');
+  const bodyEl = host.querySelector('#id-body');
   if (state.tab === 'log') bodyEl.innerHTML = logTab(node, runNode);
   else bodyEl.innerHTML = summaryTab(node, st, runNode);
   if (confirmable) bindConfirm(node, runNode);
-  panel.querySelectorAll('[data-md]').forEach(function (btn) {
-    btn.onclick = function () { openMarkdownFull(btn.dataset.md); };
-  });
 }
 
-/** 登记一段 Markdown 并渲染；「全屏」按钮按 key 取回原文。 */
-function mdBlock(key, title, text) {
-  state.md[key] = { title: title || '节点消息', text: String(text == null ? '' : text) };
-  return '<div class="section-title">' + esc(title) + ' <span class="line"></span>' +
-    '<button class="btn sm" data-md="' + key + '" title="在整屏中查看">' + icon('panel', 12) + '全屏</button></div>' +
+/** 节点消息与确认说明按 Markdown 渲染；详情本身已是 90% 弹层，不再提供二次全屏。 */
+function mdBlock(title, text) {
+  return '<div class="section-title">' + esc(title) + ' <span class="line"></span></div>' +
     '<div class="md-body">' + renderMarkdown(text) + '</div>';
-}
-
-function closeMarkdownFull() {
-  if (!state.full) return;
-  state.full.close();
-  state.full = null;
-}
-
-function openMarkdownFull(key) {
-  const entry = state.md[key];
-  if (!entry) return;
-  closeMarkdownFull();
-  const overlay = document.createElement('div');
-  overlay.className = 'id-full';
-  overlay.innerHTML = '<div class="id-full-head"><b>' + esc(entry.title) + '</b>' +
-    '<button class="icon-btn" data-close title="关闭（Esc）">' + icon('x', 18) + '</button></div>' +
-    '<div class="id-full-body"><div class="md-body">' + renderMarkdown(entry.text) + '</div></div>';
-  document.body.appendChild(overlay);
-  const onKey = function (e) { if (e.key === 'Escape') close(); };
-  const close = function () {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
-    if (state.full && state.full.overlay === overlay) state.full = null;
-  };
-  document.addEventListener('keydown', onKey);
-  overlay.querySelector('[data-close]').onclick = close;
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
-  state.full = { overlay: overlay, close: close };
 }
 
 function summaryTab(node, st, runNode) {
@@ -405,7 +413,7 @@ function summaryTab(node, st, runNode) {
     html += '<div class="section-title">判定结论 <span class="line"></span></div>' +
       '<pre class="id-pre">' + esc(typeof verdict === 'string' ? verdict : JSON.stringify(verdict, null, 2)) + '</pre>';
   }
-  if (runNode && runNode.message) html += mdBlock('node', '节点消息', runNode.message);
+  if (runNode && runNode.message) html += mdBlock('节点消息', runNode.message);
   if (runNode && runNode.error) {
     html += '<div class="section-title">错误 <span class="line"></span></div>' +
       '<pre class="id-pre id-pre-err">' + esc((runNode.error.code || '') + '：' + (runNode.error.message || '')) + '</pre>';
@@ -435,7 +443,7 @@ function logTab(node, runNode) {
 function confirmCard(node, runNode) {
   return '<div class="id-confirm-card">' +
     '<h4>' + icon('warn', 14) + ' 待人工确认 · ' + esc(node.name) + '</h4>' +
-    (runNode.message ? mdBlock('confirm', '确认说明', runNode.message) : '<div class="sub">执行节点正在等待确认决策。</div>') +
+    (runNode.message ? mdBlock('确认说明', runNode.message) : '<div class="sub">执行节点正在等待确认决策。</div>') +
     '<input class="inp" id="cf-comment" placeholder="审批意见（批准选填 / 驳回必填）" style="margin:8px 0">' +
     '<div style="display:flex;gap:8px">' +
       '<button class="btn primary" id="cf-ok">' + icon('check', 12) + '批准，继续执行</button>' +

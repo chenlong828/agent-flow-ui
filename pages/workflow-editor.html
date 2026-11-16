@@ -21,6 +21,10 @@ svg.cv-edges path.esel{stroke:var(--c-fail)!important;stroke-width:2.6!important
 .stage-sel{border-color:var(--c-primary)!important;}
 .insp-sec{border:1px solid var(--c-line);border-radius:8px;padding:12px 14px;margin-bottom:12px;background:var(--c-panel);}
 .insp-sec .t{font-size:12px;font-weight:700;color:var(--t-2);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+/* 属性弹层（90% 视口）：内容按卡片分栏，宽度有上限，不把表单拉成一行 */
+#we-inspector{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start;max-width:1200px;margin:0 auto;}
+#we-inspector > .card,#we-inspector > .btn{grid-column:1/-1;}
+#we-inspector .insp-sec{margin-bottom:0;}
 .chip-add{display:flex;gap:6px;margin-top:6px;}
 .chip-add input{flex:1;}
 .page-header .acts { flex-wrap:wrap; justify-content:flex-end; }

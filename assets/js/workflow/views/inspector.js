@@ -1,4 +1,4 @@
-/** 工作流属性抽屉纯视图：节点/阶段/连线表单 HTML。 */
+/** 工作流属性弹层纯视图：节点/阶段/连线表单 HTML。 */
 import { DF } from '../../ui.js';
 import { NODE_META, NODE_TYPES, nodeName } from '../model.js';
 

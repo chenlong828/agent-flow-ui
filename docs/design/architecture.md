@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-11-12
+updated: 2026-11-17
 ---
 
 # 系统架构（现行真相）
@@ -26,7 +26,7 @@ updated: 2026-11-12
 |---|---|---|---|
 | `CMP-ui-shell` | 13 页公共外壳 | `assets/js/ui.js` | 顶栏、左侧导航、面包屑/页头、用户区、待确认角标、字号缩放、`DF.*` 原语 |
 | `CMP-workflow-list` | `pages/workflow-list.html` | `workflow-list.js` | B3 工作流列表、筛选、统计、新建向导/复制/改名/删除/导入导出；无运行入口 |
-| `CMP-workflow-editor` | `pages/workflow-editor.html?id=` | `workflow-editor.js` + `workflow/views/*` | 画布阶段/节点/边编辑、属性抽屉、本地校验、手动保存、DSL 预览与导出；无发布/版本/运行 |
+| `CMP-workflow-editor` | `pages/workflow-editor.html?id=` | `workflow-editor.js` + `workflow/views/*` | 画布阶段/节点/边编辑、双击 90% 属性弹层、本地校验、手动保存、DSL 预览与导出；无发布/版本/运行 |
 | `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图、发起运行（工作流+Harness+路径+意图）、终止、人工确认、会话日志下载；后端未提供的控制入口置灰 |
 | `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js` | Skill 列表、筛选、启停、删除、引用方；专门页承接查看/编辑/新建，正文用 Milkdown 渲染、编辑走草稿 |
 | `CMP-experts` | `pages/experts.html` | `experts.js` | 专家列表、五区详情/编辑、Skill/工具组合、启停 |

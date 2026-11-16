@@ -5,10 +5,12 @@ status: verified
 flow: edit-workflow-live
 scenario: SCN-0019
 execution: playwright
-updated: 2026-11-14
+updated: 2026-11-17
 ---
 
 # SCN-0019 工作流编辑器同源加载、校验与保存
+
+> 需求：`REQ-0017`；节点属性交互调整见 `REQ-0020`。
 
 ## 入口
 
@@ -19,7 +21,7 @@ updated: 2026-11-14
 ## 运行序
 
 1. 带 `?id=<uuid>` 进入，`GET /workflows/{id}` 加载当前定义；画布按 `graph.nodes/edges/stages` 渲染，应用 `graph.viewport` 与节点/阶段 `layout`；缺 id 显示错误并回列表，不静默回落第一条。
-2. 选中节点打开属性抽屉；修改名称/类型/专家绑定、增删阶段/节点/边；节点/阶段可拖到画布可视区任意位置（含四边；越过画布原点记负坐标，B3 `layout.x/y` 无下界）；ID 由 `workflow/model` 生成并满足 B3 规则；6 类节点类型与边类型（seq/rollback）按矩阵约束；每节点上/右/下/左四向锚点，从哪边拖出写 `outSide`、投放到目标哪边写 `inSide`（落在主体取朝向源节点的一侧），存入 `node.layout`；缺省按中心相对位置自动选边；同一节点的入边和出边不能落在同一个锚点，冲突时拒绝并提示，旧数据同侧时加载后清空出口回落自动。拖拽时显示跟随指针/目标锚点的虚线预览，悬停目标由 `validate.checkNewEdge` 判定并标绿/标红，非法目标提示原因且不建边。
+2. 单击节点/阶段/连线只切换选中高亮，双击才打开属性弹层；弹层由 `DF.modal` 的 `size:'screen'` 提供，宽高各为视口 90%，头部/底部固定，表单内容在弹层主体内滚动（窗口 resize 重算，Esc/遮罩/× 关闭）。在弹层内修改名称/类型/专家绑定；增删阶段/节点/边；新增节点/阶段只选中不自动弹层。节点/阶段可拖到画布可视区任意位置（含四边；越过画布原点记负坐标，B3 `layout.x/y` 无下界）；ID 由 `workflow/model` 生成并满足 B3 规则；6 类节点类型与边类型（seq/rollback）按矩阵约束；每节点上/右/下/左四向锚点，从哪边拖出写 `outSide`、投放到目标哪边写 `inSide`（落在主体取朝向源节点的一侧），存入 `node.layout`；缺省按中心相对位置自动选边；同一节点的入边和出边不能落在同一个锚点，冲突时拒绝并提示，旧数据同侧时加载后清空出口回落自动。拖拽时显示跟随指针/目标锚点的虚线预览，悬停目标由 `validate.checkNewEdge` 判定并标绿/标红，非法目标提示原因且不建边。阶段标题单击不置 dirty，实际拖动后才置 dirty。
 3. 实时本地校验：`workflow/validate` 产出 `errors/warnings`；有 error 的节点/边加红框角标，图级问题（缺 start/end、seq 环、缺专家）显示顶部阻断条；保存按钮置灰；校验面板列出全部问题，点击定位。
 4. 手动保存：图合法时 `PUT /workflows/{id}/definition` 带 `If-Match`，body `{graph}`（含 `stages/nodes/edges/viewport`）；成功刷新 revision 与 warnings，清除未保存标记。
 5. 视口：平移/缩放只改本地视图，不算未保存修改；保存时把当前 `viewport` 随图提交；布局按 `dsl.schema.json` 本地校验，非法则阻断保存。
@@ -40,13 +42,13 @@ updated: 2026-11-14
 
 执行层：Playwright WebKit（DOM + 网络拦截/ B3 stub）；可执行：`node tools/verify-workflow-editor.js`（Playwright WebKit + fake B3/B1）。
 
-最近一次执行：2026-11-14，23/23 通过（T1 2 / T2 2 / T3 3 / T4 4 / T5 3 / T6 3 / T7 2 / T8 2 / T9 1 / T10 1）。
+最近一次执行：2026-11-17，24/24 通过（T1 3 / T2 2 / T3 3 / T4 4 / T5 3 / T6 3 / T7 2 / T8 2 / T9 1 / T10 1）。
 
 真实 B3 写路径追加验证（2026-10-30）：从列表创建临时工作流进入本页，改名后保存（元数据 PUT + definition PUT，revision 2），`layout`/`viewport` 落库；随后由列表删除，GET 404。
 
 | ID | 类型 | 断言 | 对应脚本 |
 |---|---|---|---|
-| SCN-0019-T1 | 正 | 加载真实详情：节点/边/阶段数与 DTO 一致；`viewport` 与节点/阶段 `layout` 应用；未知 id 不回落首条 | `tools/verify-workflow-editor.js` |
+| SCN-0019-T1 | 正 | 加载真实详情：节点/边/阶段数与 DTO 一致；`viewport` 与节点/阶段 `layout` 应用；单击只选中不弹层，双击节点/阶段/连线打开 90% × 90% 属性弹层，视口变矮后重算高度且内容走弹层内部滚动；未知 id 不回落首条 | `tools/verify-workflow-editor.js` |
 | SCN-0019-T2 | 正 | 改名/改专家/增删阶段节点边后保存：元数据与图各一次 PUT，`If-Match` 依次为当前 revision；请求体含完整 `graph`/`layout`/`viewport`；revision 更新；未保存标记清除 | `tools/verify-workflow-editor.js` |
 | SCN-0019-T3 | 正 | 非法图：保存置灰、问题元素红框、校验面板定位；修正后恢复可保存；服务端 400 issues 回填定位 | `tools/verify-workflow-editor.js` |
 | SCN-0019-T4 | 反 | 409/428 不覆盖、提示刷新；离开有未保存修改弹确认；无发布/版本/运行入口；不回落 MOCK | `tools/verify-workflow-editor.js` |

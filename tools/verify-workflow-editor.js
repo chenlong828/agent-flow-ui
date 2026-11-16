@@ -95,6 +95,58 @@ async function scenarioT1(base, browser) {
     assert.equal(await page.locator('.cv-node[data-node="n1"]').evaluate((el) => el.style.left), '80px');
     assert.equal(await page.locator('.cv-node[data-node="n1"]').evaluate((el) => el.style.top), '120px');
   });
+  await check('单击只选中，双击打开 90% 属性弹层', async function () {
+    assert.equal(await page.locator('.modal-screen').count(), 0);
+    await page.locator('.cv-node[data-node="n2"]').click();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('.modal-screen').count(), 0, '单击不应打开属性弹层');
+    assert.equal(await page.locator('.cv-node[data-node="n2"].sel').count(), 1);
+
+    await page.locator('.cv-node[data-node="n2"]').dblclick();
+    await page.waitForTimeout(250);
+    const modal = page.locator('.modal-screen');
+    assert.equal(await modal.count(), 1);
+    assert.match(await modal.innerText(), /专家节点属性/);
+    const box = await modal.boundingBox();
+    const vp = page.viewportSize();
+    assert.ok(Math.abs(box.width - vp.width * 0.9) <= 2, '弹层宽度应为视口 90%，实际 ' + box.width);
+    assert.ok(Math.abs(box.height - vp.height * 0.9) <= 2, '弹层高度应为视口 90%，实际 ' + box.height);
+
+    // 视口变矮后弹层跟随到新视口的 90%，内容超出时在弹层主体内部滚动
+    await page.setViewportSize({ width: 1440, height: 500 });
+    await page.waitForTimeout(180);
+    const small = await modal.boundingBox();
+    assert.ok(Math.abs(small.height - 500 * 0.9) <= 2, '尺寸变化后高度应重算，实际 ' + small.height);
+    const scroll = await page.locator('.modal-screen .d-body').evaluate(function (el) {
+      return { sh: el.scrollHeight, ch: el.clientHeight, overflow: getComputedStyle(el).overflowY };
+    });
+    assert.ok(scroll.sh > scroll.ch, '内容超高时应由弹层主体滚动');
+    assert.equal(scroll.overflow, 'auto');
+    await page.keyboard.press('Escape');
+    assert.equal(await modal.count(), 0);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(150);
+
+    // 阶段分组同样通过双击打开属性弹层
+    await page.locator('.cv-stage .stage-label').dblclick();
+    await page.waitForTimeout(200);
+    assert.match(await page.locator('.modal-screen').innerText(), /阶段属性/);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.modal-screen').count(), 0);
+
+    // 连线双击命中透明 path.hit，打开连线属性
+    const edgePoint = await page.locator('path.hit').first().evaluate(function (el) {
+      const svg = el.ownerSVGElement;
+      const rect = svg.getBoundingClientRect();
+      const point = el.getPointAtLength(el.getTotalLength() / 2);
+      return { x: rect.left + point.x * rect.width / svg.width.baseVal.value, y: rect.top + point.y * rect.height / svg.height.baseVal.value };
+    });
+    await page.mouse.dblclick(edgePoint.x, edgePoint.y);
+    await page.waitForTimeout(200);
+    assert.match(await page.locator('.modal-screen').innerText(), /连线属性/);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.modal-screen').count(), 0);
+  });
   await check('未知 id 显式报错，不回落第一条', async function () {
     const ctx2 = await openPage(browser, base, 'workflow-editor', 'id=not-a-workflow', { b3: rec.b3, setup: fixtures, wait: 400 });
     assert.ok(await ctx2.page.locator('#we-fatal').count());
@@ -112,12 +164,14 @@ async function scenarioT2(base, browser) {
   const ctx = await openEditor(base, browser, rec.b3);
   const page = ctx.page;
   await check('改名/改专家/新增阶段与节点边后保存完整 graph', async function () {
-    await page.locator('.cv-node[data-node="n2"]').click();
+    await page.locator('.cv-node[data-node="n2"]').dblclick();
     await page.waitForTimeout(200);
     await page.locator('#if-name').fill('需求澄清');
     const expertValue = await page.locator('#if-expert option').nth(1).getAttribute('value');
     await page.locator('#if-expert').selectOption(expertValue);
     await page.locator('#if-stage').selectOption('s1');
+    await page.locator('#we-inspector-close').click();
+    await page.waitForTimeout(120);
     await page.locator('#we-name').fill('编辑器改名验收');
     // 新增阶段
     await page.locator('.we-pitem[data-type="stage"]').click();
@@ -126,8 +180,6 @@ async function scenarioT2(base, browser) {
     await page.locator('.we-pitem[data-type="agent"]').click();
     await page.waitForTimeout(200);
     const newNode = await page.locator('.cv-node').last().getAttribute('data-node');
-    await page.locator('#we-drawer-close').click();
-    await page.waitForTimeout(150);
     await connect(page, 'n2', newNode);
     await connect(page, newNode, 'n3');
     await page.locator('#we-save').click();
@@ -175,32 +227,32 @@ async function scenarioT3(base, browser) {
   const ctx = await openEditor(base, browser, rec.b3);
   const page = ctx.page;
   await check('非法图保存置灰、节点红框、图级阻断与面板定位', async function () {
-    await page.locator('.cv-node[data-node="n1"]').click();
+    await page.locator('.cv-node[data-node="n1"]').dblclick();
     await page.waitForTimeout(150);
     await page.locator('#if-type').selectOption('confirm');
     await page.waitForTimeout(250);
     assert.equal(await page.locator('#we-save').isDisabled(), true);
     assert.ok(await page.locator('#we-blocker').isVisible());
     assert.match(await page.locator('#we-blocker').textContent(), /缺少开始节点/);
+    await page.locator('#we-inspector-close').click();
+    await page.waitForTimeout(120);
     // 增加一个孤立节点，触发节点级错误与红框
     await page.locator('.we-pitem[data-type="agent"]').click();
     await page.waitForTimeout(200);
     const badNode = await page.locator('.cv-node').last().getAttribute('data-node');
-    await page.locator('#we-drawer-close').click();
-    await page.waitForTimeout(120);
     assert.ok(await page.locator('.cv-node[data-node="' + badNode + '"].has-error').count() >= 1);
     const issues = await page.locator('#we-issues').textContent();
     assert.match(issues, /不可达|seq|入边|出边/);
     assert.match(issues, /graph\.nodes\[/);
     // 删除孤立节点，恢复开始节点
-    await page.locator('.cv-node[data-node="' + badNode + '"]').click();
+    await page.locator('.cv-node[data-node="' + badNode + '"]').dblclick();
     await page.waitForTimeout(120);
     await page.locator('#if-del').click();
     await page.locator('#mc-ok').click();
     await page.waitForTimeout(250);
   });
   await check('修正后恢复可保存', async function () {
-    await page.locator('.cv-node[data-node="n1"]').click();
+    await page.locator('.cv-node[data-node="n1"]').dblclick();
     await page.waitForTimeout(120);
     await page.locator('#if-type').selectOption('start');
     const expertValue = await page.locator('#if-expert option').first().getAttribute('value');
@@ -210,16 +262,18 @@ async function scenarioT3(base, browser) {
     assert.equal(await page.locator('.cv-node.has-error').count(), 0);
   });
   await check('服务端 400 issues 回填定位并保留编辑态', async function () {
-    await page.locator('#we-drawer-save').click();
+    await page.locator('#we-inspector-save').click();
     await page.waitForTimeout(400);
     assert.ok(await page.locator('.cv-node[data-node="n1"].has-error').count() || await page.locator('#we-issues .we-issue').count());
     assert.match(await page.locator('#we-issues').textContent(), /start 节点必须绑定专家/);
     assert.equal(await page.locator('#we-save').isDisabled(), true);
     // 本地修正一次以清除服务端 issue，再保存成功
-    await page.locator('.cv-node[data-node="n2"]').click();
+    await page.locator('#we-inspector-close').click();
+    await page.waitForTimeout(120);
+    await page.locator('.cv-node[data-node="n2"]').dblclick();
     await page.waitForTimeout(150);
     await page.locator('#if-name').fill('已修正');
-    await page.locator('#we-drawer-save').click();
+    await page.locator('#we-inspector-save').click();
     await page.waitForTimeout(600);
     assert.match(await page.locator('#we-state').textContent(), /已保存/);
   });
@@ -241,18 +295,24 @@ async function scenarioT4(base, browser) {
   const ctx = await openEditor(base, browser, rec.b3);
   const page = ctx.page;
   await check('409 不覆盖并提示刷新', async function () {
-    await page.locator('.cv-node[data-node="n2"]').click();
+    await page.locator('.cv-node[data-node="n2"]').dblclick();
     await page.waitForTimeout(150);
     await page.locator('#if-name').fill('冲突修改');
+    await page.locator('#we-inspector-close').click();
+    await page.waitForTimeout(120);
     await page.locator('#we-name').fill('冲突名称');
-    await page.locator('#we-drawer-save').click();
+    await page.locator('#we-save').click();
     await page.waitForTimeout(400);
     assert.match(await page.locator('.toast').last().textContent(), /刷新|冲突/);
     assert.ok(!rec.calls.some(function (c) { return c.method === 'PUT' && /\/definition$/.test(c.path); }), '409 后不得继续保存图');
   });
   await check('428 提示刷新且不覆盖', async function () {
+    await page.locator('.cv-node[data-node="n2"]').dblclick();
+    await page.waitForTimeout(150);
     await page.locator('#if-name').fill('再次修改');
-    await page.locator('#we-drawer-save').click();
+    await page.locator('#we-inspector-close').click();
+    await page.waitForTimeout(120);
+    await page.locator('#we-save').click();
     await page.waitForTimeout(400);
     assert.match(await page.locator('.toast').last().textContent(), /缺少版本条件|刷新/);
   });
@@ -375,8 +435,6 @@ async function scenarioT6(base, browser) {
     await page.locator('.we-pitem[data-type="agent"]').click();
     await page.waitForTimeout(150);
     const newNode = await page.locator('.cv-node').last().getAttribute('data-node');
-    await page.locator('#we-drawer-close').click();
-    await page.waitForTimeout(120);
 
     async function connect(fromId, toId) {
       const fromPort = await page.locator('.cv-node[data-node="' + fromId + '"] .port[data-side="right"]').boundingBox();

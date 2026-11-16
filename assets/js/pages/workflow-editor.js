@@ -210,6 +210,7 @@ function renderShell() {
     if (!btn) return;
     state.tab = btn.getAttribute('data-t');
     document.querySelectorAll('#we-tab button').forEach(function (x) { x.classList.toggle('on', x === btn); });
+    closeInspector();
     renderMain();
   });
   document.getElementById('we-validate').addEventListener('click', runValidate);
@@ -264,7 +265,7 @@ function renderLayout() {
         '<div class="we-issues card" id="we-issues"></div>' +
         '<div class="cv-legend">' +
           '<b>' + icon('user', 12) + ' 专家节点</b><b>' + icon('check', 12) + ' 评审节点</b><b>' + icon('warn', 12) + ' 人工确认</b>' +
-          '<b>' + icon('flow', 12) + ' 并行网关</b><b>拖拽端口连线 · 拖动节点调整位置 · 点击节点在右侧编辑</b>' +
+          '<b>' + icon('flow', 12) + ' 并行网关</b><b>拖拽端口连线 · 拖动节点调整位置 · 双击节点/阶段/连线编辑属性</b>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -407,7 +408,7 @@ function bindCanvas() {
       const sid = stageLabel.getAttribute('data-stage');
       select({ type: 'stage', id: sid });
       const stage = state.graph.stages.find(function (s) { return s.id === sid; });
-      state.drag = { mode: 'stage', id: sid, ox: event.clientX, oy: event.clientY, box: deepClone(stage.box) };
+      state.drag = { mode: 'stage', id: sid, ox: event.clientX, oy: event.clientY, box: deepClone(stage.box), moved: false };
       event.preventDefault();
     } else if (nodeEl) {
       const nid = nodeEl.getAttribute('data-node');
@@ -424,11 +425,21 @@ function bindCanvas() {
   });
   wrap.addEventListener('click', function (event) {
     const hit = event.target.closest('path.hit');
-    if (hit) select({ type: 'edge', id: hit.getAttribute('data-edge') });
+    if (!hit) return;
+    const sel = { type: 'edge', id: hit.getAttribute('data-edge') };
+    if (state.sel && state.sel.type === sel.type && state.sel.id === sel.id) return;
+    select(sel);
   });
+  /* 双击节点/阶段/连线打开属性弹层；单击只做选中高亮，不再常驻右侧抽屉。 */
   wrap.addEventListener('dblclick', function (event) {
+    const nodeEl = event.target.closest('.cv-node');
+    if (nodeEl) { openInspectorFor({ type: 'node', id: nodeEl.getAttribute('data-node') }); return; }
+    const stageLabel = event.target.closest('.stage-label');
+    if (stageLabel) { openInspectorFor({ type: 'stage', id: stageLabel.getAttribute('data-stage') }); return; }
+    const stageEl = event.target.closest('.cv-stage');
+    if (stageEl) { openInspectorFor({ type: 'stage', id: stageEl.getAttribute('data-stage') }); return; }
     const hit = event.target.closest('path.hit');
-    if (hit) select({ type: 'edge', id: hit.getAttribute('data-edge') });
+    if (hit) openInspectorFor({ type: 'edge', id: hit.getAttribute('data-edge') });
   });
 }
 
@@ -493,6 +504,7 @@ document.addEventListener('mousemove', function (event) {
     const stage = state.graph.stages.find(function (s) { return s.id === drag.id; });
     stage.box.x = Math.round(drag.box.x + p1.x - p0.x);
     stage.box.y = Math.round(drag.box.y + p1.y - p0.y);
+    drag.moved = true;
     paint();
   } else if (drag.mode === 'pan') {
     const vp = state.graph.viewport;
@@ -523,7 +535,7 @@ document.addEventListener('mouseup', function (event) {
     clearLinkTarget(drag);
     if (!hit.id || hit.id === drag.from) return;
     createEdge(drag.from, hit.id, drag.kind, drag.sourceSide, hit.side);
-  } else if ((drag.mode === 'node' && drag.moved) || drag.mode === 'stage') {
+  } else if ((drag.mode === 'node' || drag.mode === 'stage') && drag.moved) {
     markDirty();
   }
 });
@@ -550,9 +562,10 @@ document.addEventListener('click', function (event) {
 });
 
 function select(sel) {
+  const same = sel && state.sel && sel.type === state.sel.type && sel.id === state.sel.id;
   state.sel = sel;
-  paint();
-  renderInspector();
+  if (!same) paint();
+  if (!sel) closeInspector();
 }
 
 function addType(type, x, y) {
@@ -572,7 +585,6 @@ function addType(type, x, y) {
   state.graph.nodes.push(node);
   state.sel = { type: 'node', id: node.id };
   markDirty();
-  renderInspector();
   toast('已添加 ' + ((NODE_META[type] || {}).label || type), 'ok');
 }
 
@@ -586,7 +598,6 @@ function addStage(x, y) {
   state.graph.stages.push(stage);
   state.sel = { type: 'stage', id: stage.id };
   markDirty();
-  renderInspector();
 }
 
 function createEdge(from, to, kind, fromSide, toSide) {
@@ -676,48 +687,93 @@ function deleteSelected() {
   }
 }
 
-/* ---------------- 属性抽屉 ---------------- */
-function renderInspector() {
-  const existing = document.getElementById('we-inspector');
-  if (state.tab !== 'canvas' || !state.sel) { if (existing) DF.drawer.close(); return; }
-  let title = '';
-  let html = '';
+/* ---------------- 属性弹层 ---------------- */
+let inspector = null; // { key, handle }：当前打开的属性弹层
+
+function inspectorKey() {
+  return state.sel ? state.sel.type + ':' + state.sel.id : '';
+}
+
+function inspectorView() {
+  if (state.tab !== 'canvas' || !state.sel) return null;
   if (state.sel.type === 'edge') {
     const edge = state.graph.edges.find(function (e) { return e.id === state.sel.id; });
-    if (!edge) { if (existing) DF.drawer.close(); return; }
-    title = '连线属性';
-    html = edgeInspector(edge, state.graph);
-  } else if (state.sel.type === 'stage') {
+    if (!edge) return null;
+    return { title: '连线属性', html: edgeInspector(edge, state.graph) };
+  }
+  if (state.sel.type === 'stage') {
     const stage = state.graph.stages.find(function (s) { return s.id === state.sel.id; });
-    if (!stage) { if (existing) DF.drawer.close(); return; }
-    title = '阶段属性 · ' + stage.name;
-    html = stageInspector(stage);
-  } else {
-    const node = state.graph.nodes.find(function (n) { return n.id === state.sel.id; });
-    if (!node) { if (existing) DF.drawer.close(); return; }
-    title = (NODE_META[node.type] || {}).label + '属性 · ' + node.name;
-    html = nodeInspector(node, state.graph, state.experts);
+    if (!stage) return null;
+    return { title: '阶段属性 · ' + stage.name, html: stageInspector(stage) };
   }
-  if (!existing) {
-    DF.drawer.open({
-      title: title, width: 380, noOverlay: true,
-      body: '<div id="we-inspector"></div>',
-      footer: '<button class="btn" id="we-drawer-close">关闭</button><button class="btn primary" id="we-drawer-save">保存</button>',
-      onClose: function () {
-        if (state.sel) { state.sel = null; paint(); }
-      }
-    });
-    const footerSave = document.getElementById('we-drawer-save');
-    const footerClose = document.getElementById('we-drawer-close');
-    if (footerSave) footerSave.onclick = save;
-    if (footerClose) footerClose.onclick = function () { DF.drawer.close(); };
-  } else {
-    const head = existing.closest('.drawer').querySelector('.d-head');
-    if (head) head.firstChild.textContent = title;
-  }
+  const node = state.graph.nodes.find(function (n) { return n.id === state.sel.id; });
+  if (!node) return null;
+  return {
+    title: (NODE_META[node.type] || {}).label + '属性 · ' + node.name,
+    html: nodeInspector(node, state.graph, state.experts)
+  };
+}
+
+/** 双击入口：先选中，再按当前选中项打开或复用属性弹层。 */
+function openInspectorFor(sel) {
+  if (!sel) return;
+  const same = state.sel && sel.type === state.sel.type && sel.id === state.sel.id;
+  state.sel = sel;
+  if (!same) paint();
+  renderInspector();
+}
+
+function closeInspector() {
+  if (!inspector) return;
+  const handle = inspector.handle;
+  inspector = null;
+  handle.close();
+}
+
+function fillInspector(view) {
   const box = document.getElementById('we-inspector');
-  box.innerHTML = html;
+  if (!box) return;
+  const head = box.closest('.modal') ? box.closest('.modal').querySelector('.d-head') : null;
+  if (head && head.firstChild) head.firstChild.textContent = view.title;
+  box.innerHTML = view.html;
   bindInspector();
+}
+
+function openInspector() {
+  const view = inspectorView();
+  if (!view) return;
+  let handle = null;
+  handle = DF.modal.open({
+    title: view.title,
+    size: 'screen',
+    body: '<div id="we-inspector"></div>',
+    footer: '<button class="btn" id="we-inspector-close">关闭</button><button class="btn primary" id="we-inspector-save">保存</button>',
+    onMount: function (body, close) {
+      const root = body.closest('.modal');
+      root.querySelector('#we-inspector-close').onclick = close;
+      root.querySelector('#we-inspector-save').onclick = function () { save(); };
+    },
+    onClose: function () {
+      if (inspector && inspector.handle === handle) inspector = null;
+    }
+  });
+  inspector = { key: inspectorKey(), handle: handle };
+  fillInspector(view);
+}
+
+function refreshInspectorTitle() {
+  const view = inspectorView();
+  const box = document.getElementById('we-inspector');
+  if (!view || !box) return;
+  const head = box.closest('.modal') ? box.closest('.modal').querySelector('.d-head') : null;
+  if (head && head.firstChild) head.firstChild.textContent = view.title;
+}
+
+function renderInspector() {
+  const view = inspectorView();
+  if (!view) { closeInspector(); return; }
+  if (!inspector || inspector.key !== inspectorKey()) { openInspector(); return; }
+  fillInspector(view);
 }
 
 function bindInspector() {
@@ -729,7 +785,7 @@ function bindInspector() {
     const type = document.getElementById('if-type');
     const stageSel = document.getElementById('if-stage');
     const expert = document.getElementById('if-expert');
-    name.oninput = function () { node.name = name.value; state.dirty = true; refreshValidation(); renderHeader(); renderIssues(); paint(); };
+    name.oninput = function () { node.name = name.value; state.dirty = true; refreshValidation(); renderHeader(); renderIssues(); refreshInspectorTitle(); paint(); };
     type.onchange = function () {
       node.type = type.value;
       if (node.type === 'confirm') node.expertId = null;
@@ -748,7 +804,7 @@ function bindInspector() {
     const desc = document.getElementById('if-sdesc');
     const width = document.getElementById('if-sw');
     const height = document.getElementById('if-sh');
-    name.oninput = function () { stage.name = name.value; state.dirty = true; refreshValidation(); renderHeader(); paint(); };
+    name.oninput = function () { stage.name = name.value; state.dirty = true; refreshValidation(); renderHeader(); refreshInspectorTitle(); paint(); };
     desc.oninput = function () { stage.description = desc.value; state.dirty = true; refreshValidation(); renderHeader(); paint(); };
     width.oninput = function () { stage.box.w = Math.max(120, Number(width.value) || 460); stage.box = stage.box; state.dirty = true; refreshValidation(); renderHeader(); paint(); };
     height.oninput = function () { stage.box.h = Math.max(80, Number(height.value) || 200); state.dirty = true; refreshValidation(); renderHeader(); paint(); };

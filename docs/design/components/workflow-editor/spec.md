@@ -5,16 +5,16 @@ component: CMP-workflow-editor
 requirement: REQ-0017
 scenario: SCN-0019
 status: active
-updated: 2026-11-14
+updated: 2026-11-17
 ---
 
 # 工作流编辑器（B3 live）
 
-> 导航：流程研发 / 工作流 → 编辑器　|　形态：画布 + 属性抽屉 + DSL　|　前置：`design/components/ui-shell/spec.md`、`design/components/workflow-data/spec.md`
+> 导航：流程研发 / 工作流 → 编辑器　|　形态：画布 + 双击属性弹层 + DSL　|　前置：`design/components/ui-shell/spec.md`、`design/components/workflow-data/spec.md`
 
 ## 0 模块卡
 
-> 追溯：`REQ-0017` / `SCN-0019`（verified；Playwright 14/14）。
+> 追溯：`REQ-0017` / `SCN-0019`（verified；Playwright 24/24）。
 
 - 状态：active（2026-10-30 从 MOCK 原型切到 B3 live）
 - 单元 / 层：组件 / L2 页面组件
@@ -22,30 +22,38 @@ updated: 2026-11-14
 - 负责 / 不负责：负责加载详情、画布/阶段/节点/边编辑、专家绑定、本地校验与阻断、手动保存、DSL 只读预览/复制/导出；不负责新建（列表向导/复制）、导入（列表页）、列表检索、运行/发布/版本（明确不做）。
 - 内部逻辑：B3 图 → `toEditorGraph`（layout→x/y/box，viewport 归一）；编辑只改视图模型；`validateEditorGraph` 实时产出 errors/warnings；保存时 `toB3Graph`（box→layout）并 `PUT /definition` 带 `If-Match`；名称/类型/描述变更先 `PUT /workflows/{id}`，再用新 revision 保存图；视口平移/缩放不算 dirty，保存时随图提交。
 - 数据所有权：B3 `WorkflowDefinition` 的唯一编辑写入口（经 `workflow/data`）；页面只持有当前详情、编辑器图、selection/dirty 等内存态；不写 localStorage、不写 `MOCK`。节点选边 `inSide/outSide` 是前端布局字段，写入 `node.layout` 后随图保存，不参与拓扑。
-- 公开契约：入口 `pages/workflow-editor.html?id=<uuid>`；操作 `#open`、`#add-node`、`#connect-edge`、`#inspector`、`#validate`、`#save`、`#dsl`；不变量：非法图保存按钮置灰、问题元素红框、图级阻断条；写操作必须带 `If-Match`；409/428 不覆盖当前编辑；缺 id/404 显式报错，不回落第一条；每节点四向锚点、seq 边仍最多一进一出，选边只影响贴边不影响 `from/to/kind`。
-- 依赖：`DF`（外壳、抽屉、弹窗、Toast、下载）、`API`（仅专家列表）、`workflow/model`、`workflow/validate`（含 `checkNewEdge`）、`workflow/data`、`workflow/views/{canvas,inspector,dsl}`；不依赖列表页 JS；跨页只走 URL。
+- 公开契约：入口 `pages/workflow-editor.html?id=<uuid>`；操作 `#open`、`#add-node`、`#connect-edge`、`#inspector`、`#validate`、`#save`、`#dsl`；不变量：单击只选中，双击节点/阶段/连线才打开属性弹层；属性弹层占视口 90% × 90%，内容超出时在弹层主体内部滚动，Esc/遮罩/× 关闭；非法图保存按钮置灰、问题元素红框、图级阻断条；写操作必须带 `If-Match`；409/428 不覆盖当前编辑；缺 id/404 显式报错，不回落第一条；每节点四向锚点、seq 边仍最多一进一出，选边只影响贴边不影响 `from/to/kind`。
+- 依赖：`DF`（外壳、`modal` 90% 大弹层、Toast、下载）、`API`（仅专家列表）、`workflow/model`、`workflow/validate`（含 `checkNewEdge`）、`workflow/data`、`workflow/views/{canvas,inspector,dsl}`；不依赖列表页 JS；跨页只走 URL。
 - 冷热属性：冷；单详情加载 + 用户编辑，无轮询。
 - 变化轴：节点类型/边类型/校验矩阵；`layout/viewport` 结构变化集中在 `model`；三块视图分别演进。
-- 验证入口：`node tools/verify-workflow-editor.js`（SCN-0019，23/23）；`npm run test:workflow`；真实 B3 只读走查 `/pages/workflow-editor.html?id=<真实 id>`。
-- 验证计划：T1 加载/layout/viewport/未知 id；T2 编辑与保存（含元数据、If-Match、layout/viewport）；T3 非法图阻断与服务端 400 回填；T4 409/428、离开警告、无发布/版本/运行；T5 节点拖动可达画布左上边缘（80% 与 45% 缩放）、`fit` 含负坐标；T6 连线拖拽预览、目标合法性高亮与非法投放拦截；T7 四向锚点、选边写入 layout、刷新后还原；T8 同一节点进出锚点相同被拦截；T9 旧数据同侧进出加载后自动拆开；T10 连线终点箭头可见。
+- 验证入口：`node tools/verify-workflow-editor.js`（SCN-0019，24/24）；`npm run test:workflow`；真实 B3 只读走查 `/pages/workflow-editor.html?id=<真实 id>`。
+- 验证计划：T1 加载/layout/viewport、单击只选中与双击 90% 属性弹层、未知 id；T2 编辑与保存（含元数据、If-Match、layout/viewport）；T3 非法图阻断与服务端 400 回填；T4 409/428、离开警告、无发布/版本/运行；T5 节点拖动可达画布左上边缘（80% 与 45% 缩放）、`fit` 含负坐标；T6 连线拖拽预览、目标合法性高亮与非法投放拦截；T7 四向锚点、选边写入 layout、刷新后还原；T8 同一节点进出锚点相同被拦截；T9 旧数据同侧进出加载后自动拆开；T10 连线终点箭头可见。
 - 预算：页面编排约 28 KB + 三视图约 7 KB + 本规格；远低于 120k token。
 - 单独运行：`npm start` → `/pages/workflow-editor.html?id=<workflowId>`。
 - 删除测试：删除后工作流只能被创建/删除，不能改结构、校验或导出 DSL，编排能力整体消失；故保留独立页面。
 - 已知偏差：2026-11-12 已对齐 B3 七类节点（删除 `fanin`、新增 `split`、`fanout` 唯一前驱必须是 `split`）；元数据与图是两次 PUT，非原子；元数据成功、图失败时列表名称已变、图未变（页面保留编辑态并提示）。无自动保存/草稿/版本历史/发布/运行。现有 B3 测试数据需确认后清理。2026-11-13 四向锚点与选边：`inSide/outSide` 作为前端布局字段写入 `node.layout`，B3 运行时不解释；`dsl.schema.json` 的 node layout 同步允许这两个可选枚举。
 - 2026-11-13 修复画布拖动死区：`#cvScaler` 曾按默认中心缩放、节点/阶段坐标被 `Math.max(0, …)` 钳在原点右侧下方，开始节点在 80% 缩放下距画布左边 116px / 上边 65px 即停，45% 缩放下约 498px / 264px；现改为左上变换原点、允许负坐标并还原滚动偏移，`fit` 按包围盒平移（`SCN-0019-T5`）。
+- 2026-11-17 属性编辑从右侧抽屉改为双击弹层（`REQ-0020`）：单击只做选中高亮，双击节点/阶段/连线打开 90% × 90% 视口弹层（`DF.modal size:'screen'`），弹层尺寸随窗口 resize 重算，内容超出时在弹层主体内滚动；新增节点/阶段只选中不自动弹层，避免遮挡调色板；阶段拖动改为实际移动后才置 dirty（此前单击阶段标题也会置 dirty）。
 
 ## 1 页面定位
 
-以画布维护「阶段 + 节点 + 有向边」结构，节点绑定专家；评审/确认节点可发回退边；`split` 负责拆分、`fanout` 负责展开并行（`fanout` 的唯一 seq 前驱必须是 `split`）。右栏编辑属性，底部显示校验问题；DSL 只读。
+以画布维护「阶段 + 节点 + 有向边」结构，节点绑定专家；评审/确认节点可发回退边；`split` 负责拆分、`fanout` 负责展开并行（`fanout` 的唯一 seq 前驱必须是 `split`）。双击元素在 90% 视口弹层编辑属性，底部显示校验问题；DSL 只读。
 
 ## 2 布局
 
 ```
 ┌ [名称输入] 已保存·rN [画布|DSL] [校验] [保存] ┐
-│ 节点面板 │ 画布（阶段框/连线/节点/缩放） │ 属性抽屉（选中时） │
-│          │ 校验面板（错误/警告）          │                    │
-└───────────────────────────────────────────────────────────────┘
+│ 节点面板 │ 画布（阶段框/连线/节点/缩放）        │
+│          │ 校验面板（错误/警告）               │
+└────────────────────────────────────────────────┘
+
+双击节点/阶段/连线 → 90% × 90% 属性弹层（内容内部滚动）
 ```
+
+- 选中与打开分离：单击画布元素只切换选中高亮并支持 Delete 删除；双击才打开属性弹层。
+- 属性弹层使用 `DF.modal.open({ size: 'screen' })`：宽高各为视口 90%，头部标题与底部「关闭/保存」固定，表单区在 `.d-body` 内滚动；窗口尺寸变化时重算；Esc、遮罩点击、右上 × 均可关闭。
+- 弹层内容按卡片分栏（`#we-inspector` grid），大屏不把表单拉成单列满宽。
+- 新增节点/阶段只选中并置 dirty，不自动弹层；需要编辑时双击。
 
 ## 3 编辑与约束
 
