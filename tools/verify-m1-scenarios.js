@@ -874,7 +874,7 @@ async function scn0010T1(browser) {
     const k1 = MOCK.keys.find((k) => k.id === ws1.credId);
     const row1 = ctx.page.locator('#ws-table tbody tr', { hasText: ws1.name }).first();
     assert.match(await row1.textContent(), new RegExp(k1.name));
-    const row4 = ctx.page.locator('#ws-table tbody tr', { hasText: 'pb2-service' }).first();
+    const row4 = ctx.page.locator('#ws-table tbody tr', { hasText: 'settle-service' }).first();
     assert.match(await row4.textContent(), /未关联/);
     noErrors(ctx);
   } finally { await ctx.page.close(); }
