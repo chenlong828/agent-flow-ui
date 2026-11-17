@@ -565,8 +565,12 @@
     const margin = 16;
     const boxW = menuEl.offsetWidth;
     const boxH = menuEl.offsetHeight;
-    const left = Math.max(margin, Math.min(opts && opts.alignRight ? x - boxW : x, innerWidth - boxW - margin));
-    const top = Math.max(margin, Math.min(y, innerHeight - boxH - margin));
+    /* zoom 路径下 fixed 菜单随 html zoom 放大，offsetWidth/Height 是 CSS px，
+     * 视口也要换算成同一坐标系；否则底部菜单会按"看起来还有空间"继续向下溢出。 */
+    const viewW = zoomOnFixed ? innerWidth / zK : innerWidth;
+    const viewH = zoomOnFixed ? innerHeight / zK : innerHeight;
+    const left = Math.max(margin, Math.min(opts && opts.alignRight ? x - boxW : x, viewW - boxW - margin));
+    const top = Math.max(margin, Math.min(y, viewH - boxH - margin));
     menuEl.style.left = left + 'px';
     menuEl.style.top = top + 'px';
 

@@ -2,7 +2,7 @@
 layer: requirements
 module: workflow-list
 status: delivered
-updated: 2026-10-30
+updated: 2026-11-17
 ---
 
 # REQ-0016 工作流列表同源接入（B3）
@@ -16,5 +16,5 @@ updated: 2026-10-30
 | 非目标 | 不做画布节点编辑（`REQ-0017`）；不做实例/运行/发布/版本；不做旧空图迁移（上线前清空）；不展示 `updatedBy`（等后端修 actor）；不做权限与多人协同。 |
 | 约束 | 同源 BFF；写操作带 `If-Match`；创建必须提交合法图（start/end 绑专家）；无 MOCK 回落；列表页 live-only，后端不可用显式报错；桌面优先；无构建、无新增运行时依赖；模块按 ESM（`docs/history/works/2026-10-30-frontend-esm/`）。 |
 | 影响场景 | `SCN-0018`（`design/scenarios/flow/workflow-list/browse-workflows-live/scenario.md`） |
-| 澄清记录 | 2026-10-30 交互式评审：新建走「向导 + 模板复制」；旧图不迁移、可删除；列表只放工作流域指标、不展示更新人；列表与编辑器同轮 live；工作流数据层独立为 `workflow/data`。契约依据 `history/decisions/2026-10-30-frontend-esm.md` 与 B3 `2026-10-30-workflow-contract-boundary`。 |
-| 状态 | `delivered`（2026-10-30；场景 `verified`） |
+| 澄清记录 | 2026-10-30 交互式评审：新建走「向导 + 模板复制」；旧图不迁移、可删除；列表只放工作流域指标、不展示更新人；列表与编辑器同轮 live；工作流数据层独立为 `workflow/data`。契约依据 `history/decisions/2026-10-30-frontend-esm.md` 与 B3 `2026-10-30-workflow-contract-boundary`。2026-11-17 修复卡片「更多」菜单在底部触发时越出视口：`DF.menu` 纵向钳制补上缩放坐标换算，`SCN-0018-T3` 增补底部菜单断言（15/15）。 |
+| 状态 | `delivered`（2026-10-30；场景 `verified`；2026-11-17 菜单钳制修复后 15/15） |

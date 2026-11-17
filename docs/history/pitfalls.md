@@ -115,6 +115,12 @@ updated: 2026-11-17
 - **存续条件**：任何「单击处理器重建事件目标 + 依赖原生 dblclick」的交互都会复发；任何拖拽处理器缺少 `moved` 标记、在 mouseup 无条件提交/重绘时也会复发。
 - **对策落点**：`workflow-editor.js` 的 `select()` 在同选中项上跳过 `paint()`，`openInspectorFor()` 由 `dblclick` 驱动；阶段拖拽增加 `moved` 标记，只有实际移动才 `markDirty()`。`SCN-0019-T1` 断言单击不弹层、双击节点/阶段/连线打开弹层。
 
+### JS-11 · 菜单视口钳制混用物理视口与 CSS 尺寸 → 底部菜单越出屏幕
+- **现象**：工作流列表卡片右下角「更多」菜单在页面靠下位置弹出后，底部菜单项落到窗口外，无法点选；字号放大或缩放路径下更明显。
+- **根因**：`DF.menu` 用 `innerHeight`（物理视口）直接与菜单的 `offsetHeight`（CSS px）比较，再决定 `top`；zoom 路径下 fixed 菜单随 html zoom 放大，同一坐标系未统一，算出的“剩余空间”偏大，菜单继续向下溢出。横向的 `innerWidth` 同样存在该风险。
+- **存续条件**：任何「fixed 弹层 + 缩放路径 + 靠近视口底部/右侧触发」的菜单都会复发；WebKit 2104 的 zoom 探测失效，引擎测试只覆盖 transform 兜底路径，真实 Chrome/Safari 仍需人工复验。
+- **对策落点**：`assets/js/ui.js` `menu()` 的 `viewW/viewH`——zoom 路径下 `innerWidth/Height` 先除以 `zK`，再与 `offsetWidth/Height` 比较；`SCN-0018-T3` 断言底部触发时菜单整体在视口内；《代码重构要点》§4 `DF.menu` 条目。
+
 ## 接口契约类
 
 ### API-1 · BFF 请求头白名单漏掉条件请求头 → 文档永远拿不到 304

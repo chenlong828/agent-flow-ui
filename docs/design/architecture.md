@@ -161,7 +161,7 @@ updated: 2026-11-17
 | 组件 | check-docs（模块卡 + REQ/SCN） | Playwright 13 页 | 场景 | 人工 Safari |
 |---|---|---|---|---|
 | `CMP-ui-shell` | ✓ | ✓ | `SCN-0001` verified（45/45） | 待验收（R9） |
-| `CMP-workflow-list` | ✓ | ✓ | `SCN-0018` verified（14/14） | — |
+| `CMP-workflow-list` | ✓ | ✓ | `SCN-0018` verified（15/15） | — |
 | `CMP-workflow-editor` | ✓ | ✓ | `SCN-0019` verified（24/24） | — |
 | `CMP-workflow-data` | ✓ | — | `SCN-0018/0019` 页面路径 + 26 条纯逻辑 | — |
 | `CMP-run-data` | ✓ | — | `SCN-0004` 页面路径 | — |
@@ -178,7 +178,7 @@ updated: 2026-11-17
 - 语法层：`node --check` 全部页面 JS、`bff/*.js`、`tests/bff/*.js`。
 - 结构层：`node tools/smoke-test.js`（Playwright WebKit；13/13 页面）。
 - 引擎层：`node tools/verify-user-menu.js`（需 Playwright WebKit 与运行中的 `:3000`）。
-- 业务场景层：`node tools/verify-m1-scenarios.js`（Playwright，49/49；各场景至少 3 正 1 反）；工作流：`npm run test:workflow`（纯逻辑 24/24 + SCN-0018 14/14 + SCN-0019 11/11）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）；`tools/verify-b1-writes.js`（写 4/4，2026-10-30 已确认并清理）。
+- 业务场景层：`node tools/verify-m1-scenarios.js`（Playwright，53/53；各场景至少 3 正 1 反）；工作流：`npm run test:workflow`（纯逻辑 32/32 + SCN-0018 15/15 + SCN-0019 24/24）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）；`tools/verify-b1-writes.js`（写 4/4，2026-10-30 已确认并清理）。
 - BFF 层：`npm run test:bff`（Node `node:test` + stub 上游；12 条契约断言，含 `If-None-Match`/304）。
 - 人工层：Safari 走查为发布门禁；未完成不宣称“浏览器全兼容”。
 - **M1 十页 + B1/Skill v2/Skill 专门页场景已 verified**：M1 40/40；全量 Playwright 49/49（数量见 `design/scenarios/_index.md`）；专门页另加引擎层 29/29。

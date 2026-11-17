@@ -5,7 +5,7 @@ component: CMP-workflow-list
 requirement: REQ-0016
 scenario: SCN-0018
 status: active
-updated: 2026-10-30
+updated: 2026-11-17
 ---
 
 # 工作流列表（B3 live）
@@ -14,7 +14,7 @@ updated: 2026-10-30
 
 ## 0 模块卡
 
-> 追溯：`REQ-0016` / `SCN-0018`（verified；Playwright 14/14）。
+> 追溯：`REQ-0016` / `SCN-0018`（verified；Playwright 15/15）。
 
 - 状态：active（2026-10-30 从 MOCK 原型切到 B3 live）
 - 单元 / 层：组件 / L2 页面组件
@@ -26,12 +26,12 @@ updated: 2026-10-30
 - 依赖：`DF`（外壳、弹窗、菜单、表格/空态、统计卡、Toast、`lsGet/lsSet`）、`API`（仅专家列表，用于向导起止专家）、`workflow/data`、`workflow/model`（`minimalGraph`/`graphCounts`）；不依赖其他页面 JS。
 - 冷热属性：冷；一次列表查询 + 用户动作，无后台轮询。失败快速显示错误，不重试。
 - 变化轴：查询维度（类型/排序/分页）与工作流生命周期操作；B3 DTO 字段变化集中在 `workflow/data`。
-- 验证入口：`node tools/verify-workflow-list.js`（SCN-0018，14/14）；`npm run test:workflow`；真实 B3 只读走查 `http://127.0.0.1:3000/pages/workflow-list.html`。
-- 验证计划：T1 查询/筛选/搜索/排序/空态；T2 新建与模板复制；T3 元数据/删除/导入/导出；T4 400/409/428/后端不可用与不回落。
+- 验证入口：`node tools/verify-workflow-list.js`（SCN-0018，15/15）；`npm run test:workflow`；真实 B3 只读走查 `http://127.0.0.1:3000/pages/workflow-list.html`。
+- 验证计划：T1 查询/筛选/搜索/排序/空态；T2 新建与模板复制；T3 元数据/删除/导入/导出/底部菜单不出视口；T4 400/409/428/后端不可用与不回落。
 - 预算：页面源码约 19 KB + 本规格；远低于 120k token。
 - 单独运行：`npm start` → `/pages/workflow-list.html`。
 - 删除测试：删除后 B3 工作流没有发现与创建入口，编辑器只能靠手写 URL 进入，复杂度会集中到编辑器；故保留独立页面。
-- 已知偏差：类型 Tab 的计数是当前页分布（无独立 count API）；导入只接受 JSON（YAML 由服务端导出）；现有 B3 测试工作流未清理，按 brief 的部署步骤需用户确认后执行。
+- 已知偏差：类型 Tab 的计数是当前页分布（无独立 count API）；导入只接受 JSON（YAML 由服务端导出）；现有 B3 测试工作流未清理，按 brief 的部署步骤需用户确认后执行。2026-11-17 修复卡片「更多」菜单在底部触发时越出视口：`DF.menu` 纵向钳制按缩放路径换算视口，`SCN-0018-T3` 断言菜单整体留在视口内。
 
 ## 1 页面定位
 

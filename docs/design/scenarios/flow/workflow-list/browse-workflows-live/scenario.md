@@ -5,7 +5,7 @@ status: verified
 flow: browse-workflows-live
 scenario: SCN-0018
 execution: playwright
-updated: 2026-10-30
+updated: 2026-11-17
 ---
 
 # SCN-0018 工作流列表同源浏览、创建与生命周期
@@ -41,7 +41,7 @@ updated: 2026-10-30
 
 执行层：Playwright WebKit（DOM + 网络拦截/ B3 stub）；可执行：`node tools/verify-workflow-list.js`（Playwright WebKit + fake B3/B1）。
 
-最近一次执行：2026-10-30，14/14 通过（T1 4 / T2 2 / T3 4 / T4 4）。
+最近一次执行：2026-11-17，15/15 通过（T1 4 / T2 2 / T3 5 / T4 4）。
 
 真实 B3 写路径追加验证（2026-10-30）：经 BFF 在真实 B3 创建临时工作流 → 编辑器改名保存（revision 2）→ 列表删除，删除后 GET 404；未保留测试记录，现有 14 条测试工作流未动。
 
@@ -49,5 +49,5 @@ updated: 2026-10-30
 |---|---|---|---|
 | SCN-0018-T1 | 正 | 列表按 `updatedAt:desc` 请求并渲染；统计总数=服务端 total；类型筛选/搜索/排序请求参数正确；空态与恢复 | `tools/verify-workflow-list.js` |
 | SCN-0018-T2 | 正 | 新建向导提交含 `start→end` 的合法 graph 与起止专家；201 后 GET 详情并跳转；模板复制同样 201→GET→跳转 | `tools/verify-workflow-list.js` |
-| SCN-0018-T3 | 正 | 改名/改类型带 `If-Match` 生效；删除二次确认；导入显示 idMap/warnings；导出下载 JSON/YAML | `tools/verify-workflow-list.js` |
+| SCN-0018-T3 | 正 | 改名/改类型带 `If-Match` 生效；删除二次确认；导入显示 idMap/warnings；导出下载 JSON/YAML；在视口底部触发「更多」菜单时整体留在视口内（顶部 ≥0、底部 ≤ innerHeight） | `tools/verify-workflow-list.js` |
 | SCN-0018-T4 | 反 | 服务端 400 issues 保留向导；名称重复 409；元数据 PUT 428 提示刷新；后端不可用显示错误且不落假数据 | `tools/verify-workflow-list.js` |

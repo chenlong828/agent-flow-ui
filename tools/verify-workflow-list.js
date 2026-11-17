@@ -206,6 +206,24 @@ async function scenarioT3(base, browser) {
     assert.match(downloads[0], /\.json$/);
     assert.match(downloads[1], /\.yaml$/);
   });
+  await check('底部触发时「更多」菜单整体留在视口内', async function () {
+    const fit = await page.evaluate(function () {
+      const buttons = document.querySelectorAll('[data-act="more"]');
+      const button = buttons[buttons.length - 1];
+      const rect = button.getBoundingClientRect();
+      button.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: innerHeight - 10
+      }));
+      const menu = document.querySelector('.menu');
+      const box = menu.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom, height: box.height, innerHeight: innerHeight };
+    });
+    assert.ok(fit.top >= 0, '菜单顶部越出视口: ' + fit.top);
+    assert.ok(fit.bottom <= fit.innerHeight, '菜单底部越出视口: ' + Math.round(fit.bottom) + ' > ' + fit.innerHeight);
+    await page.evaluate(function () { document.body.click(); });
+  });
   assertNoPageErrors(ctx.errors);
 }
 
