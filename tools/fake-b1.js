@@ -182,7 +182,10 @@ for (const k of Object.keys(MOCK)) {
       return Promise.resolve({ status: 200, body: runDetail(run) });
     }
     if (method === 'GET' && parts[2] === 'nodes' && parts[4] === 'session-log') {
-      var target = run.nodes.find(function (n) { return n.nodeId === parts[3]; });
+      var visit = Number(query.visit) || 0;
+      var target = run.nodes.find(function (n) {
+        return n.nodeId === parts[3] && (!visit || (Number(n.visit) || 1) === visit);
+      });
       if (!target || !target.taskId) return Promise.resolve(notFound());
       return Promise.resolve({ status: 200, body: null, headers: { 'Content-Type': 'application/x-ndjson', 'Content-Encoding': 'gzip', 'X-Checksum-Sha256': 'x' } });
     }
@@ -764,6 +767,12 @@ for (const k of Object.keys(MOCK)) {
     }
     return resource(parts, method, body, headers);
   };
+
+/** 测试注入一条运行记录（不进入默认 4 条列表夹具，避免影响列表计数断言）。 */
+export function addRunFixture(run) {
+  runs.push(run);
+  return run;
+}
 
 export function resetFakeB1() {
   revs = Object.create(null);

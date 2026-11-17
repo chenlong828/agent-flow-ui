@@ -13,8 +13,8 @@ updated: 2026-11-17
 ## 统计
 
 - 场景：18
-- 文档用例：85
-- Playwright runner：58
+- 文档用例：86
+- Playwright runner：59
 - 其他执行层：27（引擎 / BFF / 真实 B1）
 
 ## 清单

@@ -49,13 +49,22 @@ const NODE_CLASS = {
   failed: 'st-fail'
 };
 
+const NODE_DOT = {
+  queued: 'gray',
+  dispatched: 'blue',
+  waiting_confirm: 'orange',
+  succeeded: 'green',
+  rejected: 'purple',
+  failed: 'red'
+};
+
 const state = {
   runId: null,
   run: null,
   workflow: null,
   graph: null,
   experts: new Map(),
-  nodesById: new Map(),
+  nodeVisits: new Map(),
   selectedId: null,
   tab: 'summary',
   loading: true,
@@ -108,10 +117,19 @@ async function load() {
     state.workflow = wf;
     state.graph = toEditorGraph(wf.graph);
     state.experts = new Map((expertPage.items || []).map(function (e) { return [e.id, e]; }));
-    state.nodesById = new Map();
+    /* 同一节点可执行多轮（重新进入 / 打回重跑）：保留每一轮，按 visit 倒序。
+     * 画布着色只用最新一轮；弹层用轮次 Tab 切换，历史轮次只读。 */
+    state.nodeVisits = new Map();
     (run.nodes || []).forEach(function (node) {
-      const prev = state.nodesById.get(node.nodeId);
-      if (!prev || node.visit >= prev.visit) state.nodesById.set(node.nodeId, node);
+      const visit = Number(node.visit) || 1;
+      const list = state.nodeVisits.get(node.nodeId) || [];
+      const same = list.findIndex(function (item) { return (Number(item.visit) || 1) === visit; });
+      if (same >= 0) list[same] = node;
+      else list.push(node);
+      state.nodeVisits.set(node.nodeId, list);
+    });
+    state.nodeVisits.forEach(function (list) {
+      list.sort(function (a, b) { return (Number(b.visit) || 1) - (Number(a.visit) || 1); });
     });
     state.error = null;
     if (!state.selectedId || !state.graph.nodes.some(function (n) { return n.id === state.selectedId; })) {
@@ -229,15 +247,30 @@ function canvasSize() {
   return { w: w, h: h };
 }
 
-function nodeState(nodeId) {
-  const node = state.nodesById.get(nodeId);
-  if (!node) return { key: 'pending', label: '待执行', visit: 0, run: null };
+function visitList(nodeId) {
+  return state.nodeVisits.get(nodeId) || [];
+}
+
+function latestVisit(nodeId) {
+  return visitList(nodeId)[0] || null;
+}
+
+function findVisit(nodeId, visit) {
+  return visitList(nodeId).find(function (item) { return (Number(item.visit) || 1) === Number(visit); }) || null;
+}
+
+function visitState(record) {
+  if (!record) return { key: 'pending', label: '待执行', visit: 0, run: null };
   return {
-    key: node.state,
-    label: NODE_STATE[node.state] || node.state,
-    visit: node.visit || 1,
-    run: node
+    key: record.state,
+    label: NODE_STATE[record.state] || record.state,
+    visit: Number(record.visit) || 1,
+    run: record
   };
+}
+
+function nodeState(nodeId) {
+  return visitState(latestVisit(nodeId));
 }
 
 function paint() {
@@ -277,9 +310,11 @@ function nodesHTML() {
     const st = nodeState(n.id);
     const meta = NODE_META[n.type] || { label: n.type, cls: 't-plain' };
     const expert = n.expertId ? state.experts.get(n.expertId) : null;
+    const visits = visitList(n.id);
     const sub = st.label + (st.visit > 1 ? ' · 第 ' + st.visit + ' 轮' : '');
+    const hint = visits.length > 1 ? '双击查看详情（共 ' + visits.length + ' 轮）' : '双击查看详情';
     return '<div class="cv-node ' + meta.cls + ' ' + (NODE_CLASS[st.key] || 'st-pending') +
-      (state.selectedId === n.id ? ' sel' : '') + '" data-node="' + esc(n.id) + '"' +
+      (state.selectedId === n.id ? ' sel' : '') + '" data-node="' + esc(n.id) + '" title="' + esc(hint) + '"' +
       ' style="left:' + p.x + 'px;top:' + p.y + 'px;cursor:pointer">' +
       '<div class="n-head"><span class="e-dot" style="background:' + (expert ? esc(expert.color) : '#94a3b8') + '"></span>' + esc(n.name) + '</div>' +
       '<div class="n-sub">' + esc(sub) + '</div>' +
@@ -320,9 +355,28 @@ function selectedNode() {
     : null;
 }
 
-function nodeModalTitle(node) {
+function nodeModalTitle(node, record, isLatest) {
   const meta = NODE_META[node.type] || { label: node.type };
-  return node.name + ' · ' + meta.label;
+  let title = node.name + ' · ' + meta.label;
+  if (record && visitList(node.id).length > 1) {
+    title += ' · 第 ' + (Number(record.visit) || 1) + ' 轮' + (isLatest ? '（最新）' : '（历史）');
+  }
+  return title;
+}
+
+/** 轮次 Tab：仅有历史时才出现；最新一轮在左，历史轮次按 visit 倒序。 */
+function roundsHTML(visits, selectedVisit) {
+  if (visits.length <= 1) return '';
+  return '<div class="id-rounds"><span class="lbl">执行轮次</span><div class="id-round-tabs">' +
+    visits.map(function (record, index) {
+      const visit = Number(record.visit) || 1;
+      const on = visit === Number(selectedVisit);
+      return '<button type="button" class="id-round-tab' + (on ? ' on' : '') + '" data-visit="' + visit + '"' +
+        ' title="' + esc(NODE_STATE[record.state] || record.state) + '">' +
+        dot(NODE_DOT[record.state] || 'gray') +
+        esc((index === 0 ? '最新 · 第 ' : '第 ') + visit + ' 轮') + '</button>';
+    }).join('') +
+    '</div><span class="meta">共 ' + visits.length + ' 轮</span></div>';
 }
 
 function closeNodeModal() {
@@ -339,9 +393,10 @@ function openNodeModal(nodeId) {
   if (state.modal && state.modal.nodeId === node.id) return;
   state.selectedId = node.id;
   state.tab = 'summary';
+  const latest = latestVisit(node.id);
   let handle = null;
   handle = DF.modal.open({
-    title: nodeModalTitle(node),
+    title: nodeModalTitle(node, latest, true),
     size: 'screen',
     body: '<div id="id-modal-body"></div>',
     footer: '<button class="btn" id="id-modal-close">关闭</button>',
@@ -353,7 +408,12 @@ function openNodeModal(nodeId) {
       if (state.modal && state.modal.handle === handle) state.modal = null;
     }
   });
-  state.modal = { nodeId: node.id, handle: handle };
+  state.modal = {
+    nodeId: node.id,
+    visit: latest ? (Number(latest.visit) || 1) : null,
+    followLatest: true,
+    handle: handle
+  };
   renderNodeModal();
 }
 
@@ -362,13 +422,25 @@ function renderNodeModal() {
   if (!host) return;
   const node = selectedNode();
   if (!node) { closeNodeModal(); return; }
-  const st = nodeState(node.id);
-  const runNode = st.run;
-  const confirmable = runNode && runNode.state === 'waiting_confirm';
+  const visits = visitList(node.id);
+  if (state.modal.followLatest && visits.length) {
+    state.modal.visit = Number(visits[0].visit) || 1;
+  }
+  let runNode = visits.length ? findVisit(node.id, state.modal.visit) : null;
+  if (visits.length && !runNode) {
+    runNode = visits[0];
+    state.modal.visit = Number(runNode.visit) || 1;
+    state.modal.followLatest = true;
+  }
+  const st = visitState(runNode);
+  const isLatest = !runNode || (Number(runNode.visit) || 1) === (Number(visits[0].visit) || 1);
+  const confirmable = runNode && isLatest && runNode.state === 'waiting_confirm';
+  const title = nodeModalTitle(node, runNode, isLatest);
   const root = host.closest('.modal');
   const head = root ? root.querySelector('.d-head') : null;
-  if (head && head.firstChild) head.firstChild.textContent = nodeModalTitle(node);
+  if (head && head.firstChild) head.firstChild.textContent = title;
   host.innerHTML =
+    roundsHTML(visits, state.modal.visit) +
     (confirmable ? confirmCard(node, runNode) : '') +
     '<div class="id-tabs">' +
       [['summary', '概要'], ['log', '会话日志']].map(function (t) {
@@ -376,15 +448,29 @@ function renderNodeModal() {
       }).join('') +
     '</div>' +
     '<div class="id-body" id="id-body"></div>';
+  const roundBar = host.querySelector('.id-rounds');
+  if (roundBar) {
+    roundBar.onclick = function (e) {
+      const btn = e.target.closest('.id-round-tab');
+      if (!btn) return;
+      const visit = Number(btn.dataset.visit);
+      state.modal.visit = visit;
+      state.modal.followLatest = visits.length > 0 && visit === (Number(visits[0].visit) || 1);
+      renderNodeModal();
+    };
+  }
   host.querySelector('.id-tabs').onclick = function (e) {
     const t = e.target.closest('.tab');
     if (!t) return;
     state.tab = t.dataset.t;
     renderNodeModal();
   };
+  const historyNote = runNode && visits.length > 1 && !isLatest
+    ? '<div class="id-history-note">历史轮次 · 第 ' + (Number(runNode.visit) || 1) + ' 轮（仅查看）；人工确认与操作入口在「最新」轮次。</div>'
+    : '';
   const bodyEl = host.querySelector('#id-body');
-  if (state.tab === 'log') bodyEl.innerHTML = logTab(node, runNode);
-  else bodyEl.innerHTML = summaryTab(node, st, runNode);
+  if (state.tab === 'log') bodyEl.innerHTML = historyNote + logTab(node, runNode);
+  else bodyEl.innerHTML = historyNote + summaryTab(node, st, runNode, { isLatest: isLatest, count: visits.length });
   if (confirmable) bindConfirm(node, runNode);
 }
 
@@ -394,7 +480,10 @@ function mdBlock(title, text) {
     '<div class="md-body">' + renderMarkdown(text) + '</div>';
 }
 
-function summaryTab(node, st, runNode) {
+function summaryTab(node, st, runNode, opt) {
+  opt = opt || {};
+  const manyRounds = (opt.count || 0) > 1;
+  const isLatest = opt.isLatest !== false;
   const meta = NODE_META[node.type] || { label: node.type };
   const expert = node.expertId ? state.experts.get(node.expertId) : null;
   const verdict = runNode && runNode.verdict;
@@ -402,13 +491,14 @@ function summaryTab(node, st, runNode) {
     ['状态', tag(st.label, st.key === 'succeeded' ? 'green' : st.key === 'failed' ? 'red' : st.key === 'rejected' ? 'purple' : st.key === 'waiting_confirm' ? 'orange' : st.key === 'dispatched' ? 'blue' : 'gray')],
     ['节点类型', esc(meta.label)],
     ['专家', expert ? '<span class="expert-dot" style="background:' + esc(expert.color) + ';width:16px;height:16px;font-size:9px;border-radius:4px">' + esc(String(expert.name).slice(0, 1)) + '</span> ' + esc(expert.name) : (node.expertId ? '<span class="mono">' + esc(node.expertId) + '</span>' : '—')],
-    ['访问轮次', runNode ? '第 ' + esc(runNode.visit) + ' 轮' : '—'],
+    ['访问轮次', runNode ? '第 ' + esc(runNode.visit) + ' 轮' + (manyRounds ? (isLatest ? '（最新）' : '（历史）') : '') : '—'],
     ['任务 ID', runNode && runNode.taskId ? '<span class="mono">' + esc(runNode.taskId) + '</span>' : '—'],
     ['下发时间', esc(fmtTime(runNode && runNode.dispatchedAt))],
     ['完成时间', esc(fmtTime(runNode && runNode.finishedAt))],
     ['节点耗时', runNode && runNode.dispatchedAt ? esc(fmtMs(runNode.dispatchedAt, runNode.finishedAt)) : '—']
   ];
-  let html = '<div class="id-node-h"><b>' + esc(node.name) + '</b>' + tag(meta.label, 'gray') + tag(st.label, 'gray') + '</div>' + DF.kv(rows);
+  let html = '<div class="id-node-h"><b>' + esc(node.name) + '</b>' + tag(meta.label, 'gray') + tag(st.label, 'gray') +
+    (manyRounds ? tag(isLatest ? '最新轮次' : '历史轮次', isLatest ? 'blue' : 'gray') : '') + '</div>' + DF.kv(rows);
   if (verdict) {
     html += '<div class="section-title">判定结论 <span class="line"></span></div>' +
       '<pre class="id-pre">' + esc(typeof verdict === 'string' ? verdict : JSON.stringify(verdict, null, 2)) + '</pre>';
@@ -431,10 +521,12 @@ function logTab(node, runNode) {
   if (!runNode.taskId) {
     return '<div class="sub" style="color:var(--t-3)">该节点没有执行会话（人工确认节点不产生会话日志）。</div>';
   }
+  const visit = Number(runNode.visit) || 1;
   return '<div class="section-title">会话日志 <span class="line"></span></div>' +
-    '<div class="sub" style="margin-bottom:10px">由执行节点上传的 gzip JSONL（<span class="mono">' + esc(runNode.taskId) + '</span>）。</div>' +
-    '<a class="btn primary" href="' + esc(runs.sessionLogUrl(state.run.runId, node.id)) + '" download="session-' + esc(node.id) + '.ndjson.gz">' +
-      icon('download', 14) + '下载会话日志</a>' +
+    '<div class="sub" style="margin-bottom:10px">第 ' + visit + ' 轮由执行节点上传的 gzip JSONL（<span class="mono">' + esc(runNode.taskId) + '</span>）。</div>' +
+    '<a class="btn primary" href="' + esc(runs.sessionLogUrl(state.run.runId, node.id, { visit: visit })) + '"' +
+      ' download="session-' + esc(node.id) + '-v' + visit + '.ndjson.gz">' +
+      icon('download', 14) + '下载第 ' + visit + ' 轮会话日志</a>' +
     '<div class="sub" style="margin-top:8px">首次点击若提示 404，表示执行节点尚未上传该轮日志。</div>';
 }
 

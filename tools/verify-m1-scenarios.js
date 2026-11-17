@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { startStaticServer, launchBrowser, openPage } from './test-harness.js';
 import { MOCK } from '../assets/js/mock-data.js';
-import { fakeB1 } from './fake-b1.js';
+import { fakeB1, addRunFixture } from './fake-b1.js';
 import { fakeB3, prepareUuidExperts } from './fake-b3.js';
 
 let BASE = '';
@@ -92,6 +92,74 @@ async function clickMenu(page, label) {
 /* ----------------------------- SCN-0004 ----------------------------- */
 const RUN_WAIT = 'aaaaaaaa-0000-4000-8000-000000000002';
 const RUN_RUNNING = 'aaaaaaaa-0000-4000-8000-000000000003';
+const RUN_HISTORY = 'aaaaaaaa-0000-4000-8000-000000000005';
+const HISTORY_WF = '99999999-9999-4999-8999-999999999999';
+
+const HISTORY_GRAPH = {
+  stages: [{ id: 's1', name: '多轮回退阶段', description: '演示重新进入与打回', layout: { x: 40, y: 40, width: 820, height: 260 } }],
+  nodes: [
+    { id: 'n1', type: 'start', name: '启动', stageId: 's1', expertId: null, layout: { x: 60, y: 120 } },
+    { id: 'n2', type: 'agent', name: '开发实现', stageId: 's1', expertId: null, layout: { x: 280, y: 120 } },
+    { id: 'n3', type: 'review', name: '代码评审', stageId: 's1', expertId: null, layout: { x: 500, y: 120 } },
+    { id: 'n4', type: 'end', name: '收尾', stageId: null, expertId: null, layout: { x: 720, y: 120 } }
+  ],
+  edges: [
+    { id: 'e1', from: 'n1', to: 'n2', kind: 'seq' },
+    { id: 'e2', from: 'n2', to: 'n3', kind: 'seq' },
+    { id: 'e3', from: 'n3', to: 'n4', kind: 'seq' },
+    { id: 'e4', from: 'n3', to: 'n2', kind: 'rollback' }
+  ],
+  viewport: { x: 16, y: 12, zoom: 0.8 }
+};
+
+function historyWorkflow() {
+  return { id: HISTORY_WF, name: '多轮回退演示', type: '研发主流程', revision: 2, graph: HISTORY_GRAPH };
+}
+
+function historyRun() {
+  const iso = (min) => new Date(Date.now() - min * 60000).toISOString();
+  return {
+    runId: RUN_HISTORY,
+    workflowId: HISTORY_WF,
+    workflowRevision: 2,
+    harnessId: 'h-1',
+    clientId: 'client-stub-01',
+    instanceId: 'bbbbbbbb-0000-4000-8000-000000000005',
+    state: 'running',
+    outcome: null,
+    currentNodeId: 'n2',
+    archiveState: 'none',
+    createdAt: iso(20), startedAt: iso(20), finishedAt: null,
+    workspacePath: '/tmp/fake/ws-history',
+    taskSpacePath: '/tmp/fake/ws-history/.agent-flow/task/' + RUN_HISTORY,
+    autoConfirm: false,
+    finalMessage: null,
+    error: null,
+    nodes: [
+      { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-h1', verdict: null, message: '流程启动', error: null, dispatchedAt: iso(20), finishedAt: iso(19) },
+      { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'succeeded', taskId: 't-h2', verdict: null, message: '## 初版实现\n\n- 增加接口\n- 缺少幂等', error: null, dispatchedAt: iso(19), finishedAt: iso(17) },
+      { nodeId: 'n3', nodeType: 'review', visit: 1, state: 'rejected', taskId: 't-h3', verdict: { decision: 'reject', reason: '缺少幂等处理' }, message: '## 评审不通过\n\n- 缺少幂等处理', error: null, dispatchedAt: iso(17), finishedAt: iso(16) },
+      { nodeId: 'n2', nodeType: 'agent', visit: 2, state: 'dispatched', taskId: 't-h4', verdict: null, message: '## 第二轮修订\n\n- 已补充幂等键\n- 等待复审', error: null, dispatchedAt: iso(2), finishedAt: null }
+    ]
+  };
+}
+
+function historyB3() {
+  return {
+    handle: async function (method, path, body, headers) {
+      if (method === 'GET' && path === '/workflows/' + HISTORY_WF) return { status: 200, body: historyWorkflow() };
+      return fakeB3.handle(method, path, body, headers);
+    }
+  };
+}
+
+function openRunHistory(browser) {
+  return open(browser, 'instance-detail', 'id=' + RUN_HISTORY, {
+    b3: historyB3(),
+    setup: function () { runFixtures(); addRunFixture(historyRun()); },
+    wait: 900
+  });
+}
 
 function runFixtures() {
   prepareUuidExperts();
@@ -245,6 +313,51 @@ async function scn0004T4(browser) {
     await ctx.page.waitForTimeout(500);
     assert.equal(await ctx.page.locator('#id-stop').count(), 0);
     assert.match(await ctx.page.locator('body').textContent(), /已终止/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0004T6(browser) {
+  const ctx = await openRunHistory(browser);
+  try {
+    const page = ctx.page;
+    assert.equal(await page.locator('.cv-node').count(), 4);
+    assert.match(await page.locator('.cv-node[data-node="n2"] .n-sub').textContent(), /第 2 轮/);
+    assert.match(await page.locator('.cv-node[data-node="n3"]').getAttribute('class'), /st-rollback/);
+
+    await page.locator('.cv-node[data-node="n2"]').dblclick();
+    await page.waitForTimeout(250);
+    const modal = page.locator('.modal-screen');
+    assert.equal(await modal.count(), 1);
+    assert.equal(await page.locator('.id-round-tab').count(), 2, '重新进入的节点应出现最新轮与历史轮 Tab');
+    assert.match(await page.locator('.id-round-tab').first().textContent(), /最新 · 第 2 轮/);
+    assert.match(await page.locator('.id-round-tab[data-visit="1"]').textContent(), /第 1 轮/);
+    assert.match(await page.locator('#id-body').innerText(), /第二轮修订/);
+    assert.match(await page.locator('#id-body').innerText(), /第 2 轮（最新）/);
+
+    await page.locator('.id-round-tab[data-visit="1"]').click();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('.id-round-tab.on').getAttribute('data-visit'), '1');
+    assert.match(await page.locator('#id-body').innerText(), /初版实现/);
+    assert.match(await page.locator('#id-body').innerText(), /第 1 轮（历史）/);
+    assert.match(await page.locator('.id-history-note').innerText(), /历史轮次/);
+    assert.equal(await page.locator('.id-confirm-card').count(), 0, '历史轮次不得出现确认入口');
+
+    await page.locator('.id-tabs .tab[data-t="log"]').click();
+    await page.waitForTimeout(120);
+    const log = page.locator('#id-body a.btn.primary');
+    assert.match(await log.getAttribute('href'), /\/runs\/[^/]+\/nodes\/n2\/session-log\?visit=1/);
+    assert.equal(await log.getAttribute('download'), 'session-n2-v1.ndjson.gz');
+
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.modal-screen').count(), 0);
+    // 被打回的评审节点仍保留此前一轮的结论与内容
+    await page.locator('.cv-node[data-node="n3"]').dblclick();
+    await page.waitForTimeout(200);
+    assert.match(await page.locator('.modal-screen').innerText(), /评审不通过/);
+    assert.match(await page.locator('.modal-screen').innerText(), /缺少幂等处理/);
+    assert.match(await page.locator('.modal-screen .id-node-h').innerText(), /已驳回/);
+    assert.equal(await page.locator('.id-round-tab').count(), 0, '单轮节点不显示轮次 Tab');
     noErrors(ctx);
   } finally { await ctx.page.close(); }
 }
@@ -1127,7 +1240,8 @@ const SCENARIOS = [
     ['SCN-0004-T2', '正', '详情节点状态来自 run.nodes', scn0004T2],
     ['SCN-0004-T3', '正', '人工确认后节点推进', scn0004T3],
     ['SCN-0004-T4', '反', '取消终止不改状态', scn0004T4],
-    ['SCN-0004-T5', '正', '发起运行按 harness/路径/意图提交', scn0004T5]
+    ['SCN-0004-T5', '正', '发起运行按 harness/路径/意图提交', scn0004T5],
+    ['SCN-0004-T6', '正', '多轮节点可切最新/历史并保留打回前内容', scn0004T6]
   ]],
   ['SCN-0005', 'Skill 维护与渐进披露', [
     ['SCN-0005-T1', '正', '列表计数同源', scn0005T1],

@@ -25,6 +25,7 @@ updated: 2026-11-17
 | M12 | MOCK 演示页临时关闭：导航隐藏 + 直达占位页 + `?demo=1` 演示模式 | 已完成（2026-11-12；SCN-0020 22/22、M1 50/50、13 页冒烟、`npm test` 通过） | `REQ-0018` / `SCN-0020` / `history/works/2026-11-12-mock-pages-off/` |
 | M13 | 真实专家与 Skill 内容提取（旁路）：16 专家 / 30 Skill 入 B1；执行 `catalog.md`、`import-plan.md` | 主体完成（2026-11-02；S4 工作流 9 条、4 工具、4 类知识未做，另立工序） | `history/works/2026-11-01-expert-skill-extraction/` |
 | M14 | 节点详情交互统一：双击 90% 弹层，移除右侧抽屉/面板与节点消息二次全屏 | 已完成（2026-11-17；SCN-0019 24/24、SCN-0004 5/5、`npm test` 通过） | `REQ-0020` / `SCN-0019` / `SCN-0004` / `history/works/2026-11-17-node-detail-modal/` |
+| M15 | 运行节点多轮历史：按 `visit` 保留全部轮次，弹层轮次 Tab 查看最新与历史；历史轮只读、日志按轮下载 | 已完成（2026-11-17；SCN-0004 6/6、`npm test` 通过） | `REQ-0021` / `SCN-0004` / `history/works/2026-11-17-run-node-history/` |
 
 > **M1 追溯与验收（2026-10-23 用户要求）**：10 个页面组件已补 `REQ-0002..0011` + M1 场景，组件 frontmatter 反查、`check-docs` 强制。`tools/verify-m1-scenarios.js` 覆盖 10 场景 × 3 正 1 反，40/40 通过；SCN 转 `verified`、REQ 转 `delivered`，R7/R10 关闭。详见 `history/works/2026-10-23-m1-scenario-verification/result.md`。
 

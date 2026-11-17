@@ -14,24 +14,24 @@ updated: 2026-11-17
 
 ## 0 模块卡
 
-> 追溯：`REQ-0019`（原 `REQ-0004`）/ `SCN-0004`（verified；Playwright 5 条，2026-11-17 节点详情改双击 90% 弹层）。
+> 追溯：`REQ-0019`（原 `REQ-0004`）/ `SCN-0004`（verified；Playwright 6 条，2026-11-17 节点详情改双击 90% 弹层与多轮历史）。
 
 - 状态：active（2026-11-12 从 MOCK 原型切到 B4 `/runs` live）
 - 单元 / 层：组件 / L2 页面组件（列表 + 详情两个页面入口）
 - 业务价值：运行观察者与操作者要能看见真实工作流跑到哪一步、失败在哪、并终止或做人工确认；没有它，工作流只能被定义，无法被观察、干预或审批。
 - 负责 / 不负责：负责运行列表（状态 Tab/计数/耗时）、详情（轨迹图、节点状态/结论/日志下载）、发起运行（工作流 + Harness + 工作区路径 + 意图）、终止、人工确认决策；不负责工作流定义与画布编辑（`CMP-workflow-editor`）、B1 资产定义、运行状态机（后端运行编排服务）。
-- 内部逻辑：列表一次取 `/runs?limit=200` 与 `/workflows?limit=200`，工作流名在页面侧 join；Tab 由 run.state 分组（全部 / created+running / waiting_confirm / done）；详情取 run + 工作流图，`toEditorGraph` 得到画布坐标，节点状态取 `run.nodes` 中该节点最大 `visit` 的行；单击节点只选中高亮，双击节点在 90% × 90% 视口弹层中查看概要与会话日志；进行中的 run 每 5s 轮询；人工确认为 `waiting_confirm` 节点写决策；终止调用 cancel 并刷新。
+- 内部逻辑：列表一次取 `/runs?limit=200` 与 `/workflows?limit=200`，工作流名在页面侧 join；Tab 由 run.state 分组（全部 / created+running / waiting_confirm / done）；详情取 run + 工作流图，`toEditorGraph` 得到画布坐标，节点颜色取 `run.nodes` 中该节点最大 `visit` 的行；同一节点按 `nodeId + visit` 保留全部轮次，抽屉/弹层中用轮次 Tab 切换最新与历史；单击节点只选中高亮，双击节点在 90% × 90% 视口弹层中查看概要与会话日志；进行中的 run 每 5s 轮询；人工确认为 `waiting_confirm` 节点写决策；终止调用 cancel 并刷新。
 - 数据所有权：读 B4 `RunSummary`/`RunDetail`（经 `CMP-run-data`）与 B3 工作流图（经 `CMP-workflow-data`）；不写任何本地数据、不写 `MOCK`、不用 `sessionStorage`；页面只持有当前列表/详情/选择/弹层内存态。
-- 公开契约：入口 `pages/instances.html?tab=&wfId=`、`pages/instance-detail.html?id=<runId>`；操作 `CMP-instances#list`、`#launch`、`#detail`、`#cancel`、`#decide`、`#session-log`；不变量：详情不用常驻右侧面板，双击节点才打开 90% × 90% 弹层（内容内部滚动，Esc/遮罩/× 关闭）；发起运行三个必填（`harnessId`/`workspacePath`/`intentMarkdown`）缺一不提交；Harness 只列 `enabled && clientId`；人工确认只对 `waiting_confirm` 节点出现；终态 run 不显示终止；后端未提供的能力按钮置灰并注明原因。
+- 公开契约：入口 `pages/instances.html?tab=&wfId=`、`pages/instance-detail.html?id=<runId>`；操作 `CMP-instances#list`、`#launch`、`#detail`、`#cancel`、`#decide`、`#session-log`；不变量：详情不用常驻右侧面板，双击节点才打开 90% × 90% 弹层（内容内部滚动，Esc/遮罩/× 关闭）；多轮节点必须保留历史轮次，最新轮跟随轮询、历史轮只读且不出现人工确认入口；会话日志按 `visit` 下载；发起运行三个必填（`harnessId`/`workspacePath`/`intentMarkdown`）缺一不提交；Harness 只列 `enabled && clientId`；人工确认只对 `waiting_confirm` 节点出现；终态 run 不显示终止；后端未提供的能力按钮置灰并注明原因。
 - 依赖：`DF`（外壳、表格、Tabs、90% 大弹层、Toast、时间格式化）、`CMP-run-data`、`CMP-workflow-data`、`workflow/model`（图映射）、`shared/http`（Harness/专家列表）、`shared/markdown-editor`（发起运行意图编辑）；不 import 其他页面 JS；跨页只走 URL。
 - 冷热属性：热（列表/详情轮询、发起运行、决策）；轮询只在非终态运行期间存在，页面隐藏时跳过一轮。
 - 变化轴：B4 run DTO 与状态闭集、可用操作集合（当前只有 cancel/decision）、发起运行入参；变化集中在 `run/data` 与两个页面。
-- 验证入口：`node tools/verify-m1-scenarios.js SCN-0004`（5 条）；`npm start` + `/pages/instances.html`、`/pages/instance-detail.html?id=<runId>`；真实后端只读走查。
-- 验证计划：列表计数与 Tab 分组；详情轨迹/节点状态来自 run.nodes；双击节点打开 90% 弹层且不出现右侧面板、内容超高走弹层内部滚动、节点消息无二次全屏；人工确认推进；取消终止不改状态；发起运行请求体（harness/路径/意图）。
-- 预算：列表约 11 KB + 详情约 18 KB + `run/data` 约 5 KB；远低于 120k token。
+- 验证入口：`node tools/verify-m1-scenarios.js SCN-0004`（6 条）；`npm start` + `/pages/instances.html`、`/pages/instance-detail.html?id=<runId>`；真实后端只读走查。
+- 验证计划：列表计数与 Tab 分组；详情轨迹/节点状态来自 run.nodes；双击节点打开 90% 弹层且不出现右侧面板、内容超高走弹层内部滚动、节点消息无二次全屏；多轮节点显示最新/历史 Tab、历史轮只读、按轮下载会话日志、打回后评审内容仍可查看；人工确认推进；取消终止不改状态；发起运行请求体（harness/路径/意图）。
+- 预算：列表约 11 KB + 详情约 21 KB + `run/data` 约 5 KB；远低于 120k token。
 - 单独运行：`node tools/verify-m1-scenarios.js SCN-0004`。
 - 删除测试：删除后运行只能由 API 直接操作，无法观察、终止或审批；复杂度会回流到工作流页面，故保留独立组件。
-- 已知偏差：run 详情不含启动时的图快照，轨迹按当前工作流图渲染（工作流被改后节点名可能漂移）；后端未提供暂停/恢复、节点重试、从节点重跑、输入输出、工作区文件留痕与 fan-out 子任务下钻，相关入口置灰并注明「后端未提供」；`split`/`fanout` 可保存但启动返回 `unsupported_node_type`。2026-11-17 节点详情从右侧面板改为双击 90% × 90% 弹层（`REQ-0020`），概要与会话日志不再常驻；节点消息/确认说明直接按 Markdown 在弹层内展示，移除了原来的二次「全屏」入口（`SCN-0004-T2/T4`）。
+- 已知偏差：run 详情不含启动时的图快照，轨迹按当前工作流图渲染（工作流被改后节点名可能漂移）；后端未提供暂停/恢复、节点重试、从节点重跑、输入输出、工作区文件留痕与 fan-out 子任务下钻，相关入口置灰并注明「后端未提供」；`split`/`fanout` 可保存但启动返回 `unsupported_node_type`。2026-11-17 节点详情从右侧面板改为双击 90% × 90% 弹层（`REQ-0020`），概要与会话日志不再常驻；节点消息/确认说明直接按 Markdown 在弹层内展示，移除了原来的二次「全屏」入口（`SCN-0004-T2/T4`）。同日补多轮历史（`REQ-0021`）：同一节点按 `nodeId + visit` 聚合，弹层轮次 Tab 查看最新与历史；历史轮只读，确认入口只在最新轮；历史会话日志按 `visit` 下载。若后端只回传最新一轮，页面只能展示收到的记录，前端不做丢失数据的兜底（`SCN-0004-T6`）。
 
 ## 1 页面定位
 
@@ -103,6 +103,7 @@ updated: 2026-11-17
 - 图来自 `GET /workflows/{workflowId}`，经 `toEditorGraph` 得到节点坐标与阶段框；节点状态来自 `run.nodes`（同节点多次访问取最大 `visit`，副标题显示「第 N 轮」）。
 - 状态着色：`queued`→待执行灰、`dispatched`→运行中蓝、`waiting_confirm`→等待人工橙、`succeeded`→成功绿、`rejected`→已驳回紫、`failed`→失败红；未出现的节点为「待执行」。
 - 单击节点只切换选中高亮；双击节点打开节点详情弹层。页面加载时不再默认展开任何节点的详情。
+- 多轮节点画布仍按最新 `visit` 着色，节点副标题显示「第 N 轮」，`title` 提示「共 N 轮」；历史轮次只在弹层内查看。
 - 图例固定六类；不显示进度百分比（后端无节点总数之外的进度字段）。
 
 ### 3.4 节点详情弹层（90% × 90%）
@@ -110,14 +111,16 @@ updated: 2026-11-17
 | Tab | 内容 |
 |---|---|
 | 概要 | 节点名/类型、状态、专家、访问轮次、任务 ID、下发/完成时间、节点耗时；`verdict` 原样 JSON、`error` 分块展示；`message` 按 Markdown 渲染（`shared/markdown.js`），详情本身已是大弹层，不再提供二次「全屏」；底部「重试节点」「从此节点重跑」置灰并注明后端未提供；一行说明「输入与输出、工作区文件留痕：当前执行面未提供对应端点」 |
-| 会话日志 | 有 `taskId` 时给下载按钮（`GET /runs/{id}/nodes/{nodeId}/session-log`，gzip JSONL）；无 `taskId`（如 confirm 节点）说明不产生会话 |
+| 会话日志 | 有 `taskId` 时给下载按钮（`GET /runs/{id}/nodes/{nodeId}/session-log?visit=<n>`，gzip JSONL）；无 `taskId`（如 confirm 节点）说明不产生会话 |
 
 - 弹层由 `DF.modal.open({ size: 'screen' })` 提供：宽高各为视口 90%，头部标题与底部「关闭」固定，`.d-body` 在内容超高时内部滚动；窗口 resize 时重算尺寸。
-- 关闭方式：Esc、点击遮罩、右上 ×、底部「关闭」。轮询刷新时弹层保持打开并按最新 run 数据重绘内容。
+- **轮次 Tab**：同一 `nodeId` 存在多个 `visit` 时，弹层顶部显示「最新 · 第 N 轮 / 第 N-1 轮…」；默认最新轮，切到历史轮后该轮只读，历史提示条说明确认与操作入口在最新轮。单轮节点不显示轮次 Tab。
+- 轮询刷新时弹层保持打开并按最新 run 数据重绘内容；停留在最新轮则跟随新轮，停留在历史轮则保持当前轮；历史轮被后端移除时回落到最新轮。
+- 关闭方式：Esc、点击遮罩、右上 ×、底部「关闭」。
 
 ### 3.5 人工确认（`waiting_confirm`）
 
-- 弹层顶部橙色卡片：显示节点 `message`，意见输入框（驳回必填），「批准，继续执行」/「驳回」。
+- 弹层顶部橙色卡片只在最新轮且状态为 `waiting_confirm` 时出现：显示节点 `message`，意见输入框（驳回必填），「批准，继续执行」/「驳回」。历史轮不出现该卡片。
 - 卡片内的模型输出同样按 Markdown 渲染；不再提供二次「全屏」入口。
 - 决策成功 `POST .../decision` → 刷新详情（节点状态、当前节点、run 状态由后端推进），弹层保持打开并按新状态重绘。
 - 重复提交幂等；非 `waiting_confirm` 节点不出现该卡片。
