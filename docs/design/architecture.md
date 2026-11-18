@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-11-17
+updated: 2026-11-18
 ---
 
 # 系统架构（现行真相）
@@ -15,19 +15,21 @@ updated: 2026-11-17
 - 模块系统（2026-10-30 完成迁移）：全站原生 ESM，`package.json` 为 `"type":"module"`，Node 侧 `server.js` / `bff/` / `tools/` / `tests/` 同为 ESM；页面只通过显式 `import` 取依赖，无 `window.DF/MOCK/API/WSC`，无构建与 `.cjs` 兼容层。迁移记录见 `history/works/2026-10-30-frontend-esm/`，决策见 `history/decisions/2026-10-30-frontend-esm.md`。
 - 数据：Harness / Tool / Skill / Expert 四页直接消费 B1 DTO（经 `CMP-bff` 同源访问），写操作走 B1 并带 `If-Match`；工作流列表/编辑器经 `workflow/data` 消费 B3 `/api/v1/workflows*`；运行列表/详情/发起运行经 `run/data` 消费 B4 `/api/v1/runs` 与 `/api/v1/workflows/{id}/runs`（状态机与节点推进由后端运行编排服务 拥有）；`layout/viewport` 由前端拥有/后端透传。效能看板、工作区两页、个人 Key 管理仍由 `assets/js/mock-data.js` 的 `MOCK` 具名导出提供，写操作只改内存；这四页自 2026-11-12 起**默认关闭**（导航隐藏、直达显示占位页），地址带 `?demo=1` 才恢复，开关存 sessionStorage `df-demo-pages`（`REQ-0018` / `SCN-0020`）。前端不直接持有数据库或鉴权态。
 - 服务：`server.js`（Node 原生 `http`）是组合根，做静态托管、`/` 302 与 `CMP-bff` 挂载；`CMP-bff` 只透明转发 `/api/v1/*` 与 `/healthz`，不承载业务逻辑。
-- 验证：`tools/check-docs.js`（五态文档）、`tools/check-deps.js`（依赖准入）、`tools/check-architecture.js`（ESM import 图与边界）、`tools/check-scenario-trace.js`（核对场景卡 / Playwright runner / 外部执行层；统计以 `design/scenarios/_index.md` 为准）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（Playwright 13 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）、`tools/verify-workflow-list.js` / `tools/verify-workflow-editor.js`（SCN-0018/0019，fake B3 + Playwright）；`npm test` 串联零依赖门禁、BFF 单测、Playwright 业务场景与工作流场景；人工 Safari 走查为发布门禁。
+- 验证：`tools/check-docs.js`（五态文档）、`tools/check-deps.js`（依赖准入）、`tools/check-architecture.js`（ESM import 图与边界）、`tools/check-scenario-trace.js`（核对场景卡 / Playwright runner / 外部执行层；统计以 `design/scenarios/_index.md` 为准）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（Playwright 13 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）、`tools/verify-workflow-list.js` / `tools/verify-workflow-editor.js`（SCN-0018/0019，fake B3 + Playwright）；`npm test` 串联零运行时依赖门禁、oxlint 风格门禁、BFF 单测、Playwright 业务场景与工作流场景；人工 Safari 走查为发布门禁。
 - 明确不做：真实工作流执行引擎、Agent 运行时、CI/CD 触发、权限体系、密钥加密存储、移动端适配、前端持久化；BFF 不做 CORS、鉴权、TLS、DTO 映射、revision 缓存或聚合。
 
 ## 2 组件地图
 
-### 2.1 业务组件（11 个 `CMP-*`）
+### 2.1 业务组件（13 个 `CMP-*`）
 
 | 组件 | 页面入口 | 源码 | 职责 |
 |---|---|---|---|
 | `CMP-ui-shell` | 13 页公共外壳 | `assets/js/ui.js` | 顶栏、左侧导航、面包屑/页头、用户区、待确认角标、字号缩放、`DF.*` 原语 |
 | `CMP-workflow-list` | `pages/workflow-list.html` | `workflow-list.js` | B3 工作流列表、筛选、统计、新建向导/复制/改名/删除/导入导出；无运行入口 |
 | `CMP-workflow-editor` | `pages/workflow-editor.html?id=` | `workflow-editor.js` + `workflow/views/*` | 画布阶段/节点/边编辑、双击 90% 属性弹层、本地校验、手动保存、DSL 预览与导出；无发布/版本/运行 |
-| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图、发起运行（工作流+Harness+路径+意图）、节点多轮历史弹层、终止、人工确认、按轮会话日志下载；后端未提供的控制入口置灰 |
+| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图、发起运行（工作流+Harness+路径+意图）、节点多轮历史弹层、文件/执行会话 Tab、页头任务文件、终止、人工确认、按轮会话日志下载；后端未提供的控制入口置灰 |
+| `CMP-run-files` | `instance-detail.html` 节点弹层/页头任务文件 | `run/views/files.js` | 运行任务文件只读浏览：根切换、面包屑、目录懒加载、Markdown/文本/二进制/截断预览 |
+| `CMP-run-session` | `instance-detail.html` 节点弹层执行会话 | `run/views/session.js` | 执行会话只读：详情、历史事件、`EventSource` 实时追加、raw 下载；无 sessionId |
 | `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js` | Skill 列表、筛选、启停、删除、引用方；专门页承接查看/编辑/新建，正文用 Milkdown 渲染、编辑走草稿 |
 | `CMP-experts` | `pages/experts.html` | `experts.js` | 专家列表、五区详情/编辑、Skill/工具组合、启停 |
 | `CMP-harnesses` | `pages/harnesses.html` | `harnesses.js` | 设施列表、注册、健康/配额、启停、删除 |
@@ -47,7 +49,7 @@ updated: 2026-11-17
 | 静态服务 | `server.js` | 静态文件 + `/` 302 | 只服务 `pages/` 与 `assets/`，绑定 `127.0.0.1`；拒绝点文件与越界路径 |
 | 同源网关 | `bff/`（`CMP-bff`） | `/api/v1/*`、`/healthz` 透明转发 | 与 `server.js` 同进程；不做 DTO 映射、revision、重试、聚合；详见 `components/bff/spec.md` |
 | 工作流数据服务 | `assets/js/workflow/data.js` | `CMP-workflow-data` §1 的 11 个操作 | B3 工作流唯一读写入口；页面不得直接 `fetch /api/v1/workflows*`；规格见 `components/workflow-data/spec.md` |
-| 运行数据服务 | `assets/js/run/data.js` | `CMP-run-data` §0 的 6 个操作 + 状态词表 | B4 run 唯一读写入口；页面不得直接 `fetch /api/v1/runs*`；规格见 `components/run-data/spec.md` |
+| 运行数据服务 | `assets/js/run/data.js` | `CMP-run-data` §0 的 12 个操作 + 状态词表 | B4 run 唯一读写入口；页面不得直接 `fetch /api/v1/runs*`；含 client 文件/session 只读方法；规格见 `components/run-data/spec.md` |
 | Markdown 编辑器适配 | `assets/js/shared/markdown-editor.js` | `mountMarkdown/destroyMarkdown` | Milkdown 7.7.0（`DEP-0001`）唯一入口；Skill 正文与运行意图共用；不泄漏第三方类型 |
 | Markdown 显示渲染 | `assets/js/shared/markdown.js` | `renderMarkdown/renderInline` | 只读渲染模型输出（运行节点消息）；先转义后出标签，链接只放行 http(s)/mailto/站内路径 |
 | 工作流领域模型/校验 | `assets/js/workflow/model.js`、`validate.js` | 图映射、ID、DSL、B3 规则镜像 | 无 DOM/network；供数据服务与编辑器复用 |
@@ -64,7 +66,9 @@ updated: 2026-11-17
 | 页面 JS（B1 四类资产） | `API` | `/api/v1` DTO + `/skills/{id}/document` | HTTP，同源 | 四页直接用 DTO；文档视图只用 API-31 原文；不建客户端视图模型；不直连 3100 |
 | 工作流两页 | `workflow/data` | B3 `/api/v1/workflows*` | HTTP，同源 | 唯一读写入口；写带 `If-Match`；不直连 3100 |
 | 工作流两页 | `workflow/model` / `validate` / `views` | 图映射、本地规则、纯视图 | 同步，ESM import | 不碰网络；`validate` 镜像 B3 规则 |
-| 运行两页 | `run/data` | B4 `/api/v1/runs*` 与启动端点 | HTTP，同源 | 唯一读写入口；不推断状态机、不缓存 |
+| 运行两页 | `run/data` | B4 `/api/v1/runs*` 与启动端点 | HTTP，同源 | 唯一读写入口；不推断状态机、不缓存；含 client 文件/session 只读方法与 SSE/raw URL |
+| 运行详情 | `run/views/files` | 文件只读视图 | 同步，ESM import | 只经 `run/data` 取数；不 import 页面 |
+| 运行详情 | `run/views/session` | 会话只读视图 + `EventSource` | 同步，ESM import | 只经 `run/data` 取数；unmount 必关流 |
 | 运行两页 | `workflow/data` / `workflow/model` | 工作流图与坐标 | HTTP + 同步 | 详情轨迹只读工作流图，不改图 |
 | Skill 正文 / 运行意图 | `shared/markdown-editor` | `mountMarkdown/destroyMarkdown` | 动态 import vendor | 只经适配层使用 Milkdown，页面不直接 import vendor |
 | 运行详情 | `shared/markdown` | `renderMarkdown` | 同步，ESM import | 节点消息只读渲染；不执行原始 HTML |
@@ -83,7 +87,7 @@ updated: 2026-11-17
 - `CMP-bff` 不得 import `DF`/`MOCK`/页面代码，不得做 DTO 映射、revision 缓存、重试、聚合或模拟数据。
 - 四页 live 后不得自动回落 MOCK；失败必须显式报错。
 - 同层页面不横调；共享能力下沉到 `DF`/`WSC`，跨页流程上提到 URL 约定。
-- 页面 JS 不得引用未登记 `DEP-xxxx` 的第三方脚本/模块，不得出现 `http(s)://` 或协议相对外链；`package.json` 的 `dependencies` / `devDependencies` 保持为空（构建链另案 P1）。
+- 页面 JS 不得引用未登记 `DEP-xxxx` 的第三方脚本/模块，不得出现 `http(s)://` 或协议相对外链；`package.json` 的 `dependencies` 保持为空；`devDependencies` 只允许 `dependencies.md` §7 登记的开发工具（当前 `oxlint`）。
 
 > 可机械判定的部分：`tools/check-architecture.js` 覆盖边 1/3/4/5，并机械检查边 6 的共享模块路径；边 7 由 `tools/check-deps.js` 覆盖。边 2（`DF`/`MOCK` 是否承载业务规则）与边 6 的任意横向耦合仍需人工评审。
 
@@ -104,7 +108,7 @@ updated: 2026-11-17
 | `CMP-ui-shell` | `#renderShell`、`#topbar`、`#nav`、`#font-scale`、`#bell`、`#user-menu`、`#mock-page-gate` |
 | `CMP-workflow-list` | `#list`、`#create`、`#copy`、`#update`、`#delete`、`#import`、`#export` |
 | `CMP-workflow-editor` | `#open`、`#add-node`、`#connect-edge`、`#inspector`、`#validate`、`#save`、`#dsl` |
-| `CMP-instances` | `#list`、`#launch`、`#detail`、`#cancel`、`#decide`、`#session-log` |
+| `CMP-instances` | `#list`、`#launch`、`#detail`、`#cancel`、`#decide`、`#session-log`、`#run-files`、`#node-modal` |
 | `CMP-skills` | `#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#document` |
 | `CMP-experts` | `#list`、`#create`、`#edit`、`#toggle`、`#detail`、`#picker` |
 | `CMP-harnesses` | `#list`、`#register`、`#detail`、`#toggle`、`#delete` |
@@ -140,6 +144,8 @@ updated: 2026-11-17
 | `MOCK.knowledgeTree` | —（只读） | 编辑器节点配置 | 内存 | 只读夹具 |
 | `df-font` / `df-collapsed` | `CMP-ui-shell` | 外壳、13 页 | localStorage | UI 偏好；跨页保留 |
 | `wl-view` | `CMP-workflow-list` | 本页 | localStorage | UI 偏好；跨页保留 |
+| `df-run-session-filter` | `CMP-run-session` | 执行会话 | localStorage | UI 偏好；多选类别集合；非法/空回落「活动」 |
+| `df-launch-workspace-paths` | `CMP-instances` | 发起运行弹窗 | localStorage | UI 偏好；按 `clientId` 保存最近 10 条工作区绝对路径，最近置顶、成功后写入；非法/损坏按空历史 |
 | `df-new-workspace` | `CMP-workspaces`（`WSC`） | 列表 → 详情 | sessionStorage | 一次性；消费后删除 |
 
 > `MOCK` 是夹具而非数据服务：没有事务、没有并发控制、没有跨标签页一致性；工作流两页已不再写 `MOCK.workflows`，写入口统一为 B3 `workflow/data`。
@@ -188,7 +194,7 @@ updated: 2026-11-17
 1. **M1 追溯与验收闭环**：10 个页面已补 M1 追溯；原列表/编辑器场景已归档，其余场景 `verified`，M1 40/40 通过，10 张 REQ 转 `delivered`（R7/R10 关闭）。冒烟仍不是业务验收。
 2. **MOCK 多写/复位**：工作流两页已切 B3；其余 MOCK 集合单写但都只改内存，刷新复位，无事务/并发控制（R8）。
 3. **Safari 人工未完成**：engine 层只覆盖 WebKit 2104 的 transform 兜底路径；zoom 路径需真实 Safari 确认（R1/R9）。
-4. **页面组件不是独立部署单元**：11 个业务组件 + 1 个基础设施组件（`CMP-bff`）共享 `DF`/`MOCK`（BFF 不共享）；按页面入口划分；不引入模块打包、事务或分层过度设计（KISS）。
+4. **页面组件不是独立部署单元**：13 个业务组件 + 1 个基础设施组件（`CMP-bff`）共享 `DF`/`MOCK`（BFF 不共享）；按页面入口划分；不引入模块打包、事务或分层过度设计（KISS）。
 5. **静态服务与 BFF 仅本地**：无鉴权、无 TLS；只服务 `pages/` 与 `assets/`，BFF 只转发 `/api/v1/*` 与 `/healthz`，均绑定 `127.0.0.1`。
 6. **B1 四类资产与 B3 工作流已接入**：`CMP-bff` 12 条单测通过；四个资产页直接消费 B1 DTO，工作流两页经 `workflow/data` 消费 B3（`layout/viewport` 透传）；B1 真实读写由 `tools/verify-b1-*` 覆盖；B3 页面契约由 `tools/verify-workflow-*` 覆盖（fake B3）；真实 B3 写路径已于 2026-10-30 用临时记录验证创建/保存/删除并清理；实例/效能/工作区/Key 仍 MOCK。
 7. **运行时依赖改为准入制**：基线由「无第三方运行时依赖」改为「默认零 + 准入登记（`DEP-xxxx`）」；当前已登记 `DEP-0001`（Milkdown 7.7.0，查看与编辑共用 + Prism 语法高亮，177.6 KB gzip，按需加载）；门禁 `tools/check-deps.js`；三条红线（工具链/服务端零依赖、禁 CDN）见 `design/dependencies.md`。

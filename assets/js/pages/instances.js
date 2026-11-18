@@ -33,7 +33,70 @@ const TAB_STATE = {
 
 const DEFAULT_WORKSPACE_PATH = '/Users/chenlong/hundsun/af-workspace-demo';
 
-const state = { runs: [], workflows: new Map(), loading: true, error: null, now: Date.now(), editor: null };
+/* 工作区路径历史按执行节点（clientId）隔离，每节点最多 10 条。
+ * 只存 UI 偏好，不参与运行业务数据；同一 clientId 的多个 Harness 共用一份历史。 */
+const WS_HISTORY_KEY = 'df-launch-workspace-paths';
+const WS_HISTORY_MAX = 10;
+
+function readWorkspaceHistory() {
+  const empty = { v: 1, byClient: {} };
+  let raw;
+  try { raw = localStorage.getItem(WS_HISTORY_KEY); } catch { return empty; }
+  if (!raw) return empty;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.v !== 1 || !parsed.byClient || typeof parsed.byClient !== 'object' || Array.isArray(parsed.byClient)) return empty;
+    const byClient = {};
+    Object.keys(parsed.byClient).forEach(function (clientId) {
+      const list = parsed.byClient[clientId];
+      if (!Array.isArray(list)) return;
+      const clean = [];
+      list.forEach(function (path) {
+        if (typeof path !== 'string' || path.charAt(0) !== '/') return;
+        if (clean.indexOf(path) >= 0 || clean.length >= WS_HISTORY_MAX) return;
+        clean.push(path);
+      });
+      byClient[clientId] = clean;
+    });
+    return { v: 1, byClient: byClient };
+  } catch {
+    return empty;
+  }
+}
+
+function writeWorkspaceHistory(data) {
+  try { localStorage.setItem(WS_HISTORY_KEY, JSON.stringify(data)); } catch { /* 隐私模式忽略 */ }
+}
+
+function workspacePathsOf(clientId) {
+  if (!clientId) return [];
+  const list = readWorkspaceHistory().byClient[clientId];
+  return Array.isArray(list) ? list : [];
+}
+
+function rememberWorkspacePath(clientId, path) {
+  if (!clientId || typeof path !== 'string' || path.charAt(0) !== '/') return;
+  const data = readWorkspaceHistory();
+  const list = data.byClient[clientId] || [];
+  data.byClient[clientId] = [path].concat(list.filter(function (p) { return p !== path; })).slice(0, WS_HISTORY_MAX);
+  writeWorkspaceHistory(data);
+}
+
+function forgetWorkspacePath(clientId, path) {
+  if (!clientId) return;
+  const data = readWorkspaceHistory();
+  const list = (data.byClient[clientId] || []).filter(function (p) { return p !== path; });
+  if (list.length) data.byClient[clientId] = list;
+  else delete data.byClient[clientId];
+  writeWorkspaceHistory(data);
+}
+
+function harnessClientId(harnesses, harnessId) {
+  const h = (harnesses || []).find(function (x) { return x.id === harnessId; });
+  return h && h.clientId ? h.clientId : null;
+}
+
+const state = { runs: [], workflows: new Map(), loading: true, error: null, now: Date.now(), editor: null, wsPickerDispose: null };
 
 function currentTab() {
   const t = DF.qs('tab');
@@ -155,7 +218,6 @@ function render() {
 }
 
 function rowHTML(run) {
-  const wf = wfOf(run);
   const active = ACTIVE_STATES.indexOf(run.state) >= 0;
   const confirmable = run.state === 'waiting_confirm';
   let act = '<button class="btn sm" data-act="view" data-id="' + esc(run.runId) + '">详情</button>';
@@ -183,7 +245,6 @@ function doAction(act, id) {
 }
 
 function stopRun(id) {
-  const run = state.runs.find(function (r) { return r.runId === id; });
   DF.modal.confirm({
     title: '终止运行',
     html: '终止后<b>正在执行的节点将被取消</b>，运行进入「已终止」终态，不可恢复。',
@@ -202,6 +263,106 @@ function stopRun(id) {
 }
 
 /* ---------------- 发起运行 ---------------- */
+
+/* 工作区路径选择器：输入框保底可手输，右侧下拉列出当前执行节点的历史路径；
+ * 列表项右侧小叉只删除该条历史，不改输入框内容。返回清理函数，弹窗关闭时移除全局监听。 */
+function mountWorkspacePicker(body, harnesses) {
+  const input = body.querySelector('#rn-path');
+  const toggle = body.querySelector('#rn-path-toggle');
+  const pop = body.querySelector('#rn-path-pop');
+  const wrap = body.querySelector('#rn-path-wrap');
+  const harnessSel = body.querySelector('#rn-harness');
+  if (!input || !toggle || !pop || !wrap || !harnessSel) return null;
+  const harnessMap = new Map(harnesses.map(function (h) { return [h.id, h]; }));
+
+  function currentClientId() {
+    const h = harnessMap.get(harnessSel.value);
+    return h && h.clientId ? h.clientId : null;
+  }
+
+  function renderList() {
+    const clientId = currentClientId();
+    const paths = workspacePathsOf(clientId);
+    if (!paths.length) {
+      pop.innerHTML = '<div class="ws-path-empty">' +
+        (clientId ? '该执行节点暂无历史路径<div class="hint">发起运行成功后会记录，最多保留 10 条</div>'
+          : '请先选择已绑定执行节点的 Harness') +
+        '</div>';
+      return;
+    }
+    pop.innerHTML = paths.map(function (path) {
+      return '<div class="ws-path-item" data-path="' + esc(path) + '">' +
+        '<span class="ws-path-text mono" title="' + esc(path) + '">' + esc(path) + '</span>' +
+        '<button type="button" class="ws-path-del" data-del="' + esc(path) + '" title="从最近路径中删除" aria-label="删除 ' + esc(path) + '">' +
+        icon('x', 12) + '</button></div>';
+    }).join('');
+  }
+
+  /* 列表在弹层主体内展开：优先向下，空间不足时向上或收窄高度，避免被 .d-body 裁切。 */
+  function place() {
+    const bodyBox = body.getBoundingClientRect();
+    const inputBox = input.getBoundingClientRect();
+    const below = bodyBox.bottom - inputBox.bottom - 16;
+    const above = inputBox.top - bodyBox.top - 16;
+    pop.style.top = '';
+    pop.style.bottom = '';
+    if (below < 140 && above > below) {
+      pop.style.top = 'auto';
+      pop.style.bottom = 'calc(100% + 4px)';
+      pop.style.maxHeight = Math.max(100, Math.min(240, above)) + 'px';
+    } else {
+      pop.style.maxHeight = Math.max(100, Math.min(240, below)) + 'px';
+    }
+  }
+
+  function setOpen(open) {
+    pop.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    renderList();
+    place();
+  }
+
+  function onDocDown(e) {
+    if (!wrap.contains(e.target)) setOpen(false);
+  }
+
+  function onKey(e) {
+    if (e.key === 'Escape' && !pop.hidden) { e.stopPropagation(); setOpen(false); }
+  }
+
+  function onResize() { if (!pop.hidden) place(); }
+
+  toggle.onclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(pop.hidden);
+  };
+  pop.onclick = function (e) {
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      e.stopPropagation();
+      forgetWorkspacePath(currentClientId(), del.dataset.del);
+      renderList();
+      return;
+    }
+    const item = e.target.closest('[data-path]');
+    if (!item) return;
+    input.value = item.dataset.path;
+    setOpen(false);
+    input.focus();
+  };
+  harnessSel.addEventListener('change', function () { if (!pop.hidden) renderList(); });
+  document.addEventListener('mousedown', onDocDown);
+  window.addEventListener('resize', onResize);
+  wrap.addEventListener('keydown', onKey);
+
+  return function dispose() {
+    document.removeEventListener('mousedown', onDocDown);
+    window.removeEventListener('resize', onResize);
+    wrap.removeEventListener('keydown', onKey);
+  };
+}
 
 async function openLaunch() {
   let wfList;
@@ -241,14 +402,19 @@ async function openLaunch() {
         '<select class="inp" id="rn-harness">' + options + '</select>',
         { required: true, hint: usable.length ? '只列出已绑定执行节点且启用的 Harness' : '没有可用的执行节点：请先在 Harness 详情登记 clientId 与凭据' }) +
       DF.field('工作区路径',
-        '<input class="inp mono" id="rn-path" value="' + esc(DEFAULT_WORKSPACE_PATH) + '" placeholder="' + esc(DEFAULT_WORKSPACE_PATH) + '" autocomplete="off">',
-        { required: true, hint: '执行节点上的绝对路径；同一 clientId + 路径已有实例时复用' }) +
+        '<div class="ws-path" id="rn-path-wrap">' +
+          '<input class="inp mono" id="rn-path" value="' + esc(DEFAULT_WORKSPACE_PATH) + '" placeholder="' + esc(DEFAULT_WORKSPACE_PATH) + '" autocomplete="off">' +
+          '<button type="button" class="ws-path-toggle" id="rn-path-toggle" title="选择最近使用的工作区路径" aria-label="选择最近使用的工作区路径" aria-expanded="false">' + icon('down', 14) + '</button>' +
+          '<div class="ws-path-pop" id="rn-path-pop" hidden></div>' +
+        '</div>',
+        { required: true, hint: '执行节点上的绝对路径；下拉列出该执行节点最近 10 条，同一 clientId + 路径已有实例时复用' }) +
       DF.field('启动意图（Markdown）',
         '<div class="rn-editor" id="rn-intent"></div>',
         { required: true, hint: '所见即所得编辑，保存后作为 intentMarkdown 传给 start 节点' }) +
       '<label class="rn-check"><input type="checkbox" id="rn-auto"> 自动通过人工确认节点（autoConfirm）</label>',
-    onMount: function (body, close) {
+    onMount: function (body, _close) {
       if (usable.length) document.getElementById('rn-harness').value = usable[0].id;
+      state.wsPickerDispose = mountWorkspacePicker(body, harnesses);
       state.editor = null;
       mountMarkdown(document.getElementById('rn-intent'), {
         markdown: '',
@@ -282,6 +448,7 @@ async function openLaunch() {
         intentMarkdown: intentMarkdown,
         autoConfirm: autoConfirm
       }).then(function (result) {
+        rememberWorkspacePath(harnessClientId(harnesses, harnessId), workspacePath);
         closeRunModal(close);
         DF.toast('已发起运行 ' + shortId(result.runId), 'ok');
         state.now = Date.now();
@@ -292,6 +459,7 @@ async function openLaunch() {
       });
     },
     onClose: function () {
+      if (state.wsPickerDispose) { state.wsPickerDispose(); state.wsPickerDispose = null; }
       if (state.editor) { destroyMarkdown(state.editor); state.editor = null; }
       state.intent = '';
     }
@@ -299,6 +467,7 @@ async function openLaunch() {
 }
 
 function closeRunModal(close) {
+  if (state.wsPickerDispose) { state.wsPickerDispose(); state.wsPickerDispose = null; }
   if (state.editor) { destroyMarkdown(state.editor); state.editor = null; }
   close();
 }

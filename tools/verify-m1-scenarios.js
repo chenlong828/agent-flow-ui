@@ -362,6 +362,103 @@ async function scn0004T6(browser) {
   } finally { await ctx.page.close(); }
 }
 
+async function scn0004T7(browser) {
+  const ctx = await open(browser, 'instances', '', {
+    b3: fakeB3, setup: runFixtures, initScript: launchEditorInit, wait: 900
+  });
+  try {
+    const paths = [];
+    for (let i = 0; i < 10; i++) paths.push('/tmp/scn0004/recent-' + i);
+    await ctx.page.evaluate(function (seed) {
+      localStorage.setItem('df-launch-workspace-paths', JSON.stringify({
+        v: 1,
+        byClient: { 'client-stub-01': seed, 'client-other': ['/tmp/scn0004/other-client'] }
+      }));
+    }, paths);
+
+    await ctx.page.locator('#in-launch').click();
+    await ctx.page.locator('#stub-intent').waitFor({ timeout: 5000 });
+    assert.equal(await ctx.page.locator('#rn-path').inputValue(), '/Users/chenlong/hundsun/af-workspace-demo');
+
+    await ctx.page.locator('#rn-path-toggle').click();
+    await ctx.page.locator('.ws-path-item').first().waitFor({ timeout: 3000 });
+    assert.equal(await ctx.page.locator('.ws-path-item').count(), 10);
+    assert.equal(await ctx.page.locator('.ws-path-item').first().locator('.ws-path-text').textContent(), paths[0]);
+    assert.equal(await ctx.page.locator('.ws-path-pop').textContent().then(function (t) { return t.includes('/tmp/scn0004/other-client'); }), false);
+    const inputBox = await ctx.page.locator('#rn-path').boundingBox();
+    const popBox = await ctx.page.locator('#rn-path-pop').boundingBox();
+    assert.ok(inputBox && popBox && popBox.y >= inputBox.y + inputBox.height, '下拉应位于输入框下方');
+    assert.ok(popBox && popBox.x >= 0 && popBox.x + popBox.width <= 1441, '下拉不得越出视口');
+    const bodyBox = await ctx.page.locator('.modal .d-body').boundingBox();
+    assert.ok(bodyBox && popBox && popBox.y + popBox.height <= bodyBox.y + bodyBox.height + 1, '下拉不得被弹层主体裁切');
+
+    await ctx.page.setViewportSize({ width: 900, height: 640 });
+    await ctx.page.waitForTimeout(100);
+    const smallBody = await ctx.page.locator('.modal .d-body').boundingBox();
+    const smallPop = await ctx.page.locator('#rn-path-pop').boundingBox();
+    assert.ok(smallBody && smallPop && smallPop.y >= smallBody.y && smallPop.y + smallPop.height <= smallBody.y + smallBody.height + 1, '小视口下拉不得被弹层主体裁切');
+    await ctx.page.setViewportSize({ width: 1440, height: 900 });
+    await ctx.page.waitForTimeout(100);
+
+    await ctx.page.locator('.ws-path-item').nth(1).click();
+    assert.equal(await ctx.page.locator('#rn-path').inputValue(), paths[1]);
+    assert.equal(await ctx.page.locator('#rn-path-pop').isHidden(), true);
+
+    await ctx.page.locator('#rn-path-toggle').click();
+    await ctx.page.locator('.ws-path-item').nth(2).locator('.ws-path-del').click();
+    assert.equal(await ctx.page.locator('.ws-path-item').count(), 9);
+    const stored = await ctx.page.evaluate(function () { return JSON.parse(localStorage.getItem('df-launch-workspace-paths')); });
+    assert.equal(stored.byClient['client-stub-01'].length, 9);
+    assert.equal(stored.byClient['client-stub-01'].includes('/tmp/scn0004/recent-2'), false);
+    assert.equal(await ctx.page.locator('#rn-path').inputValue(), paths[1], '删除历史不得改动当前输入');
+
+    const fresh = '/tmp/scn0004/ws-history-new';
+    await ctx.page.fill('#rn-path', fresh);
+    await ctx.page.fill('#stub-intent', '## 历史路径\n\n- 启动成功后写入');
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
+    await ctx.page.waitForURL(/instance-detail\.html\?id=/, { timeout: 8000 });
+    await ctx.page.waitForTimeout(200);
+    const after = await ctx.page.evaluate(function () { return JSON.parse(localStorage.getItem('df-launch-workspace-paths')); });
+    assert.deepEqual(after.byClient['client-stub-01'].slice(0, 3), [fresh, paths[0], paths[1]]);
+    assert.equal(after.byClient['client-stub-01'].length, 10);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0004T8(browser) {
+  const ctx = await open(browser, 'instances', '', {
+    b3: fakeB3, setup: runFixtures, initScript: launchEditorInit, wait: 900
+  });
+  try {
+    await ctx.page.evaluate(function () {
+      localStorage.setItem('df-launch-workspace-paths', 'not-json');
+    });
+    await ctx.page.locator('#in-launch').click();
+    await ctx.page.locator('#stub-intent').waitFor({ timeout: 5000 });
+    await ctx.page.locator('#rn-path-toggle').click();
+    assert.equal(await ctx.page.locator('.ws-path-item').count(), 0);
+    assert.match(await ctx.page.locator('.ws-path-pop').textContent(), /该执行节点暂无历史路径/);
+    assert.equal(await ctx.page.locator('#rn-path').inputValue(), '/Users/chenlong/hundsun/af-workspace-demo');
+    await closeModal(ctx.page);
+    await ctx.page.waitForTimeout(120);
+
+    await ctx.page.evaluate(function () {
+      localStorage.setItem('df-launch-workspace-paths', JSON.stringify({
+        v: 1,
+        byClient: { 'client-other': ['/tmp/scn0004/other-only'] }
+      }));
+    });
+    await ctx.page.locator('#in-launch').click();
+    await ctx.page.locator('#stub-intent').waitFor({ timeout: 5000 });
+    await ctx.page.locator('#rn-path-toggle').click();
+    assert.equal(await ctx.page.locator('.ws-path-item').count(), 0, '其他执行节点的历史不得串入');
+    assert.equal(await ctx.page.locator('.ws-path-pop').textContent().then(function (t) { return t.includes('/tmp/scn0004/other-only'); }), false);
+    await ctx.page.fill('#rn-path', '/tmp/scn0004/manual-path');
+    assert.equal(await ctx.page.locator('#rn-path').inputValue(), '/tmp/scn0004/manual-path', '无历史时仍可手输绝对路径');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
 /* ----------------------------- SCN-0005 ----------------------------- */
 async function scn0005T1(browser) {
   const ctx = await open(browser, 'skills', '', { wait: 600 });
@@ -1241,7 +1338,9 @@ const SCENARIOS = [
     ['SCN-0004-T3', '正', '人工确认后节点推进', scn0004T3],
     ['SCN-0004-T4', '反', '取消终止不改状态', scn0004T4],
     ['SCN-0004-T5', '正', '发起运行按 harness/路径/意图提交', scn0004T5],
-    ['SCN-0004-T6', '正', '多轮节点可切最新/历史并保留打回前内容', scn0004T6]
+    ['SCN-0004-T6', '正', '多轮节点可切最新/历史并保留打回前内容', scn0004T6],
+    ['SCN-0004-T7', '正', '工作区路径历史按执行节点保存、可选择与删除，启动成功后置顶并封顶 10 条', scn0004T7],
+    ['SCN-0004-T8', '反', '损坏或他节点历史不进入下拉与表单，仍可手输路径', scn0004T8]
   ]],
   ['SCN-0005', 'Skill 维护与渐进披露', [
     ['SCN-0005-T1', '正', '列表计数同源', scn0005T1],

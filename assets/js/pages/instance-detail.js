@@ -10,11 +10,14 @@ import { DF } from '../ui.js';
 import { request } from '../shared/http.js';
 import { createWorkflowData } from '../workflow/data.js';
 import { toEditorGraph } from '../workflow/model.js';
-import { renderMarkdown } from '../shared/markdown.js';
+import { fmtMs } from '../run/format.js';
+import { nodeModalTitle, roundsHTML, summaryTab, logTab, confirmCard } from '../run/node-view.js';
+import { paintCanvas } from '../run/views/run-canvas.js';
+import { mountRunFiles } from '../run/views/files.js';
+import { mountRunSession } from '../run/views/session.js';
 import {
   createRunData,
   errorText,
-  durationMs,
   RUN_STATE,
   RUN_OUTCOME,
   NODE_STATE,
@@ -26,37 +29,7 @@ const { esc, icon, tag, dot } = DF;
 const runs = createRunData();
 const workflows = createWorkflowData();
 
-const NODE_W = 168;
-const NODE_H = 58;
 const POLL_MS = 5000;
-
-const NODE_META = {
-  start: { label: '开始节点', cls: 't-plain' },
-  end: { label: '结束节点', cls: 't-plain' },
-  agent: { label: '专家执行节点', cls: 't-agent' },
-  split: { label: '拆分节点', cls: 't-gateway' },
-  review: { label: '评审节点', cls: 't-review' },
-  confirm: { label: '人工确认节点', cls: 't-confirm' },
-  fanout: { label: '展开节点', cls: 't-gateway' }
-};
-
-const NODE_CLASS = {
-  queued: 'st-pending',
-  dispatched: 'st-run',
-  waiting_confirm: 'st-wait',
-  succeeded: 'st-ok',
-  rejected: 'st-rollback',
-  failed: 'st-fail'
-};
-
-const NODE_DOT = {
-  queued: 'gray',
-  dispatched: 'blue',
-  waiting_confirm: 'orange',
-  succeeded: 'green',
-  rejected: 'purple',
-  failed: 'red'
-};
 
 const state = {
   runId: null,
@@ -66,30 +39,17 @@ const state = {
   experts: new Map(),
   nodeVisits: new Map(),
   selectedId: null,
-  tab: 'summary',
   loading: true,
   error: null,
   timer: null,
   version: 0,
   pending: 0,
-  modal: null
+  modal: null,
+  filesModal: null
 };
 
 function shortId(id) {
   return id ? String(id).slice(0, 8) : '—';
-}
-
-function fmtTime(iso) {
-  const ms = iso ? Date.parse(iso) : NaN;
-  return Number.isNaN(ms) ? '—' : DF.fmtClock(new Date(ms));
-}
-
-function fmtMs(fromIso, toIso) {
-  const from = fromIso ? Date.parse(fromIso) : NaN;
-  if (Number.isNaN(from)) return '—';
-  const to = toIso ? Date.parse(toIso) : Date.now();
-  if (Number.isNaN(to)) return '—';
-  return DF.fmtDur(Math.round(Math.max(0, to - from) / 1000));
 }
 
 function syncBell() {
@@ -162,59 +122,70 @@ function schedule() {
 
 /* ---------------- 渲染 ---------------- */
 
-function render() {
-  let body = document.getElementById('page-body');
-  if (!body) return;
-  if (state.loading) {
-    body.innerHTML = '<div class="loading">正在加载运行详情…</div>';
-    return;
-  }
-  if (state.error) {
-    const notFound = state.error.status === 404;
-    body.innerHTML = '<div class="empty"><div class="e-ic">🗂</div>' +
-      (notFound ? '运行不存在或已删除' : esc(errorText(state.error))) + '<br><br>' +
-      (notFound ? '' : '<button class="btn primary" id="id-retry">重试</button> ') +
-      '<a class="btn" href="instances.html">← 返回运行实例</a></div>';
-    const retry = document.getElementById('id-retry');
-    if (retry) retry.onclick = load;
-    return;
-  }
-  const run = state.run;
-  const active = ACTIVE_STATES.indexOf(run.state) >= 0;
-  const wfName = state.workflow ? state.workflow.name : shortId(run.workflowId);
-  const title = shortId(run.runId) + ' · ' + wfName + ' r' + run.workflowRevision;
+function renderLoading(body) {
+  body.innerHTML = '<div class="loading">正在加载运行详情…</div>';
+}
 
-  DF.renderShell({
+function renderError(body) {
+  const notFound = state.error.status === 404;
+  body.innerHTML = '<div class="empty"><div class="e-ic">🗂</div>' +
+    (notFound ? '运行不存在或已删除' : esc(errorText(state.error))) + '<br><br>' +
+    (notFound ? '' : '<button class="btn primary" id="id-retry">重试</button> ') +
+    '<a class="btn" href="instances.html">← 返回运行实例</a></div>';
+  const retry = document.getElementById('id-retry');
+  if (retry) retry.onclick = load;
+}
+
+function headerActions(run, active) {
+  return stateTag(run) +
+    '<span class="sub" style="margin:0 10px">耗时 ' + esc(fmtMs(run.startedAt, run.finishedAt)) + '</span>' +
+    '<button class="btn" id="id-files">' + icon('folder', 14) + '任务文件</button>' +
+    '<button class="btn" id="id-pause" disabled title="后端未提供暂停能力">' + icon('pause', 14) + '暂停</button>' +
+    '<button class="btn" id="id-resume" disabled title="后端未提供恢复能力">' + icon('play', 14) + '恢复</button>' +
+    '<button class="btn" id="id-rerun" disabled title="后端未提供从节点重跑能力">' + icon('retry', 14) + '从节点重跑</button>' +
+    (active ? '<button class="btn danger" id="id-stop">' + icon('stop', 14) + '终止</button>' : '');
+}
+
+function shellOptions(run, active) {
+  const wfName = state.workflow ? state.workflow.name : shortId(run.workflowId);
+  return {
     pendingCount: state.pending,
     active: 'instances',
     breadcrumb: [{ label: '运行与运营' }, { label: '运行实例', href: 'instances.html' }, { label: shortId(run.runId) }],
-    title: title,
+    title: shortId(run.runId) + ' · ' + wfName + ' r' + run.workflowRevision,
     subtitle: '执行节点 ' + (run.clientId || '—') + ' · 工作区 ' + (run.workspacePath || '—') +
       (run.archiveState && run.archiveState !== 'none' ? ' · ' + (ARCHIVE_STATE[run.archiveState] || run.archiveState) : ''),
-    actions:
-      stateTag(run) +
-      '<span class="sub" style="margin:0 10px">耗时 ' + esc(fmtMs(run.startedAt, run.finishedAt)) + '</span>' +
-      '<button class="btn" id="id-pause" disabled title="后端未提供暂停能力">' + icon('pause', 14) + '暂停</button>' +
-      '<button class="btn" id="id-resume" disabled title="后端未提供恢复能力">' + icon('play', 14) + '恢复</button>' +
-      '<button class="btn" id="id-rerun" disabled title="后端未提供从节点重跑能力">' + icon('retry', 14) + '从节点重跑</button>' +
-      (active ? '<button class="btn danger" id="id-stop">' + icon('stop', 14) + '终止</button>' : '')
-  });
+    actions: headerActions(run, active)
+  };
+}
 
+function traceHTML() {
+  return '<div class="id-layout">' +
+    '<div class="id-trace"><div class="cv-wrap" id="cvWrap"><div class="cv-canvas" id="cvCanvas"></div></div>' +
+      '<div class="cv-legend">' +
+        '<b>' + dot('green') + '成功</b><b>' + dot('blue') + '运行中</b><b>' + dot('orange') + '等待人工</b>' +
+        '<b>' + dot('red') + '失败</b><b>' + dot('purple') + '已驳回</b><b>' + dot('gray') + '待执行</b>' +
+        '<b>双击节点查看详情</b></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function render() {
+  let body = document.getElementById('page-body');
+  if (!body) return;
+  if (state.loading) { renderLoading(body); return; }
+  if (state.error) { renderError(body); return; }
+  const run = state.run;
+  const active = ACTIVE_STATES.indexOf(run.state) >= 0;
+  DF.renderShell(shellOptions(run, active));
   const stop = document.getElementById('id-stop');
   if (stop) stop.onclick = stopRun;
-
+  const filesBtn = document.getElementById('id-files');
+  if (filesBtn) filesBtn.onclick = openRunFilesModal;
   body = document.getElementById('page-body');
-  body.innerHTML =
-    '<div class="id-layout">' +
-      '<div class="id-trace"><div class="cv-wrap" id="cvWrap"><div class="cv-canvas" id="cvCanvas"></div></div>' +
-        '<div class="cv-legend">' +
-          '<b>' + dot('green') + '成功</b><b>' + dot('blue') + '运行中</b><b>' + dot('orange') + '等待人工</b>' +
-          '<b>' + dot('red') + '失败</b><b>' + dot('purple') + '已驳回</b><b>' + dot('gray') + '待执行</b>' +
-          '<b>双击节点查看详情</b></div>' +
-      '</div>' +
-    '</div>';
+  body.innerHTML = traceHTML();
   paint();
-  if (state.modal) renderNodeModal();
+  if (state.modal) syncNodeModal();
   syncBell();
 }
 
@@ -227,25 +198,6 @@ function stateTag(run) {
 }
 
 /* ---------------- 画布 ---------------- */
-
-function nodePos(node) {
-  return { x: Number.isFinite(node.x) ? node.x : 60, y: Number.isFinite(node.y) ? node.y : 110 };
-}
-
-function canvasSize() {
-  const nodes = state.graph.nodes;
-  let w = 640;
-  let h = 360;
-  nodes.forEach(function (n) {
-    const p = nodePos(n);
-    w = Math.max(w, p.x + NODE_W + 120);
-    h = Math.max(h, p.y + NODE_H + 120);
-  });
-  state.graph.stages.forEach(function (s) {
-    if (s.box) { w = Math.max(w, s.box.x + s.box.w + 60); h = Math.max(h, s.box.y + s.box.h + 60); }
-  });
-  return { w: w, h: h };
-}
 
 function visitList(nodeId) {
   return state.nodeVisits.get(nodeId) || [];
@@ -274,77 +226,16 @@ function nodeState(nodeId) {
 }
 
 function paint() {
-  const canvas = document.getElementById('cvCanvas');
-  const size = canvasSize();
-  canvas.style.width = size.w + 'px';
-  canvas.style.height = size.h + 'px';
-  canvas.innerHTML = stagesHTML() + edgesHTML() + nodesHTML();
-  canvas.onclick = function (e) {
-    const el = e.target.closest('.cv-node');
-    if (!el || state.selectedId === el.dataset.node) return;
-    state.selectedId = el.dataset.node;
-    paint();
-  };
-  canvas.ondblclick = function (e) {
-    const el = e.target.closest('.cv-node');
-    if (!el) return;
-    const nodeId = el.dataset.node;
-    state.selectedId = nodeId;
-    paint();
-    openNodeModal(nodeId);
-  };
-}
-
-function stagesHTML() {
-  return state.graph.stages.map(function (stage) {
-    if (!stage.box) return '';
-    const b = stage.box;
-    return '<div class="cv-stage" style="left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px">' +
-      '<span class="stage-label">' + esc(stage.name) + '</span></div>';
-  }).join('');
-}
-
-function nodesHTML() {
-  return state.graph.nodes.map(function (n) {
-    const p = nodePos(n);
-    const st = nodeState(n.id);
-    const meta = NODE_META[n.type] || { label: n.type, cls: 't-plain' };
-    const expert = n.expertId ? state.experts.get(n.expertId) : null;
-    const visits = visitList(n.id);
-    const sub = st.label + (st.visit > 1 ? ' · 第 ' + st.visit + ' 轮' : '');
-    const hint = visits.length > 1 ? '双击查看详情（共 ' + visits.length + ' 轮）' : '双击查看详情';
-    return '<div class="cv-node ' + meta.cls + ' ' + (NODE_CLASS[st.key] || 'st-pending') +
-      (state.selectedId === n.id ? ' sel' : '') + '" data-node="' + esc(n.id) + '" title="' + esc(hint) + '"' +
-      ' style="left:' + p.x + 'px;top:' + p.y + 'px;cursor:pointer">' +
-      '<div class="n-head"><span class="e-dot" style="background:' + (expert ? esc(expert.color) : '#94a3b8') + '"></span>' + esc(n.name) + '</div>' +
-      '<div class="n-sub">' + esc(sub) + '</div>' +
-      (expert ? '<div class="n-expert">' + icon('user', 10) + esc(expert.name) + '</div>' : '') +
-      '</div>';
-  }).join('');
-}
-
-function edgesHTML() {
-  let out = '';
-  state.graph.edges.forEach(function (e) {
-    const a = state.graph.nodes.find(function (n) { return n.id === e.from; });
-    const b = state.graph.nodes.find(function (n) { return n.id === e.to; });
-    if (!a || !b) return;
-    const pa = nodePos(a);
-    const pb = nodePos(b);
-    if (e.kind === 'rollback') {
-      const s = { x: pa.x + NODE_W - 22, y: pa.y + NODE_H };
-      const t = { x: pb.x + NODE_W / 2, y: pb.y + NODE_H };
-      const sag = Math.max(70, Math.abs(s.y - t.y) * 0.2 + 60);
-      out += '<path class="e-rb" d="M ' + s.x + ' ' + s.y + ' C ' + (s.x + 40) + ' ' + (s.y + sag) + ', ' + (t.x - 40) + ' ' + (t.y + sag) + ', ' + t.x + ' ' + t.y + '"/>';
-      return;
-    }
-    const s = { x: pa.x + NODE_W, y: pa.y + 29 };
-    const t = { x: pb.x, y: pb.y + 29 };
-    const dx = Math.max(40, Math.abs(t.x - s.x) / 2);
-    out += '<path class="e-seq" d="M ' + s.x + ' ' + s.y + ' C ' + (s.x + dx) + ' ' + s.y + ', ' + (t.x - dx) + ' ' + t.y + ', ' + t.x + ' ' + t.y + '"/>';
+  paintCanvas({
+    canvas: document.getElementById('cvCanvas'),
+    graph: state.graph,
+    experts: state.experts,
+    selectedId: state.selectedId,
+    nodeState: nodeState,
+    visitCount: function (id) { return visitList(id).length; },
+    onSelect: function (id) { state.selectedId = id; paint(); },
+    onOpen: function (id) { state.selectedId = id; paint(); openNodeModal(id); }
   });
-  const size = canvasSize();
-  return '<svg class="cv-edges" width="' + size.w + '" height="' + size.h + '">' + out + '</svg>';
 }
 
 /* ---------------- 节点详情弹层 ---------------- */
@@ -355,195 +246,260 @@ function selectedNode() {
     : null;
 }
 
-function nodeModalTitle(node, record, isLatest) {
-  const meta = NODE_META[node.type] || { label: node.type };
-  let title = node.name + ' · ' + meta.label;
-  if (record && visitList(node.id).length > 1) {
-    title += ' · 第 ' + (Number(record.visit) || 1) + ' 轮' + (isLatest ? '（最新）' : '（历史）');
-  }
-  return title;
-}
-
-/** 轮次 Tab：仅有历史时才出现；最新一轮在左，历史轮次按 visit 倒序。 */
-function roundsHTML(visits, selectedVisit) {
-  if (visits.length <= 1) return '';
-  return '<div class="id-rounds"><span class="lbl">执行轮次</span><div class="id-round-tabs">' +
-    visits.map(function (record, index) {
-      const visit = Number(record.visit) || 1;
-      const on = visit === Number(selectedVisit);
-      return '<button type="button" class="id-round-tab' + (on ? ' on' : '') + '" data-visit="' + visit + '"' +
-        ' title="' + esc(NODE_STATE[record.state] || record.state) + '">' +
-        dot(NODE_DOT[record.state] || 'gray') +
-        esc((index === 0 ? '最新 · 第 ' : '第 ') + visit + ' 轮') + '</button>';
-    }).join('') +
-    '</div><span class="meta">共 ' + visits.length + ' 轮</span></div>';
-}
+const MODAL_TABS = [['summary', '概要'], ['files', '文件'], ['session', '执行会话'], ['log', '会话日志']];
 
 function closeNodeModal() {
   if (!state.modal) return;
   const handle = state.modal.handle;
-  state.modal = null;
   handle.close();
+  if (state.modal && state.modal.handle === handle) {
+    unmountModalViews();
+    state.modal = null;
+  }
 }
 
-/** 双击节点打开 90% × 90% 弹层；首次打开挂 DOM，后续切 Tab 只重绘内容。 */
+function modalBodyHTML() {
+  return '<div id="id-modal-body">' +
+    '<div id="id-rounds"></div>' +
+    '<div id="id-confirm"></div>' +
+    '<div class="id-tabs" id="id-tabs">' +
+      MODAL_TABS.map(function (t) {
+        return '<div class="tab' + (t[0] === 'summary' ? ' active' : '') + '" data-t="' + t[0] + '">' + t[1] + '</div>';
+      }).join('') +
+    '</div>' +
+    '<div class="id-body" id="id-body">' +
+      '<div class="id-panel" data-panel="summary"></div>' +
+      '<div class="id-panel" data-panel="log"></div>' +
+      '<div class="id-panel" data-panel="files"></div>' +
+      '<div class="id-panel" data-panel="session"></div>' +
+    '</div>' +
+  '</div>';
+}
+
+/** 双击节点打开 90% × 90% 弹层；骨架只建一次，轮询只同步内容，不重建文件/会话面板。 */
 function openNodeModal(nodeId) {
   const node = state.graph && state.graph.nodes.find(function (n) { return n.id === nodeId; });
   if (!node) return;
   if (state.modal && state.modal.nodeId === node.id) return;
+  if (state.modal) {
+    const old = state.modal;
+    state.modal = null;
+    if (old.handle) old.handle.close();
+    unmountModalViews(old);
+  }
   state.selectedId = node.id;
-  state.tab = 'summary';
   const latest = latestVisit(node.id);
-  let handle = null;
-  handle = DF.modal.open({
-    title: nodeModalTitle(node, latest, true),
+  const modal = {
+    nodeId: node.id,
+    visit: latest ? (Number(latest.visit) || 1) : null,
+    followLatest: true,
+    tab: 'summary',
+    handle: null,
+    filesState: { root: 'task-space', path: '', selectedPath: null },
+    filesView: null,
+    sessionView: null,
+    sessionVisit: null,
+    roundsKey: '',
+    confirmKey: ''
+  };
+  state.modal = modal;
+  modal.handle = DF.modal.open({
+    title: nodeModalTitle(node, latest, true, visitList(node.id).length),
     size: 'screen',
-    body: '<div id="id-modal-body"></div>',
+    body: modalBodyHTML(),
     footer: '<button class="btn" id="id-modal-close">关闭</button>',
     onMount: function (body, close) {
       const btn = body.closest('.modal').querySelector('#id-modal-close');
       if (btn) btn.onclick = close;
+      bindModalShell(body);
     },
     onClose: function () {
-      if (state.modal && state.modal.handle === handle) state.modal = null;
+      unmountModalViews(modal);
+      if (state.modal === modal) state.modal = null;
     }
   });
-  state.modal = {
-    nodeId: node.id,
-    visit: latest ? (Number(latest.visit) || 1) : null,
-    followLatest: true,
-    handle: handle
-  };
-  renderNodeModal();
+  syncNodeModal();
 }
 
-function renderNodeModal() {
-  const host = document.getElementById('id-modal-body');
-  if (!host) return;
-  const node = selectedNode();
-  if (!node) { closeNodeModal(); return; }
-  const visits = visitList(node.id);
-  if (state.modal.followLatest && visits.length) {
-    state.modal.visit = Number(visits[0].visit) || 1;
+function bindModalShell(body) {
+  body.querySelector('#id-tabs').onclick = function (e) {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+    switchModalTab(tab.dataset.t);
+  };
+  body.querySelector('#id-rounds').onclick = function (e) {
+    const btn = e.target.closest('.id-round-tab');
+    const modal = state.modal;
+    if (!btn || !modal) return;
+    const visit = Number(btn.dataset.visit);
+    const visits = visitList(modal.nodeId);
+    modal.visit = visit;
+    modal.followLatest = visits.length > 0 && visit === (Number(visits[0].visit) || 1);
+    syncNodeModal();
+  };
+  body.addEventListener('click', function (e) {
+    if (e.target.closest('[data-act="open-files"]')) switchModalTab('files');
+  });
+}
+
+function unmountModalViews(modal) {
+  modal = modal || state.modal;
+  if (!modal) return;
+  if (modal.filesView) { modal.filesView.unmount(); modal.filesView = null; }
+  if (modal.sessionView) { modal.sessionView.unmount(); modal.sessionView = null; modal.sessionVisit = null; }
+}
+
+function switchModalTab(tab) {
+  const modal = state.modal;
+  if (!modal || modal.tab === tab) return;
+  if (modal.tab === 'files' && modal.filesView) {
+    modal.filesState = modal.filesView.getState();
+    modal.filesView.unmount();
+    modal.filesView = null;
   }
-  let runNode = visits.length ? findVisit(node.id, state.modal.visit) : null;
+  if (modal.tab === 'session' && modal.sessionView) {
+    modal.sessionView.unmount();
+    modal.sessionView = null;
+    modal.sessionVisit = null;
+  }
+  modal.tab = tab;
+  syncNodeModal();
+}
+
+function resolveModal(modal) {
+  const node = selectedNode();
+  if (!node) return null;
+  const visits = visitList(node.id);
+  if (modal.followLatest && visits.length) {
+    modal.visit = Number(visits[0].visit) || 1;
+  }
+  let runNode = visits.length ? findVisit(node.id, modal.visit) : null;
   if (visits.length && !runNode) {
     runNode = visits[0];
-    state.modal.visit = Number(runNode.visit) || 1;
-    state.modal.followLatest = true;
+    modal.visit = Number(runNode.visit) || 1;
+    modal.followLatest = true;
   }
   const st = visitState(runNode);
   const isLatest = !runNode || (Number(runNode.visit) || 1) === (Number(visits[0].visit) || 1);
-  const confirmable = runNode && isLatest && runNode.state === 'waiting_confirm';
-  const title = nodeModalTitle(node, runNode, isLatest);
+  return {
+    node: node,
+    visits: visits,
+    runNode: runNode,
+    st: st,
+    isLatest: isLatest,
+    confirmable: !!runNode && isLatest && runNode.state === 'waiting_confirm',
+    title: nodeModalTitle(node, runNode, isLatest, visits.length)
+  };
+}
+
+function renderModalChrome(modal, host, resolved) {
   const root = host.closest('.modal');
   const head = root ? root.querySelector('.d-head') : null;
-  if (head && head.firstChild) head.firstChild.textContent = title;
-  host.innerHTML =
-    roundsHTML(visits, state.modal.visit) +
-    (confirmable ? confirmCard(node, runNode) : '') +
-    '<div class="id-tabs">' +
-      [['summary', '概要'], ['log', '会话日志']].map(function (t) {
-        return '<div class="tab' + (state.tab === t[0] ? ' active' : '') + '" data-t="' + t[0] + '">' + t[1] + '</div>';
-      }).join('') +
-    '</div>' +
-    '<div class="id-body" id="id-body"></div>';
-  const roundBar = host.querySelector('.id-rounds');
-  if (roundBar) {
-    roundBar.onclick = function (e) {
-      const btn = e.target.closest('.id-round-tab');
-      if (!btn) return;
-      const visit = Number(btn.dataset.visit);
-      state.modal.visit = visit;
-      state.modal.followLatest = visits.length > 0 && visit === (Number(visits[0].visit) || 1);
-      renderNodeModal();
-    };
+  if (head && head.firstChild) head.firstChild.textContent = resolved.title;
+  const roundsKey = resolved.visits.map(function (v) {
+    return (Number(v.visit) || 1) + ':' + v.state;
+  }).join('|') + '@' + modal.visit;
+  if (roundsKey !== modal.roundsKey) {
+    modal.roundsKey = roundsKey;
+    host.querySelector('#id-rounds').innerHTML = roundsHTML(resolved.visits, modal.visit);
   }
-  host.querySelector('.id-tabs').onclick = function (e) {
-    const t = e.target.closest('.tab');
-    if (!t) return;
-    state.tab = t.dataset.t;
-    renderNodeModal();
-  };
-  const historyNote = runNode && visits.length > 1 && !isLatest
-    ? '<div class="id-history-note">历史轮次 · 第 ' + (Number(runNode.visit) || 1) + ' 轮（仅查看）；人工确认与操作入口在「最新」轮次。</div>'
+  const confirmKey = resolved.confirmable
+    ? resolved.runNode.state + '|' + (resolved.runNode.message || '') + '|' + (Number(resolved.runNode.visit) || 1)
+    : 'none';
+  if (confirmKey !== modal.confirmKey) {
+    modal.confirmKey = confirmKey;
+    const slot = host.querySelector('#id-confirm');
+    slot.innerHTML = resolved.confirmable ? confirmCard(resolved.node, resolved.runNode) : '';
+    if (resolved.confirmable) bindConfirm(resolved.node);
+  }
+  host.querySelectorAll('#id-tabs .tab').forEach(function (tab) {
+    tab.classList.toggle('active', tab.dataset.t === modal.tab);
+  });
+  host.querySelectorAll('.id-panel').forEach(function (panel) {
+    panel.classList.toggle('on', panel.dataset.panel === modal.tab);
+  });
+}
+
+function renderModalPanels(modal, host, resolved) {
+  const historyNote = resolved.runNode && resolved.visits.length > 1 && !resolved.isLatest
+    ? '<div class="id-history-note">历史轮次 · 第 ' + (Number(resolved.runNode.visit) || 1) + ' 轮（仅查看）；人工确认与操作入口在「最新」轮次。</div>'
     : '';
-  const bodyEl = host.querySelector('#id-body');
-  if (state.tab === 'log') bodyEl.innerHTML = historyNote + logTab(node, runNode);
-  else bodyEl.innerHTML = historyNote + summaryTab(node, st, runNode, { isLatest: isLatest, count: visits.length });
-  if (confirmable) bindConfirm(node, runNode);
-}
+  const summaryPanel = host.querySelector('[data-panel="summary"]');
+  const logPanel = host.querySelector('[data-panel="log"]');
+  summaryPanel.innerHTML = modal.tab === 'summary'
+    ? historyNote + summaryTab(resolved.node, resolved.st, resolved.runNode, { isLatest: resolved.isLatest, count: resolved.visits.length }, state.experts)
+    : '';
+  logPanel.innerHTML = modal.tab === 'log'
+    ? historyNote + logTab(resolved.node, resolved.runNode, state.run.runId, runs.sessionLogUrl)
+    : '';
 
-/** 节点消息与确认说明按 Markdown 渲染；详情本身已是 90% 弹层，不再提供二次全屏。 */
-function mdBlock(title, text) {
-  return '<div class="section-title">' + esc(title) + ' <span class="line"></span></div>' +
-    '<div class="md-body">' + renderMarkdown(text) + '</div>';
-}
-
-function summaryTab(node, st, runNode, opt) {
-  opt = opt || {};
-  const manyRounds = (opt.count || 0) > 1;
-  const isLatest = opt.isLatest !== false;
-  const meta = NODE_META[node.type] || { label: node.type };
-  const expert = node.expertId ? state.experts.get(node.expertId) : null;
-  const verdict = runNode && runNode.verdict;
-  const rows = [
-    ['状态', tag(st.label, st.key === 'succeeded' ? 'green' : st.key === 'failed' ? 'red' : st.key === 'rejected' ? 'purple' : st.key === 'waiting_confirm' ? 'orange' : st.key === 'dispatched' ? 'blue' : 'gray')],
-    ['节点类型', esc(meta.label)],
-    ['专家', expert ? '<span class="expert-dot" style="background:' + esc(expert.color) + ';width:16px;height:16px;font-size:9px;border-radius:4px">' + esc(String(expert.name).slice(0, 1)) + '</span> ' + esc(expert.name) : (node.expertId ? '<span class="mono">' + esc(node.expertId) + '</span>' : '—')],
-    ['访问轮次', runNode ? '第 ' + esc(runNode.visit) + ' 轮' + (manyRounds ? (isLatest ? '（最新）' : '（历史）') : '') : '—'],
-    ['任务 ID', runNode && runNode.taskId ? '<span class="mono">' + esc(runNode.taskId) + '</span>' : '—'],
-    ['下发时间', esc(fmtTime(runNode && runNode.dispatchedAt))],
-    ['完成时间', esc(fmtTime(runNode && runNode.finishedAt))],
-    ['节点耗时', runNode && runNode.dispatchedAt ? esc(fmtMs(runNode.dispatchedAt, runNode.finishedAt)) : '—']
-  ];
-  let html = '<div class="id-node-h"><b>' + esc(node.name) + '</b>' + tag(meta.label, 'gray') + tag(st.label, 'gray') +
-    (manyRounds ? tag(isLatest ? '最新轮次' : '历史轮次', isLatest ? 'blue' : 'gray') : '') + '</div>' + DF.kv(rows);
-  if (verdict) {
-    html += '<div class="section-title">判定结论 <span class="line"></span></div>' +
-      '<pre class="id-pre">' + esc(typeof verdict === 'string' ? verdict : JSON.stringify(verdict, null, 2)) + '</pre>';
+  if (modal.tab === 'files') {
+    if (!modal.filesView) {
+      modal.filesView = mountRunFiles(host.querySelector('[data-panel="files"]'), {
+        runId: state.run.runId,
+        root: modal.filesState.root,
+        path: modal.filesState.path,
+        selectedPath: modal.filesState.selectedPath
+      });
+    }
+  } else if (modal.filesView) {
+    modal.filesState = modal.filesView.getState();
+    modal.filesView.unmount();
+    modal.filesView = null;
   }
-  if (runNode && runNode.message) html += mdBlock('节点消息', runNode.message);
-  if (runNode && runNode.error) {
-    html += '<div class="section-title">错误 <span class="line"></span></div>' +
-      '<pre class="id-pre id-pre-err">' + esc((runNode.error.code || '') + '：' + (runNode.error.message || '')) + '</pre>';
+
+  if (modal.tab === 'session') {
+    if (!modal.sessionView || modal.sessionVisit !== modal.visit) {
+      if (modal.sessionView) modal.sessionView.unmount();
+      modal.sessionView = mountRunSession(host.querySelector('[data-panel="session"]'), {
+        runId: state.run.runId,
+        nodeId: resolved.node.id,
+        visit: modal.visit
+      });
+      modal.sessionVisit = modal.visit;
+    }
+  } else if (modal.sessionView) {
+    modal.sessionView.unmount();
+    modal.sessionView = null;
+    modal.sessionVisit = null;
   }
-  html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' +
-    '<button class="btn sm" disabled title="后端未提供节点重试能力">' + icon('retry', 12) + '重试节点</button>' +
-    '<button class="btn sm" disabled title="后端未提供从节点重跑能力">' + icon('retry', 12) + '从此节点重跑</button>' +
-    '</div>' +
-    '<div class="sub" style="margin-top:10px">输入与输出、工作区文件留痕：当前执行面未提供对应端点。</div>';
-  return html;
 }
 
-function logTab(node, runNode) {
-  if (!runNode) return '<div class="sub" style="color:var(--t-3)">该节点尚未下发执行，暂无会话日志。</div>';
-  if (!runNode.taskId) {
-    return '<div class="sub" style="color:var(--t-3)">该节点没有执行会话（人工确认节点不产生会话日志）。</div>';
-  }
-  const visit = Number(runNode.visit) || 1;
-  return '<div class="section-title">会话日志 <span class="line"></span></div>' +
-    '<div class="sub" style="margin-bottom:10px">第 ' + visit + ' 轮由执行节点上传的 gzip JSONL（<span class="mono">' + esc(runNode.taskId) + '</span>）。</div>' +
-    '<a class="btn primary" href="' + esc(runs.sessionLogUrl(state.run.runId, node.id, { visit: visit })) + '"' +
-      ' download="session-' + esc(node.id) + '-v' + visit + '.ndjson.gz">' +
-      icon('download', 14) + '下载第 ' + visit + ' 轮会话日志</a>' +
-    '<div class="sub" style="margin-top:8px">首次点击若提示 404，表示执行节点尚未上传该轮日志。</div>';
+function syncNodeModal() {
+  const modal = state.modal;
+  const host = document.getElementById('id-modal-body');
+  if (!modal || !host) return;
+  const resolved = resolveModal(modal);
+  if (!resolved) { closeNodeModal(); return; }
+  renderModalChrome(modal, host, resolved);
+  renderModalPanels(modal, host, resolved);
 }
 
-/* ---------------- 人工确认 ---------------- */
-
-function confirmCard(node, runNode) {
-  return '<div class="id-confirm-card">' +
-    '<h4>' + icon('warn', 14) + ' 待人工确认 · ' + esc(node.name) + '</h4>' +
-    (runNode.message ? mdBlock('确认说明', runNode.message) : '<div class="sub">执行节点正在等待确认决策。</div>') +
-    '<input class="inp" id="cf-comment" placeholder="审批意见（批准选填 / 驳回必填）" style="margin:8px 0">' +
-    '<div style="display:flex;gap:8px">' +
-      '<button class="btn primary" id="cf-ok">' + icon('check', 12) + '批准，继续执行</button>' +
-      '<button class="btn danger" id="cf-no">' + icon('x', 12) + '驳回</button>' +
-    '</div></div>';
+/** 页头「任务文件」：独立 90% 弹层，只挂文件视图；与节点弹层共用同一个只读组件。 */
+function openRunFilesModal() {
+  if (!state.run || state.filesModal) return;
+  const box = { handle: null, view: null };
+  state.filesModal = box;
+  box.handle = DF.modal.open({
+    title: '任务文件 · ' + shortId(state.run.runId),
+    size: 'screen',
+    body: '<div id="id-run-files"></div>',
+    footer: '<button class="btn" id="id-files-close">关闭</button>',
+    onMount: function (body, close) {
+      const btn = body.closest('.modal').querySelector('#id-files-close');
+      if (btn) btn.onclick = close;
+      box.view = mountRunFiles(body.querySelector('#id-run-files'), { runId: state.run.runId });
+    },
+    onClose: function () {
+      if (state.filesModal !== box) return;
+      if (box.view) box.view.unmount();
+      box.view = null;
+      state.filesModal = null;
+    }
+  });
 }
 
-function bindConfirm(node, runNode) {
+function bindConfirm(node) {
   const ok = document.getElementById('cf-ok');
   const no = document.getElementById('cf-no');
   if (!ok || !no) return;

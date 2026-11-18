@@ -138,6 +138,127 @@ for (const k of Object.keys(MOCK)) {
   function runNotFound() {
     return { status: 404, body: { error: { code: 'run_not_found', message: '运行不存在', details: { runId: '' } } } };
   }
+  function fakeEntry(name, path, type, sizeBytes, contentType, language, previewable) {
+    return {
+      name: name, path: path, type: type, sizeBytes: sizeBytes,
+      modifiedAt: '2026-11-18T00:00:00.000Z', hidden: false, previewable: previewable !== false,
+      contentType: contentType || null, language: language || null
+    };
+  }
+  function fileListingResult(run, query) {
+    var root = query.root === 'workspace' ? 'workspace' : 'task-space';
+    var path = query.path || '';
+    if (path.indexOf('..') >= 0) {
+      return { status: 400, body: { error: { code: 'path_escape', message: '路径非法' } } };
+    }
+    var tree = root === 'workspace'
+      ? { '': [fakeEntry('README.md', 'README.md', 'file', 240, 'text/markdown; charset=utf-8', 'markdown')] }
+      : {
+        '': [
+          fakeEntry('intent.md', 'intent.md', 'file', 105, 'text/markdown; charset=utf-8', 'markdown'),
+          fakeEntry('src', 'src', 'dir', null, null, null),
+          fakeEntry('main.ts', 'main.ts', 'file', 180, 'text/typescript; charset=utf-8', 'typescript'),
+          fakeEntry('logo.png', 'logo.png', 'file', 2048, 'image/png', null),
+          fakeEntry('big.log', 'big.log', 'file', 2097152, 'text/plain; charset=utf-8', 'text')
+        ],
+        'src': [fakeEntry('index.ts', 'src/index.ts', 'file', 120, 'text/typescript; charset=utf-8', 'typescript')]
+      };
+    return {
+      status: 200,
+      body: { runId: run.runId, root: root, path: path, entries: tree[path] || [], truncated: false, fetchedAt: new Date().toISOString() }
+    };
+  }
+  function fileContentResult(run, query) {
+    var root = query.root === 'workspace' ? 'workspace' : 'task-space';
+    var path = query.path || '';
+    if (path.indexOf('..') >= 0) {
+      return { status: 400, body: { error: { code: 'path_escape', message: '路径非法' } } };
+    }
+    var base = { runId: run.runId, root: root, path: path, modifiedAt: '2026-11-18T00:00:00.000Z', fetchedAt: new Date().toISOString() };
+    if (root === 'workspace' && path === 'README.md') {
+      return { status: 200, body: Object.assign(base, { name: 'README.md', sizeBytes: 240, contentType: 'text/markdown; charset=utf-8', language: 'markdown', content: '# 工作区\n\n共享产物。\n', truncated: false, reason: null }) };
+    }
+    if (root !== 'task-space') return notFound();
+    if (path === 'intent.md') {
+      return { status: 200, body: Object.assign(base, { name: 'intent.md', sizeBytes: 105, contentType: 'text/markdown; charset=utf-8', language: 'markdown', content: '# 启动意图\n\n创建 hello.txt。\n', truncated: false, reason: null }) };
+    }
+    if (path === 'main.ts' || path === 'src/index.ts') {
+      return { status: 200, body: Object.assign(base, {
+        name: path === 'main.ts' ? 'main.ts' : 'index.ts', sizeBytes: 120,
+        contentType: 'text/typescript; charset=utf-8', language: 'typescript',
+        content: path === 'main.ts'
+          ? "export function hello(name: string) {\n  return 'hello ' + name;\n}\n"
+          : "import { hello } from './main';\n\nhello('world');\n",
+        truncated: false, reason: null
+      }) };
+    }
+    if (path === 'logo.png') {
+      return { status: 200, body: Object.assign(base, { name: 'logo.png', sizeBytes: 2048, contentType: 'image/png', language: null, content: null, truncated: false, reason: 'binary' }) };
+    }
+    if (path === 'big.log') {
+      return { status: 200, body: Object.assign(base, { name: 'big.log', sizeBytes: 2097152, contentType: 'text/plain; charset=utf-8', language: 'text', content: 'line 1\n', truncated: true, reason: null }) };
+    }
+    return notFound();
+  }
+  function sessionStatus(node) {
+    if (node.state === 'dispatched') return 'running';
+    if (node.state === 'failed') return 'failed';
+    return 'completed';
+  }
+  function sessionView(run, node) {
+    return {
+      runId: run.runId,
+      nodeId: node.nodeId,
+      visit: Number(node.visit) || 1,
+      status: sessionStatus(node),
+      cwd: '/tmp/fake/ws-history',
+      startedAt: node.dispatchedAt || new Date().toISOString(),
+      finishedAt: node.finishedAt || null,
+      eventCount: run.eventProfile === 'many' ? 217 : 3,
+      archive: { status: 'stored', sizeBytes: run.eventProfile === 'many' ? 381510 : 42063, sha256: 'abc' }
+    };
+  }
+  function sessionEvents(run, node) {
+    if (run.eventProfile === 'many') return manySessionEvents(node);
+    var ts = node.dispatchedAt || new Date().toISOString();
+    return [
+      { seq: 1, ts: ts, kind: 'phase', event: 'session.started', data: {} },
+      { seq: 2, ts: ts, kind: 'phase', event: 'prompt.sent', message: '读取 intent.md', data: {} },
+      { seq: 3, ts: ts, kind: 'tool', event: 'tool.call', message: 'shell: ls', data: { text: 'evidence intent.md' } }
+    ];
+  }
+  /** 217 条事件：66 次工具调用、42 次 usage、37 段思考、2 段消息、2 条 phase、2 条 result。 */
+  function manySessionEvents(node) {
+    var start = Date.parse(node.dispatchedAt || Date.now());
+    var list = [];
+    var seq = 0;
+    function push(offsetSec, kind, event, message, data) {
+      seq++;
+      var item = { seq: seq, ts: new Date(start + offsetSec * 1000).toISOString(), kind: kind, event: event, data: data || {} };
+      if (message) item.message = message;
+      list.push(item);
+    }
+    push(0, 'phase', 'session.started', '', {});
+    push(1, 'phase', 'prompt.sent', '', { bytes: 811 });
+    var tools = ['bash', 'bash', 'bash', 'bash', 'edit', 'write', 'read', 'skill'];
+    for (var i = 0; i < 66; i++) {
+      var tool = tools[i % tools.length];
+      push(2 + i * 2, 'acp', 'tool_call', 'tool call: ' + tool, { acpType: 'tool_call', tool: tool, status: 'in_progress' });
+      push(3 + i * 2, 'acp', 'tool_call_update', 'tool ' + tool + ': completed', { acpType: 'tool_call_update', tool: tool, status: 'completed' });
+    }
+    for (var t = 0; t < 37; t++) {
+      push(140 + t, 'acp', 'agent_thought_chunk', 'thought: ' + ((t + 1) * 20) + ' bytes', { acpType: 'agent_thought_chunk' });
+    }
+    for (var u = 0; u < 42; u++) {
+      var used = Math.round(6340 + (u + 1) * (109917 / 42));
+      push(180 + u, 'acp', 'usage_update', 'usage: ' + used + '/1000000', { acpType: 'usage_update', usage: { used: used, size: 1000000 } });
+    }
+    push(225, 'acp', 'agent_message_chunk', 'assistant: 完成', { acpType: 'agent_message_chunk' });
+    push(226, 'acp', 'agent_message_chunk', 'assistant: 汇报', { acpType: 'agent_message_chunk' });
+    push(227, 'result', 'task.result', 'result: succeeded', { status: 'succeeded' });
+    push(228, 'result', 'task.result', 'result: final', { status: 'succeeded' });
+    return list;
+  }
   function runResource(parts, method, body, headers, query) {
     var id = parts[1];
     if (method === 'GET' && parts.length === 1) {
@@ -188,6 +309,39 @@ for (const k of Object.keys(MOCK)) {
       });
       if (!target || !target.taskId) return Promise.resolve(notFound());
       return Promise.resolve({ status: 200, body: null, headers: { 'Content-Type': 'application/x-ndjson', 'Content-Encoding': 'gzip', 'X-Checksum-Sha256': 'x' } });
+    }
+    if (method === 'GET' && parts[2] === 'files') {
+      if (run.filesError) {
+        return Promise.resolve({ status: run.filesError.status, body: { error: { code: run.filesError.code, message: run.filesError.message || run.filesError.code } } });
+      }
+      if (parts[3] === 'content') return Promise.resolve(fileContentResult(run, query));
+      return Promise.resolve(fileListingResult(run, query));
+    }
+    if (method === 'GET' && parts[2] === 'nodes' && parts[4] === 'session') {
+      if (run.sessionError) {
+        return Promise.resolve({ status: run.sessionError.status, body: { error: { code: run.sessionError.code, message: run.sessionError.message || run.sessionError.code } } });
+      }
+      var visitNo = Number(query.visit) || 0;
+      var node = run.nodes.find(function (n) {
+        return n.nodeId === parts[3] && (!visitNo || (Number(n.visit) || 1) === visitNo);
+      });
+      if (!node || !node.taskId) {
+        return Promise.resolve({ status: 404, body: { error: { code: 'session_not_linked', message: '节点尚未关联会话' } } });
+      }
+      if (parts[5] === 'raw') {
+        return Promise.resolve({ status: 200, body: 'raw', headers: { 'Content-Type': 'application/zstd', 'Content-Length': '3', ETag: '"sha256-abc"', 'X-Checksum-Sha256': 'abc', 'Content-Disposition': 'attachment; filename="s.zst"' } });
+      }
+      if (parts[5] === 'events') {
+        var allEvents = sessionEvents(run, node);
+        var cursor = Number(query.cursor) || 0;
+        var pageLimit = Math.max(1, Math.min(200, Number(query.limit) || 50));
+        var pageItems = allEvents.filter(function (e) { return e.seq > cursor; }).slice(0, pageLimit);
+        var next = pageItems.length ? String(pageItems[pageItems.length - 1].seq) : undefined;
+        var payload = { items: pageItems };
+        if (next) payload.nextCursor = next;
+        return Promise.resolve({ status: 200, body: payload });
+      }
+      return Promise.resolve({ status: 200, body: sessionView(run, node) });
     }
     return Promise.resolve(notFound());
   }

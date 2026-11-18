@@ -2,7 +2,7 @@
 layer: plan
 module: global
 status: current
-updated: 2026-11-17
+updated: 2026-11-18
 ---
 
 # 路线图
@@ -26,6 +26,10 @@ updated: 2026-11-17
 | M13 | 真实专家与 Skill 内容提取（旁路）：16 专家 / 30 Skill 入 B1；执行 `catalog.md`、`import-plan.md` | 主体完成（2026-11-02；S4 工作流 9 条、4 工具、4 类知识未做，另立工序） | `history/works/2026-11-01-expert-skill-extraction/` |
 | M14 | 节点详情交互统一：双击 90% 弹层，移除右侧抽屉/面板与节点消息二次全屏 | 已完成（2026-11-17；SCN-0019 24/24、SCN-0004 5/5、`npm test` 通过） | `REQ-0020` / `SCN-0019` / `SCN-0004` / `history/works/2026-11-17-node-detail-modal/` |
 | M15 | 运行节点多轮历史：按 `visit` 保留全部轮次，弹层轮次 Tab 查看最新与历史；历史轮只读、日志按轮下载 | 已完成（2026-11-17；SCN-0004 6/6、`npm test` 通过） | `REQ-0021` / `SCN-0004` / `history/works/2026-11-17-run-node-history/` |
+| M16 | 运行节点观测：文件与执行会话 Tab（`API-48`–`53`）、BFF 流式、页头任务文件入口 | 已完成（2026-11-18；SCN-0021 6/6、BFF 16/16、真实 run 文件/会话/raw 走查） | `REQ-0022` / `SCN-0021` / `history/works/2026-11-18-node-observability/` |
+| M17 | 执行会话概览与事件筛选：统计卡、分页、筛选/搜索、工具调用合并 | 已完成（2026-11-18；SCN-0021 7/7、真实 217 条会话走查） | `REQ-0023` / `SCN-0021` / `history/works/2026-11-18-session-overview/` |
+| M18 | rich 事件归一化：preview/rich 统一模型、`toolCallId` 配对与 `tool.durationMs` | 已完成（2026-11-18；SCN-0021 7/7、真实运行 `01a1ebf5…` 实时走查） | 旁路 / `SCN-0021` / `history/works/2026-11-18-rich-normalize/` |
+| M19 | 发起运行工作区路径历史：按 `clientId` 存最近 10 条，下拉选择与单条删除 | 已完成（2026-11-18；SCN-0004 8/8） | `REQ-0024` / `SCN-0004` / `history/works/2026-11-18-launch-workspace-history/` |
 
 > **M1 追溯与验收（2026-10-23 用户要求）**：10 个页面组件已补 `REQ-0002..0011` + M1 场景，组件 frontmatter 反查、`check-docs` 强制。`tools/verify-m1-scenarios.js` 覆盖 10 场景 × 3 正 1 反，40/40 通过；SCN 转 `verified`、REQ 转 `delivered`，R7/R10 关闭。详见 `history/works/2026-10-23-m1-scenario-verification/result.md`。
 

@@ -27,7 +27,7 @@ docs/
 
 ## 组件清单（`design/components/` 目录名即组件 ID）
 
-`ui-shell` · `workflow-list` · `workflow-editor` · `skills` · `experts` · `harnesses` · `tools` · `instances` · `analytics` · `workspaces` · `keys` · `bff`
+`ui-shell` · `workflow-list` · `workflow-editor` · `skills` · `experts` · `harnesses` · `tools` · `instances` · `run-files` · `run-session` · `analytics` · `workspaces` · `keys` · `bff`
 
 每个组件目录内 `spec.md` 为入口规格；组件的公开能力以 `CMP-<id>` 引用，场景入口写成 `CMP-<id>/file#symbol`。
 

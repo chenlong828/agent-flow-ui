@@ -3,7 +3,7 @@ layer: design
 module: global
 status: current
 generated: true
-updated: 2026-11-17
+updated: 2026-11-18
 ---
 
 # 场景索引
@@ -12,10 +12,10 @@ updated: 2026-11-17
 
 ## 统计
 
-- 场景：18
-- 文档用例：86
-- Playwright runner：59
-- 其他执行层：27（引擎 / BFF / 真实 B1）
+- 场景：19
+- 文档用例：96
+- Playwright runner：61
+- 其他执行层：35（引擎 / BFF / 真实 B1）
 
 ## 清单
 
@@ -39,3 +39,4 @@ updated: 2026-11-17
 | SCN-0018 | SCN-0018 工作流列表同源浏览、创建与生命周期 | flow / workflow-list | verified | `design/scenarios/flow/workflow-list/browse-workflows-live/scenario.md` |
 | SCN-0019 | SCN-0019 工作流编辑器同源加载、校验与保存 | flow / workflow-editor | verified | `design/scenarios/flow/workflow-editor/edit-workflow-live/scenario.md` |
 | SCN-0020 | SCN-0020 MOCK 演示页关闭与演示模式 | shell / navigation | verified | `design/scenarios/shell/navigation/mock-pages-gate/scenario.md` |
+| SCN-0021 | SCN-0021 运行节点文件与执行会话审查 | operations / instances | verified | `design/scenarios/operations/instances/inspect-node-observability/scenario.md` |
