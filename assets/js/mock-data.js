@@ -250,7 +250,6 @@
   }
 
   /* ============ 运行实例 ============ */
-  const wf1 = workflows[0].graph.nodes;
   const instances = [
     {
       id: 'INS-2041', wfId: 'w1', ver: 'v1.2', status: '运行中', workspaceId: 'ws1',

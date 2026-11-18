@@ -3,7 +3,7 @@
  * 运行时依赖准入门禁（零依赖）
  * 用法: node tools/check-deps.js
  * 校验：design/dependencies.md 清单 JSON、页面外链/vendor 引用、vendor 文件存在与
- * SHA-256/体积、页面 JS 裸模块、BFF/server 的 import、package.json 运行时依赖。
+ * SHA-256/体积、页面 JS 裸模块、BFF/server 的 import、package.json 运行时/开发工具依赖。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -41,11 +41,13 @@ if (!fs.existsSync(REGISTRY)) err('缺 docs/design/dependencies.md（依赖准�
 const md = fs.existsSync(REGISTRY) ? fs.readFileSync(REGISTRY, 'utf8') : '';
 const block = md.match(/```json\n([\s\S]*?)```/);
 let deps = [];
+let devTools = [];
 if (!block) err('dependencies.md: 缺 ```json 清单块');
 else {
   try {
     const reg = JSON.parse(block[1]);
     deps = Array.isArray(reg.deps) ? reg.deps : [];
+    devTools = Array.isArray(reg.devTools) ? reg.devTools : [];
   } catch (e) {
     err(`dependencies.md: JSON 清单无法解析（${e.message}）`);
   }
@@ -62,6 +64,14 @@ for (const d of deps) {
   if (d.version && !/^\d+\.\d+\.\d+$/.test(d.version)) err(`${d.id}: 版本须精确到 patch（${d.version}）`);
   if (d.path && !d.path.startsWith('assets/vendor/')) err(`${d.id}: 依赖必须自托管到 assets/vendor/（${d.path}）`);
   if (typeof d.gzipKb !== 'number') err(`${d.id}: 缺 gzipKb 实测值`);
+}
+
+/* 2.1 开发工具条目 */
+for (const tool of devTools) {
+  if (!tool || !tool.name) { err(`非法开发工具条目: ${JSON.stringify(tool)}`); continue; }
+  if (!/^\d+\.\d+\.\d+$/.test(tool.version || '')) err(`开发工具 ${tool.name}: 版本须精确到 patch（${tool.version}）`);
+  if (tool.license && !LICENSES.has(tool.license)) err(`开发工具 ${tool.name}: 许可证 ${tool.license} 不在白名单`);
+  if (!tool.purpose) err(`开发工具 ${tool.name}: 缺 purpose`);
 }
 
 /* 3. 文件存在、哈希、体积 */
@@ -141,15 +151,22 @@ for (const p of [path.join(ROOT, 'server.js'), ...walk(path.join(ROOT, 'bff'), (
   }
 }
 
-/* 8. package.json 不得有运行时/构建期依赖（构建链另案 P1） */
+/* 8. package.json：运行时依赖必须为空；devDependencies 只允许已登记开发工具 */
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-for (const k of ['dependencies', 'devDependencies']) {
-  const list = Object.keys(pkg[k] || {});
-  if (list.length) err(`package.json: ${k} 必须为空（构建链另案 P1），发现 ${list.join(', ')}`);
+const runtimeDeps = Object.keys(pkg.dependencies || {});
+if (runtimeDeps.length) err(`package.json: dependencies 必须为空，发现 ${runtimeDeps.join(', ')}`);
+const devDeps = pkg.devDependencies || {};
+const registeredTools = new Map(devTools.map((tool) => [tool.name, tool.version]));
+for (const [name, version] of Object.entries(devDeps)) {
+  if (!registeredTools.has(name)) err(`package.json: 未登记 devDependency ${name}`);
+  else if (registeredTools.get(name) !== version) err(`package.json: ${name} 版本须为 ${registeredTools.get(name)}（当前 ${version}）`);
+}
+for (const name of registeredTools.keys()) {
+  if (!(name in devDeps)) err(`dependencies.md: 已登记开发工具 ${name}，但 package.json 未安装`);
 }
 
 console.log(`registry: ${path.relative(ROOT, REGISTRY)}`);
-console.log(`registered deps: ${deps.length} | total new gzip: ${totalKb} KiB`);
+console.log(`registered deps: ${deps.length} | dev tools: ${devTools.length} | total new gzip: ${totalKb} KiB`);
 if (warnings.length) {
   console.log('\nWARN（体积为观测项，不阻断）:');
   warnings.forEach((w) => console.log(' -', w));

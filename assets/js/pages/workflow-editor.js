@@ -17,7 +17,7 @@ import {
   toDsl,
   toEditorGraph
 } from '../workflow/model.js';
-import { NODE_W, NODE_H, autoSides, canvasSize, edgeSvg, linkPreviewPath, nodeHtml, portPos, stageHtml } from '../workflow/views/canvas.js';
+import { NODE_W, autoSides, canvasSize, edgeSvg, linkPreviewPath, nodeHtml, portPos, stageHtml } from '../workflow/views/canvas.js';
 import { edgeInspector, nodeInspector, stageInspector } from '../workflow/views/inspector.js';
 import { dslHtml } from '../workflow/views/dsl.js';
 import {
@@ -77,20 +77,12 @@ function expertOf(expertId) {
   return state.experts.find(function (e) { return e.id === expertId; }) || null;
 }
 
-function expertLabel(expertId) {
-  if (!expertId) return '未绑定';
-  const expert = expertOf(expertId);
-  return expert ? expert.name + (expert.enabled === false ? '（停用）' : '') : expertId;
-}
-
 function refreshValidation() {
   if (!state.graph) return;
   const report = validateEditorGraph(state.graph, state.experts);
   state.errors = normalizeIssues(report.errors);
   state.warnings = normalizeIssues(report.warnings);
 }
-
-function hasServerIssues() { return state.serverIssues.length > 0; }
 
 function allErrors() {
   return state.errors.concat(state.serverIssues);
@@ -150,7 +142,7 @@ async function init() {
   try {
     const page = await API.list('expert', { limit: 200, offset: 0 });
     state.experts = (page.items || []).slice();
-  } catch (err) {
+  } catch {
     state.expertError = '专家列表加载失败，绑定存在性将由服务端校验';
     state.experts = [];
   }
@@ -806,7 +798,7 @@ function bindInspector() {
     const height = document.getElementById('if-sh');
     name.oninput = function () { stage.name = name.value; state.dirty = true; refreshValidation(); renderHeader(); refreshInspectorTitle(); paint(); };
     desc.oninput = function () { stage.description = desc.value; state.dirty = true; refreshValidation(); renderHeader(); paint(); };
-    width.oninput = function () { stage.box.w = Math.max(120, Number(width.value) || 460); stage.box = stage.box; state.dirty = true; refreshValidation(); renderHeader(); paint(); };
+    width.oninput = function () { stage.box.w = Math.max(120, Number(width.value) || 460); state.dirty = true; refreshValidation(); renderHeader(); paint(); };
     height.oninput = function () { stage.box.h = Math.max(80, Number(height.value) || 200); state.dirty = true; refreshValidation(); renderHeader(); paint(); };
     document.getElementById('if-del').onclick = deleteSelected;
   } else if (edge) {

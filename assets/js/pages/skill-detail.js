@@ -641,7 +641,7 @@ import { SKILL_MD } from './skill-detail-markdown.js';
       DF.toast('已保存 · 当前版本 ' + res.version, 'ok');
       state.id = res.id;
       state.mode = 'view';
-      try { history.replaceState(null, '', 'skill-detail.html?id=' + encodeURIComponent(res.id)); } catch (e) {}
+      try { history.replaceState(null, '', 'skill-detail.html?id=' + encodeURIComponent(res.id)); } catch {}
       state.skill = null;
       loadDetail();
     }).catch(function (err) {

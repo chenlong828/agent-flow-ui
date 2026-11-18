@@ -1,0 +1,20 @@
+{
+  "ignorePatterns": ["assets/vendor/**", "node_modules/**"],
+  "rules": {
+    "max-lines": ["warn", { "max": 600 }],
+    "max-lines-per-function": ["warn", { "max": 120 }],
+    "max-params": ["warn", 6],
+    "max-depth": ["warn", 5],
+    "complexity": ["warn", 25],
+    "max-statements": ["warn", 60],
+    "no-unused-vars": "warn",
+    "no-self-assign": "warn"
+  },
+  "overrides": [
+    { "files": ["assets/js/ui.js", "assets/js/pages/skill-detail.js", "assets/js/pages/experts.js", "assets/js/pages/workflow-editor.js"], "rules": { "max-lines": "off" } },
+    { "files": ["assets/js/pages/keys.js", "assets/js/pages/workspaces.js", "assets/js/pages/analytics.js", "assets/js/pages/workspace-detail.js", "assets/js/pages/tools.js"], "rules": { "max-lines-per-function": "off" } },
+    { "files": ["assets/js/pages/experts.js"], "rules": { "complexity": "off" } },
+    { "files": ["assets/js/mock-data.js"], "rules": { "max-params": "off" } },
+    { "files": ["assets/js/shared/markdown.js"], "rules": { "no-control-regex": "off" } }
+  ]
+}

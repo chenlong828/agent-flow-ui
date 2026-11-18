@@ -8,7 +8,7 @@
 import { DF } from '../ui.js';
 import { API } from '../api.js';
 import { createWorkflowData, errorText } from '../workflow/data.js';
-import { minimalGraph, graphCounts } from '../workflow/model.js';
+import { minimalGraph } from '../workflow/model.js';
 
 const { esc, icon, tag, toast } = DF;
 const data = createWorkflowData();
@@ -113,7 +113,7 @@ async function loadExperts() {
   try {
     const page = await API.list('expert', { limit: 200, offset: 0 });
     state.experts = (page.items || []).slice();
-  } catch (err) {
+  } catch {
     state.experts = [];
   }
 }

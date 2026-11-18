@@ -43,7 +43,7 @@ const server = http.createServer((req, res) => {
   let urlPath;
   try {
     urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-  } catch (e) {
+  } catch {
     res.writeHead(400); return res.end('Bad Request');
   }
 

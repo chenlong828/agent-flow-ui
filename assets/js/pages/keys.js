@@ -204,10 +204,6 @@ function init() {
         const hint = document.getElementById('ky-ssh-hint');
         let curType = '';
 
-        function selType() {
-          const r = b.querySelector('input[name="ky-type"]:checked');
-          return r ? r.value : '';
-        }
         function syncModelOpts() {
           const prov = document.getElementById('ky-llm-provider').value;
           document.getElementById('ky-llm-model').innerHTML =

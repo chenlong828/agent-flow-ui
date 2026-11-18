@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-28
+updated: 2026-11-18
 ---
 
 # 开发环境配置（本机实况）
@@ -84,7 +84,7 @@ updated: 2026-10-28
 
 - 用途：跑 `SCN-0004..0011`、`SCN-0014`、`SCN-0015`、`SCN-0016`、`SCN-0017` 的业务断言（各场景至少 3 正 1 反；`SCN-0013` 已废弃、挂起不执行；原工作流列表/编辑器场景已归档，现由 `SCN-0018/0019` 取代）；执行层是真实 WebKit，不是 DOM 模拟。
 - 无需另装 jsdom。`tools/test-harness.js` 在 `127.0.0.1:0` 自起临时静态服务，用 `page.route` 把 `/api/v1/**` 接到 `tools/fake-b1.js`，每个场景独立 page；结束后关闭浏览器与静态服务。
-- 运行：`npm run test:scenarios`；单场景 `node tools/verify-m1-scenarios.js SCN-0007`。
+- 运行：`npm run test:scenarios`；单场景 `node tools/verify-m1-scenarios.js SCN-0007`；运行节点观测：`npm run test:observability`。
 - Milkdown 渲染层：`npm run test:skill-render`，用真实 WebKit + vendor bundle 验证只读渲染、语法高亮与原始 HTML 不执行。
 - 引擎层（Playwright WebKit，需 `:3000` 静态服务 + B1）：
   ```bash
@@ -123,3 +123,23 @@ updated: 2026-10-28
 
 - 调试方法与断言模板：`docs/design/debugging-and-testing.md`
 - 坑档案（环境类坑的存续条件）：`docs/history/pitfalls.md`
+
+## 6 代码风格门禁（oxlint）
+
+- 首次使用：`npm install`（或 `npm ci`）安装 devDependency `oxlint@1.90.0`；页面运行时仍零第三方依赖，无需安装。
+- 命令：`npm run check:style` → `oxlint assets/js bff server.js --max-warnings 0`；配置 `.oxlintrc.json`。
+- 工具：`devDependencies.oxlint = 1.90.0`，只用于本地/CI 风格检查，不进入页面、不被 `assets/js/**`、`bff/**` import；准入登记见 `design/dependencies.md` §7。
+- UI 阈值（相对 orchaster 放宽）：
+  - 单文件 ≤ 600 行（>500 打印提醒，不单独报错）；
+  - 单函数 ≤ 120 行；
+  - 参数 ≤ 6；
+  - 嵌套 ≤ 5；
+  - 复杂度 ≤ 25；
+  - 单函数语句 ≤ 60；
+  - 未使用变量/参数为警告（允许 `_` 前缀显式忽略）。
+- 存量覆盖：`.oxlintrc.json` 的 `overrides` 只关闭具体规则，不整文件忽略：
+  - `max-lines`：`ui.js`、`skill-detail.js`、`experts.js`、`workflow-editor.js`；
+  - `max-lines-per-function`：`keys.js`、`workspaces.js`、`analytics.js`、`workspace-detail.js`、`tools.js`；
+  - `complexity`：`experts.js`；`max-params`：`mock-data.js`；`no-control-regex`：`shared/markdown.js`。
+  - 新增/修改代码不得新增覆盖项；存量文件缩小时同步收紧覆盖。
+- `npm test` / `npm run test:gate` 已包含 `check:style`；`package.json` 的 `devDependencies` 出现未登记项由 `check:deps` 拦截。

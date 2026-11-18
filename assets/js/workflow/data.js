@@ -120,7 +120,7 @@ export function createWorkflowData() {
     let body;
     try {
       body = JSON.parse(text);
-    } catch (err) {
+    } catch {
       throw new ApiError(400, 'invalid_json', 'DSL 不是合法的 JSON');
     }
     return request({ method: 'POST', path: BASE + '/import', body: body }).then(function (result) {

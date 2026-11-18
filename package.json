@@ -7,25 +7,30 @@
   "scripts": {
     "start": "node server.js",
     "start:bff": "node bff/standalone.js",
-    "check:syntax": "for f in server.js bff/*.js assets/js/ui.js assets/js/mock-data.js assets/js/api.js assets/js/shared/*.js assets/js/workflow/*.js assets/js/workflow/views/*.js assets/js/pages/*.js tools/*.js tools/*.mjs tests/bff/*.js tests/shared/*.js tests/workflow/*.js; do node --check \"$f\" || exit 1; done",
+    "check:syntax": "for f in server.js bff/*.js assets/js/ui.js assets/js/mock-data.js assets/js/api.js assets/js/shared/*.js assets/js/workflow/*.js assets/js/workflow/views/*.js assets/js/run/*.js assets/js/run/views/*.js assets/js/pages/*.js tools/*.js tools/*.mjs tests/bff/*.js tests/shared/*.js tests/workflow/*.js; do node --check \"$f\" || exit 1; done",
     "check:docs": "node tools/check-docs.js docs",
     "check:deps": "node tools/check-deps.js",
     "check:architecture": "node tools/check-architecture.js",
     "check:scenario-trace": "node tools/check-scenario-trace.js",
     "docs:index": "node tools/gen-scenario-index.js docs",
     "docs:index:check": "node tools/gen-scenario-index.js --check docs",
-    "test": "npm run check:syntax && npm run check:docs && npm run docs:index:check && npm run check:deps && npm run check:architecture && npm run check:scenario-trace && npm run test:shared && npm run test:bff && npm run test:smoke && npm run test:mock-pages && npm run test:scenarios && npm run test:workflow",
-    "test:gate": "npm run check:syntax && npm run check:docs && npm run docs:index:check && npm run check:deps && npm run check:architecture && npm run check:scenario-trace && npm run test:shared && npm run test:bff",
+    "test": "npm run check:syntax && npm run check:style && npm run check:docs && npm run docs:index:check && npm run check:deps && npm run check:architecture && npm run check:scenario-trace && npm run test:shared && npm run test:bff && npm run test:smoke && npm run test:mock-pages && npm run test:scenarios && npm run test:observability && npm run test:workflow",
+    "test:gate": "npm run check:syntax && npm run check:style && npm run check:docs && npm run docs:index:check && npm run check:deps && npm run check:architecture && npm run check:scenario-trace && npm run test:shared && npm run test:bff",
     "test:shared": "node --test tests/shared",
     "test:bff": "node --test tests/bff",
     "test:smoke": "node tools/smoke-test.js",
     "test:engine": "BASE_URL=http://127.0.0.1:3000/pages/ node tools/verify-user-menu.js",
     "test:scenarios": "node tools/verify-m1-scenarios.js",
+    "test:observability": "node tools/verify-node-observability.js",
     "test:b1-pages": "node tools/verify-b1-pages.js",
     "test:b1-writes": "node tools/verify-b1-writes.js",
     "test:skill-render": "node tools/verify-skill-page-render.js",
     "test:skill-engine": "BASE_URL=http://127.0.0.1:3000 node tools/verify-skill-page-engine.js",
     "test:workflow": "node --test tests/workflow && node tools/verify-workflow-list.js && node tools/verify-workflow-editor.js",
-    "test:mock-pages": "node tools/verify-mock-pages.js"
+    "test:mock-pages": "node tools/verify-mock-pages.js",
+    "check:style": "oxlint assets/js bff server.js --max-warnings 0"
+  },
+  "devDependencies": {
+    "oxlint": "1.90.0"
   }
 }

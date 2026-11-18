@@ -16,7 +16,7 @@ import { MOCK } from '../mock-data.js';
     try {
       const o = JSON.parse(DF.ssGet(WS_KEY) || 'null');
       return (o && o.id && String(o.id).indexOf('ws-new') === 0) ? o : null;
-    } catch (e) { return null; }
+    } catch { return null; }
   }
   function saveNewWs(o) { DF.ssSet(WS_KEY, JSON.stringify(o)); }
   function dropNewWs(id) {

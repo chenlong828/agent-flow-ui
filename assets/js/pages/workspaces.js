@@ -185,7 +185,7 @@ function init() {
       footer: '<button class="btn" id="wz-prev" style="visibility:hidden">上一步</button>' +
               '<button class="btn primary" id="wz-next">下一步</button>',
       onClose() { cancelled = true; },
-      onMount(body, close) {
+      onMount(body, _close) {
         const foot = body.closest('.modal').querySelector('.d-foot');
         const bPrev = foot.querySelector('#wz-prev');
         const bNext = foot.querySelector('#wz-next');

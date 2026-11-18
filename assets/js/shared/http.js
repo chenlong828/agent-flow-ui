@@ -33,7 +33,7 @@ function normalizeIssues(details) {
 
 function parse(text) {
   if (!text) return null;
-  try { return JSON.parse(text); } catch (err) { return null; }
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 function errorFrom(status, data) {

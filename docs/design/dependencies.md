@@ -2,12 +2,12 @@
 layer: design
 module: global
 status: current
-updated: 2026-10-28
+updated: 2026-11-18
 ---
 
-# 第三方运行时依赖准入
+# 第三方运行时依赖与开发工具准入
 
-> 本清单是「运行时依赖」的唯一数据源：规则 + 已登记依赖。门禁 `tools/check-deps.js` 读取本文末尾的 JSON 块并扫描源码；`tools/check-docs.js` 校验 `DEP-xxxx` 引用可解析。
+> 本清单是「运行时依赖」与「开发工具」的唯一数据源：规则 + 已登记条目。门禁 `tools/check-deps.js` 读取本文末尾的 JSON 块并扫描源码；`tools/check-docs.js` 校验 `DEP-xxxx` 引用可解析。
 >
 > 并入 `architecture.md` 会让架构文档随每次准入频繁改版；清单需要独立机读数据源与独立更新频率，故单独成文（`module: global`）。
 
@@ -27,7 +27,7 @@ updated: 2026-10-28
 
 - 唯一允许形态：单文件 ESM / UMD 构建产物，落 `assets/vendor/<name>/<version>/<file>`。
 - 版本精确钉住（`1.2.3`，禁止 `^` / `~` / `latest`）；登记 SHA-256。
-- 页面用本地 `<script>` 或 ESM 引用；`package.json` 的 `dependencies` / `devDependencies` 保持为空。
+- 页面用本地 `<script>` 或 ESM 引用；`package.json` 的 `dependencies` 保持为空，`devDependencies` 只允许第 7 节登记的开发工具。
 - 确需构建链（npm 包 + bundler）的组件不在此形态内，必须另案 P1 决策，由本清单登记 `form: build` 的例外（当前为 0 条）。
 
 ## 4 准入程序
@@ -78,16 +78,24 @@ updated: 2026-10-28
   - `assets/vendor/**` 下存在未登记文件 → 失败；
   - `assets/js/**` 出现裸模块名（非相对路径）→ 失败；
   - `bff/**` require 非 Node 内置 / 非相对路径 → 失败；
-  - `package.json` 出现 `dependencies` / `devDependencies` 条目 → 失败；
+  - `package.json` 出现未登记的 `dependencies` / `devDependencies` 条目 → 失败；
   - 登记文件缺失、SHA-256 不符、实测 gzip 大于登记值 → 失败；
   - `DEP-xxxx` 引用解析不到 → 失败。
 
 ## 6 已登记依赖（机读）
 
-> `check-deps.js` 读取此 JSON 块；当前已登记 1 条第三方运行时依赖（`DEP-0001`）。
+> `check-deps.js` 读取此 JSON 块；当前已登记 1 条第三方运行时依赖（`DEP-0001`）与 1 条开发工具（`oxlint`）。
 
 ```json
 {
+  "devTools": [
+    {
+      "name": "oxlint",
+      "version": "1.90.0",
+      "license": "MIT",
+      "purpose": "本地代码风格门禁（npm run check:style）；不进入页面、不随产品发布"
+    }
+  ],
   "deps": [
     {
       "id": "DEP-0001",
@@ -103,3 +111,10 @@ updated: 2026-10-28
   ]
 }
 ```
+
+## 7 开发工具依赖（不随页面发布）
+
+- 仅允许 `devDependencies`，版本精确钉住；工具不得被 `assets/js/**`、`pages/**` 或 `bff/**` import。
+- 当前登记：`oxlint`（MIT，1.90.0），用于 `npm run check:style` 的文件行数、函数行数、参数、嵌套、复杂度与未使用变量检查。
+- 规则阈值与存量文件覆盖见 `.oxlintrc.json`；阈值调整属于风格规则变更，需同步本节与 `dev-environment.md`。
+- 新增/升级开发工具仍按 P2 处理（用户签字后登记）。

@@ -74,11 +74,11 @@
   }
 
   /* ---------------- 本地存储（统一 try-catch，隐私模式不抛错） ---------------- */
-  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 忽略 */ } }
-  function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
-  function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) { /* 忽略 */ } }
-  function ssRemove(k) { try { sessionStorage.removeItem(k); } catch (e) { /* 忽略 */ } }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* 忽略 */ } }
+  function ssGet(k) { try { return sessionStorage.getItem(k); } catch { return null; } }
+  function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch { /* 忽略 */ } }
+  function ssRemove(k) { try { sessionStorage.removeItem(k); } catch { /* 忽略 */ } }
 
   /* ---------------- 文件下载（Blob + a[download]，各页导出共用） ---------------- */
   function download(filename, content, mime) {
@@ -206,7 +206,7 @@
       if (demo === '1') { ssSet(DEMO_STORE_KEY, '1'); return true; }
       if (demo === '0') { ssRemove(DEMO_STORE_KEY); return false; }
       return ssGet(DEMO_STORE_KEY) === '1';
-    } catch (e) { return false; }
+    } catch { return false; }
   }
   function mockPageHidden(active) { return MOCK_PAGE_IDS.indexOf(active) >= 0 && !demoOn(); }
 
