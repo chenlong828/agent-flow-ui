@@ -11,13 +11,24 @@ import { request } from '../shared/http.js';
 import { createWorkflowData } from '../workflow/data.js';
 import { toEditorGraph } from '../workflow/model.js';
 import { fmtMs } from '../run/format.js';
-import { nodeModalTitle, roundsHTML, summaryTab, logTab, confirmCard } from '../run/node-view.js';
+import {
+  nodeModalTitle,
+  roundsHTML,
+  summaryTab,
+  logTab,
+  confirmCard,
+  confirmModeOf,
+  confirmKeyOf,
+  readDecisionComment,
+  decisionToast
+} from '../run/node-view.js';
 import { paintCanvas } from '../run/views/run-canvas.js';
 import { mountRunFiles } from '../run/views/files.js';
 import { mountRunSession } from '../run/views/session.js';
 import {
   createRunData,
   errorText,
+  decisionErrorText,
   RUN_STATE,
   RUN_OUTCOME,
   NODE_STATE,
@@ -434,7 +445,7 @@ function resolveModal(modal) {
     runNode: runNode,
     st: st,
     isLatest: isLatest,
-    confirmable: !!runNode && isLatest && runNode.state === 'waiting_confirm',
+    confirmMode: runNode && isLatest ? confirmModeOf(node, runNode) : null,
     waitingResume: !!runNode && isLatest && runNode.state === 'waiting_resume' && state.run.state === 'waiting_resume',
     title: nodeModalTitle(node, runNode, isLatest, visits.length)
   };
@@ -451,14 +462,12 @@ function renderModalChrome(modal, host, resolved) {
     modal.roundsKey = roundsKey;
     host.querySelector('#id-rounds').innerHTML = roundsHTML(resolved.visits, modal.visit);
   }
-  const confirmKey = resolved.confirmable
-    ? resolved.runNode.state + '|' + (resolved.runNode.message || '') + '|' + (Number(resolved.runNode.visit) || 1)
-    : 'none';
+  const confirmKey = confirmKeyOf(resolved.confirmMode, resolved.runNode);
   if (confirmKey !== modal.confirmKey) {
     modal.confirmKey = confirmKey;
     const slot = host.querySelector('#id-confirm');
-    slot.innerHTML = resolved.confirmable ? confirmCard(resolved.node, resolved.runNode) : '';
-    if (resolved.confirmable) bindConfirm(resolved.node);
+    slot.innerHTML = resolved.confirmMode ? confirmCard(resolved.node, resolved.runNode, resolved.confirmMode) : '';
+    if (resolved.confirmMode) bindConfirm(resolved.node, resolved.confirmMode);
   }
   host.querySelectorAll('#id-tabs .tab').forEach(function (tab) {
     tab.classList.toggle('active', tab.dataset.t === modal.tab);
@@ -552,21 +561,58 @@ function openRunFilesModal() {
   });
 }
 
-function bindConfirm(node) {
+/** 决策响应就是更新后的 RunDetail：直接重绘并继续轮询，不再二次 GET 详情。 */
+function applyDecisionDetail(detail) {
+  if (!detail || !Array.isArray(detail.nodes)) { load(); return; }
+  state.version++;
+  state.run = detail;
+  indexNodes(detail);
+  state.error = null;
+  render();
+  schedule();
+  runs.list({ state: 'waiting_confirm', limit: 1 }).then(function (page) {
+    state.pending = page.total || 0;
+    syncBell();
+  }).catch(function () {});
+}
+
+function bindConfirm(node, mode) {
+  if (mode === 'abnormal') {
+    const refresh = document.getElementById('cf-refresh');
+    if (refresh) refresh.onclick = function () { load(); };
+    return;
+  }
   const ok = document.getElementById('cf-ok');
   const no = document.getElementById('cf-no');
   if (!ok || !no) return;
+  let busy = false;
   const send = function (decision) {
-    const comment = (document.getElementById('cf-comment').value || '').trim();
-    if (decision === 'reject' && !comment) { DF.toast('驳回必须填写意见', 'err'); return; }
+    if (busy) return;
+    const comment = readDecisionComment(mode);
+    if (decision === 'reject' && !comment) {
+      DF.toast(mode === 'confirmation' ? '拒绝必须选择选项或填写说明' : '驳回必须填写意见', 'err');
+      return;
+    }
+    busy = true;
     ok.disabled = true; no.disabled = true;
-    runs.decide(state.run.runId, node.id, { decision: decision, comment: comment || undefined }).then(function () {
-      DF.toast(decision === 'pass' ? '已批准，流程继续' : '已驳回，流程回退', decision === 'pass' ? 'ok' : 'warn');
-      load();
-    }).catch(function (err) {
-      ok.disabled = false; no.disabled = false;
-      DF.toast(errorText(err), 'err');
-    });
+    runs.decide(state.run.runId, node.id, { decision: decision, comment: comment || undefined })
+      .then(function (detail) {
+        busy = false;
+        DF.toast(decisionToast(mode, decision), decision === 'pass' ? 'ok' : 'warn');
+        applyDecisionDetail(detail);
+      })
+      .catch(function (err) {
+        busy = false;
+        ok.disabled = false; no.disabled = false;
+        if (err && err.status === 404) {
+          DF.toast('运行或节点已不存在', 'err');
+          closeNodeModal();
+          load();
+          return;
+        }
+        DF.toast(decisionErrorText(err), 'err');
+        if (err && err.status === 409) load();
+      });
   };
   ok.onclick = function () { send('pass'); };
   no.onclick = function () { send('reject'); };

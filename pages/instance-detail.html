@@ -115,6 +115,22 @@
 .id-wait-acts{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;}
 .id-wait-acts .sub{color:var(--t-3);font-size:12px;}
 .id-confirm-card h4{font-size:14px;margin-bottom:8px;}
+/* 执行中确认点（MCP confirmation_request）：问题/上下文/候选答案/补充说明 */
+.id-confirm-point .id-cf-q{font-size:14px;font-weight:600;margin:2px 0 8px;}
+.id-cf-label{font-size:11px;color:var(--t-3);margin:10px 0 4px;}
+.id-confirm-point .id-cf-context{margin-bottom:4px;}
+.id-cf-options{display:flex;flex-direction:column;gap:6px;margin:4px 0 2px;}
+.id-cf-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--c-line-2);border-radius:6px;background:#fff;font-size:13px;cursor:pointer;}
+.id-cf-opt:hover{border-color:var(--c-primary);}
+.id-cf-opt:has(input:checked){border-color:var(--c-primary);background:var(--c-primary-bg);color:var(--c-primary);font-weight:600;}
+.id-cf-opt input{accent-color:var(--c-primary);margin:0;}
+.id-cf-note{margin:2px 0 4px;}
+.id-cf-note summary{cursor:pointer;font-size:12px;color:var(--t-2);padding:2px 0;}
+.id-cf-note .md-body{max-height:160px;}
+.id-cf-summary{margin-bottom:8px;}
+.id-cf-opt-list{font-size:13px;color:var(--t-2);}
+.id-fold{margin:4px 0 10px;}
+.id-fold summary{cursor:pointer;font-size:12px;color:var(--t-2);}
 .md h4{margin:8px 0 4px;font-size:13px;}
 .md ul{margin:4px 0 8px 18px;}
 .md p{margin:4px 0;}

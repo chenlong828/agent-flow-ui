@@ -12,9 +12,9 @@ updated: 2026-11-18
 
 ## 统计
 
-- 场景：19
-- 文档用例：99
-- Playwright runner：64
+- 场景：20
+- 文档用例：107
+- Playwright runner：72
 - 其他执行层：35（引擎 / BFF / 真实 B1）
 
 ## 清单
@@ -40,3 +40,4 @@ updated: 2026-11-18
 | SCN-0019 | SCN-0019 工作流编辑器同源加载、校验与保存 | flow / workflow-editor | verified | `design/scenarios/flow/workflow-editor/edit-workflow-live/scenario.md` |
 | SCN-0020 | SCN-0020 MOCK 演示页关闭与演示模式 | shell / navigation | verified | `design/scenarios/shell/navigation/mock-pages-gate/scenario.md` |
 | SCN-0021 | SCN-0021 运行节点文件与执行会话审查 | operations / instances | verified | `design/scenarios/operations/instances/inspect-node-observability/scenario.md` |
+| SCN-0022 | SCN-0022 执行中确认点（MCP confirmation_request） | operations / instances | verified | `design/scenarios/operations/instances/confirm-during-execution/scenario.md` |

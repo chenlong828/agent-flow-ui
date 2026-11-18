@@ -73,9 +73,98 @@ function summaryRows(node, st, runNode, opt, experts) {
   ];
 }
 
+/**
+ * 解析 `confirmation_request` 形状（不看节点状态）：用于等待卡与概要 Tab；
+ * 等待卡是否出现仍由 `confirmationOf` / `confirmModeOf` 按 waiting_confirm 判断。
+ */
+export function confirmationFromVerdict(verdict) {
+  if (!verdict || typeof verdict !== 'object' || Array.isArray(verdict)) return null;
+  if (verdict.kind !== 'confirmation_request') return null;
+  if (typeof verdict.question !== 'string' || verdict.question.trim() === '') return null;
+  return verdict;
+}
+
+/**
+ * `waiting_confirm` 有两种来源：`confirm` 节点（nodeType=confirm）与执行中确认点
+ * （agent/design 节点执行中通过 MCP 回传 `confirmation_request`）。
+ * 只认 RunNodeView，不按节点类型猜；question 为空或 verdict 形状不对时返回 null。
+ */
+export function confirmationOf(runNode) {
+  if (!runNode || runNode.state !== 'waiting_confirm') return null;
+  return confirmationFromVerdict(runNode.verdict);
+}
+
+/** 仅最新轮等待中的节点返回 confirm / confirmation / abnormal；其余返回 null。 */
+export function confirmModeOf(node, runNode) {
+  if (!runNode || runNode.state !== 'waiting_confirm') return null;
+  if ((runNode.nodeType || (node && node.type)) === 'confirm') return 'confirm';
+  return confirmationOf(runNode) ? 'confirmation' : 'abnormal';
+}
+
+/**
+ * 确认卡的轮询重建键：执行中确认点不含 message，避免 5s 轮询把用户已选的选项/输入清空；
+ * 选项或问题变化时才重建。
+ */
+export function confirmKeyOf(mode, runNode) {
+  if (!mode || !runNode) return 'none';
+  const visit = Number(runNode.visit) || 1;
+  if (mode === 'confirm') {
+    return 'confirm|' + runNode.state + '|' + (runNode.message || '') + '|' + visit;
+  }
+  if (mode === 'confirmation') {
+    const request = confirmationOf(runNode);
+    if (!request) return 'confirmation|missing|' + visit;
+    const options = Array.isArray(request.options) ? request.options : [];
+    return 'confirmation|' + runNode.state + '|' + String(runNode.verdict.kind || '') + '|' +
+      request.question + '|' + JSON.stringify(options) + '|' + visit;
+  }
+  return 'abnormal|' + runNode.state + '|' + visit;
+}
+
+/** 选项 + 补充说明统一拼进 comment；不生成 answer 字段。 */
+export function readDecisionComment(mode) {
+  const input = document.getElementById('cf-comment');
+  const text = (input ? input.value : '').trim();
+  if (mode !== 'confirmation') return text;
+  const picked = document.querySelector('#id-confirm input[name="cf-option"]:checked');
+  return [picked ? picked.value.trim() : '', text].filter(Boolean).join('\n');
+}
+
+/** confirm 节点沿用原有文案；执行中确认点的 reject 不回退，不能写「流程回退」。 */
+export function decisionToast(mode, decision) {
+  if (mode === 'confirmation') {
+    return decision === 'pass' ? '已确认，继续执行' : '已拒绝，意见已反馈';
+  }
+  return decision === 'pass' ? '已批准，流程继续' : '已驳回，流程回退';
+}
+
+function optionsOf(request) {
+  return Array.isArray(request.options)
+    ? request.options.filter(function (option) { return typeof option === 'string'; })
+    : [];
+}
+
 function verdictBlock(verdict) {
   return '<div class="section-title">判定结论 <span class="line"></span></div>' +
     '<pre class="id-pre">' + esc(typeof verdict === 'string' ? verdict : JSON.stringify(verdict, null, 2)) + '</pre>';
+}
+
+/** 执行中确认点：结构化展示问题/上下文/候选答案，原始 verdict 收进折叠区。 */
+function confirmationBlock(request, verdict) {
+  const options = optionsOf(request);
+  return '<div class="section-title">确认请求 <span class="line"></span></div>' +
+    '<div class="id-cf-summary">' +
+      '<div class="id-cf-q">' + esc(request.question) + '</div>' +
+      (request.context
+        ? '<div class="id-cf-label">上下文</div><div class="md-body">' + renderMarkdown(request.context) + '</div>'
+        : '') +
+      (options.length
+        ? '<div class="id-cf-label">候选答案</div><div class="id-cf-opt-list">' + options.map(esc).join(' / ') + '</div>'
+        : '') +
+    '</div>' +
+    '<details class="id-fold"><summary>原始 verdict</summary>' +
+      '<pre class="id-pre">' + esc(typeof verdict === 'string' ? verdict : JSON.stringify(verdict, null, 2)) + '</pre>' +
+    '</details>';
 }
 
 function errorBlock(runNode) {
@@ -125,7 +214,10 @@ export function summaryTab(node, st, runNode, opt, experts) {
   let html = '<div class="id-node-h"><b>' + esc(node.name) + '</b>' + tag(meta.label, 'gray') + tag(st.label, 'gray') +
     (manyRounds ? tag(isLatest ? '最新轮次' : '历史轮次', isLatest ? 'blue' : 'gray') : '') + '</div>' +
     DF.kv(summaryRows(node, st, runNode, { manyRounds: manyRounds, isLatest: isLatest }, experts));
-  if (runNode && runNode.verdict) html += verdictBlock(runNode.verdict);
+  if (runNode && runNode.verdict) {
+    const request = confirmationFromVerdict(runNode.verdict);
+    html += request ? confirmationBlock(request, runNode.verdict) : verdictBlock(runNode.verdict);
+  }
   if (runNode && runNode.message) html += mdBlock('节点消息', runNode.message);
   if (runNode && runNode.state === 'waiting_resume' && isLatest && opt.waitingResume) {
     html += resumeNotice(runNode, opt.resuming);
@@ -138,6 +230,9 @@ export function summaryTab(node, st, runNode, opt, experts) {
 export function logTab(node, runNode, runId, sessionLogUrl) {
   if (!runNode) return '<div class="sub" style="color:var(--t-3)">该节点尚未下发执行，暂无会话日志。</div>';
   if (!runNode.taskId) {
+    if (confirmationOf(runNode)) {
+      return '<div class="sub" style="color:var(--t-3)">该确认点尚未关联执行会话；确认后以续跑任务恢复同一 session。</div>';
+    }
     return '<div class="sub" style="color:var(--t-3)">该节点没有执行会话（人工确认节点不产生会话日志）。</div>';
   }
   const visit = Number(runNode.visit) || 1;
@@ -149,7 +244,7 @@ export function logTab(node, runNode, runId, sessionLogUrl) {
     '<div class="sub" style="margin-top:8px">首次点击若提示 404，表示执行节点尚未上传该轮日志。</div>';
 }
 
-export function confirmCard(node, runNode) {
+function nodeConfirmCard(node, runNode) {
   return '<div class="id-confirm-card">' +
     '<h4>' + icon('warn', 14) + ' 待人工确认 · ' + esc(node.name) + '</h4>' +
     (runNode.message ? mdBlock('确认说明', runNode.message) : '<div class="sub">执行节点正在等待确认决策。</div>') +
@@ -158,4 +253,47 @@ export function confirmCard(node, runNode) {
       '<button class="btn primary" id="cf-ok">' + icon('check', 12) + '批准，继续执行</button>' +
       '<button class="btn danger" id="cf-no">' + icon('x', 12) + '驳回</button>' +
     '</div></div>';
+}
+
+function confirmationCard(node, runNode, request) {
+  const options = optionsOf(request);
+  return '<div class="id-confirm-card id-confirm-point">' +
+    '<h4>' + icon('warn', 14) + ' 执行中确认 · ' + esc(node.name) + '</h4>' +
+    '<div class="id-cf-q">' + esc(request.question) + '</div>' +
+    (request.context
+      ? '<div class="id-cf-label">上下文</div><div class="id-cf-context md-body">' + renderMarkdown(request.context) + '</div>'
+      : '') +
+    (options.length
+      ? '<div class="id-cf-label">选择</div><div class="id-cf-options" role="radiogroup" aria-label="候选答案">' +
+        options.map(function (option, index) {
+          return '<label class="id-cf-opt"><input type="radio" name="cf-option" value="' + esc(option) + '" data-i="' + index + '">' +
+            '<span>' + esc(option) + '</span></label>';
+        }).join('') +
+        '</div>'
+      : '') +
+    '<input class="inp" id="cf-comment" placeholder="补充说明（可选）" style="margin:8px 0">' +
+    (runNode.message
+      ? '<details class="id-cf-note"><summary>模型说明</summary><div class="md-body">' + renderMarkdown(runNode.message) + '</div></details>'
+      : '') +
+    '<div style="display:flex;gap:8px;margin-top:8px">' +
+      '<button class="btn primary" id="cf-ok">' + icon('check', 12) + '确认并继续</button>' +
+      '<button class="btn danger" id="cf-no">' + icon('x', 12) + '拒绝并反馈</button>' +
+    '</div></div>';
+}
+
+function abnormalConfirmCard(node) {
+  return '<div class="id-confirm-card id-confirm-abnormal">' +
+    '<h4>' + icon('warn', 14) + ' 等待人工确认 · ' + esc(node.name) + '</h4>' +
+    '<div class="sub">该节点处于等待确认状态，但缺少可识别的确认信息（可能是旧数据或状态不同步）。本卡片不提供提交入口，请刷新后重试。</div>' +
+    '<div style="margin-top:8px"><button class="btn" id="cf-refresh">' + icon('refresh', 12) + '刷新详情</button></div>' +
+    '</div>';
+}
+
+export function confirmCard(node, runNode, mode) {
+  if (mode === 'confirmation') {
+    const request = confirmationOf(runNode);
+    return request ? confirmationCard(node, runNode, request) : abnormalConfirmCard(node);
+  }
+  if (mode === 'abnormal') return abnormalConfirmCard(node);
+  return nodeConfirmCard(node, runNode);
 }

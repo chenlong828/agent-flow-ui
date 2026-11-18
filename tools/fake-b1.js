@@ -334,6 +334,16 @@ for (const k of Object.keys(MOCK)) {
       if (decision !== 'pass' && decision !== 'reject') {
         return Promise.resolve({ status: 400, body: { error: { code: 'validation_error', message: 'decision 必须是 pass 或 reject' } } });
       }
+      /* 执行中确认点：pass/reject 都续跑同一节点，visit 不变、taskId 替换，不推进到 n3。 */
+      if (node.verdict && node.verdict.kind === 'confirmation_request') {
+        node.state = 'dispatched';
+        node.taskId = 't-resume-' + nodeId + '-' + (++seq);
+        node.finishedAt = null;
+        run.state = 'running';
+        run.outcome = null;
+        run.currentNodeId = nodeId;
+        return Promise.resolve({ status: 200, body: runDetail(run) });
+      }
       node.state = decision === 'pass' ? 'succeeded' : 'rejected';
       node.finishedAt = new Date().toISOString();
       node.message = (body.comment || node.message || '');

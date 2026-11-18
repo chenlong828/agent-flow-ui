@@ -31,6 +31,7 @@ updated: 2026-11-18
 | M18 | rich 事件归一化：preview/rich 统一模型、`toolCallId` 配对与 `tool.durationMs` | 已完成（2026-11-18；SCN-0021 7/7、真实运行 `01a1ebf5…` 实时走查） | 旁路 / `SCN-0021` / `history/works/2026-11-18-rich-normalize/` |
 | M19 | 发起运行工作区路径历史：按 `clientId` 存最近 10 条，下拉选择与单条删除 | 已完成（2026-11-18；SCN-0004 8/8） | `REQ-0024` / `SCN-0004` / `history/works/2026-11-18-launch-workspace-history/` |
 | M20 | 超时节点继续执行：`waiting_resume` 状态、等待横幅/节点继续卡、续跑端点与 409/503 处理 | 已完成（2026-11-18；SCN-0004 11/11、M1 58/58） | `REQ-0025` / `SCN-0004` / `history/works/2026-11-18-run-timeout-resume-ui/` |
+| M21 | 执行中确认点：按 `RunNodeView.verdict.kind` 渲染 MCP 确认卡、选项/补充说明拼接与防重 | 已完成（2026-11-18；SCN-0022 8/8、SCN-0004 11/11） | `REQ-0026` / `SCN-0022` / `history/works/2026-11-18-run-confirmation-point/` |
 
 > **M1 追溯与验收（2026-10-23 用户要求）**：10 个页面组件已补 `REQ-0002..0011` + M1 场景，组件 frontmatter 反查、`check-docs` 强制。`tools/verify-m1-scenarios.js` 覆盖 10 场景 × 3 正 1 反，40/40 通过；SCN 转 `verified`、REQ 转 `delivered`，R7/R10 关闭。详见 `history/works/2026-10-23-m1-scenario-verification/result.md`。
 

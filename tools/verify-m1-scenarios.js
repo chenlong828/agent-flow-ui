@@ -93,10 +93,10 @@ async function clickMenu(page, label) {
 const RUN_WAIT = 'aaaaaaaa-0000-4000-8000-000000000002';
 const RUN_RUNNING = 'aaaaaaaa-0000-4000-8000-000000000003';
 const RUN_HISTORY = 'aaaaaaaa-0000-4000-8000-000000000005';
-const HISTORY_WF = '99999999-9999-4999-8999-999999999999';
 const RUN_RESUME = 'aaaaaaaa-0000-4000-8000-000000000006';
 const RUN_RESUME_CONFLICT = 'aaaaaaaa-0000-4000-8000-000000000007';
 const RUN_RESUME_503 = 'aaaaaaaa-0000-4000-8000-000000000008';
+const HISTORY_WF = '99999999-9999-4999-8999-999999999999';
 
 /** 超时等待态的可注入夹具：常见于续跑前的 run，带 taskId 与 timeout error。 */
 function resumeRunFixture(runId, extra) {
@@ -124,7 +124,6 @@ function resumeRunFixture(runId, extra) {
     ]
   }, extra);
 }
-
 
 const HISTORY_GRAPH = {
   stages: [{ id: 's1', name: '多轮回退阶段', description: '演示重新进入与打回', layout: { x: 40, y: 40, width: 820, height: 260 } }],
@@ -305,7 +304,7 @@ async function scn0004T5(browser) {
     ctx.page.on('request', (req) => {
       if (req.method() !== 'POST') return;
       if (!/\/api\/v1\/workflows\/[^/]+\/runs$/.test(new URL(req.url()).pathname)) return;
-      try { sent = JSON.parse(req.postData() || '{}'); } catch (e) { sent = null; }
+      try { sent = JSON.parse(req.postData() || '{}'); } catch { sent = null; }
     });
     await ctx.page.locator('#in-launch').click();
     await ctx.page.locator('#stub-intent').waitFor({ timeout: 5000 });
@@ -592,6 +591,270 @@ async function scn0004T11(browser) {
     assert.equal(await ctx.page.locator('#id-wait-banner').count(), 1);
     assert.equal(await ctx.page.locator('#id-wait-resume').isDisabled(), false, '503 后保留按钮供重试');
     assert.match(await ctx.page.locator('.page-header').textContent(), /执行超时，等待继续/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+/* ----------------------------- SCN-0022 ----------------------------- */
+const RUN_CONFIRM = 'aaaaaaaa-0000-4000-8000-000000000009';
+const RUN_CONFIRM_HISTORY = 'aaaaaaaa-0000-4000-8000-000000000010';
+const RUN_CONFIRM_BAD = 'aaaaaaaa-0000-4000-8000-000000000011';
+const RUN_CONFIRM_TEXT = 'aaaaaaaa-0000-4000-8000-000000000012';
+
+/** 执行中确认点夹具：默认 n2 为 agent，verdict 由页面按 kind 识别。 */
+function confirmRunFixture(runId, opts) {
+  const iso = (min) => new Date(Date.now() - min * 60000).toISOString();
+  opts = opts || {};
+  const verdict = opts.verdict !== undefined ? opts.verdict : {
+    kind: 'confirmation_request',
+    question: '是否允许修改契约？',
+    context: 'A 方案改动小，B 方案可扩展；需要人拍板。',
+    options: ['允许', '拒绝'],
+    allowFreeText: true
+  };
+  const nodes = opts.nodes || [
+    { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-c1', verdict: null, message: '开始', error: null, dispatchedAt: iso(8), finishedAt: iso(7) },
+    { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'waiting_confirm', taskId: 't-c2', verdict: verdict, message: opts.message !== undefined ? opts.message : '## 执行到一半\n\n- 已完成接口梳理\n- 等待人工拍板', error: null, dispatchedAt: iso(7), finishedAt: null }
+  ];
+  return {
+    runId: runId,
+    workflowId: '11111111-1111-4111-8111-111111111111',
+    workflowRevision: 3,
+    harnessId: 'h-1',
+    clientId: 'client-stub-01',
+    instanceId: runId.replace('aaaaaaaa', 'bbbbbbbb'),
+    state: 'waiting_confirm',
+    outcome: null,
+    currentNodeId: 'n2',
+    archiveState: 'none',
+    createdAt: iso(8), startedAt: iso(8), finishedAt: null,
+    workspacePath: '/tmp/fake/ws-confirm',
+    taskSpacePath: '/tmp/fake/ws-confirm/.agent-flow/task/' + runId,
+    autoConfirm: false,
+    finalMessage: null,
+    error: null,
+    nodes: nodes
+  };
+}
+
+function confirmationHistoryRun() {
+  const iso = (min) => new Date(Date.now() - min * 60000).toISOString();
+  return confirmRunFixture(RUN_CONFIRM_HISTORY, {
+    nodes: [
+      { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-ch1', verdict: null, message: '开始', error: null, dispatchedAt: iso(12), finishedAt: iso(11) },
+      { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'succeeded', taskId: 't-ch2', verdict: { decision: 'pass', reason: '先做第一版' }, message: '## 第一版\n\n- 已按 A 方案实现', error: null, dispatchedAt: iso(11), finishedAt: iso(10) },
+      { nodeId: 'n2', nodeType: 'agent', visit: 2, state: 'waiting_confirm', taskId: 't-ch3', verdict: { kind: 'confirmation_request', question: '是否允许修改契约？', options: ['允许', '拒绝'], allowFreeText: true }, message: '## 第二轮\n\n- 需要人工拍板', error: null, dispatchedAt: iso(5), finishedAt: null }
+    ]
+  });
+}
+
+function openConfirmRun(browser, run) {
+  return open(browser, 'instance-detail', 'id=' + run.runId, {
+    b3: fakeB3,
+    setup: function () { runFixtures(); addRunFixture(run); },
+    wait: 900
+  });
+}
+
+async function scn0022T1(browser) {
+  const ctx = await openConfirmRun(browser, confirmRunFixture(RUN_CONFIRM));
+  try {
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(220);
+    const card = ctx.page.locator('.id-confirm-card');
+    assert.equal(await card.count(), 1);
+    const text = await card.innerText();
+    assert.match(text, /执行中确认 · 需求分析/);
+    assert.match(text, /是否允许修改契约？/);
+    assert.match(text, /A 方案改动小，B 方案可扩展/);
+    assert.equal(await ctx.page.locator('.id-cf-opt').count(), 2);
+    assert.match(await ctx.page.locator('#cf-ok').innerText(), /确认并继续/);
+    assert.match(await ctx.page.locator('#cf-no').innerText(), /拒绝并反馈/);
+    assert.equal(text.includes('批准，继续执行'), false, '执行中确认点不得复用 confirm 节点按钮文案');
+    assert.equal(text.includes('驳回'), false, '执行中确认点不得复用 confirm 节点驳回文案');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0022T2(browser) {
+  const ctx = await openConfirmRun(browser, confirmRunFixture(RUN_CONFIRM));
+  let sent = null;
+  try {
+    ctx.page.on('request', function (req) {
+      if (req.method() !== 'POST' || !new URL(req.url()).pathname.endsWith('/nodes/n2/decision')) return;
+      try { sent = JSON.parse(req.postData() || '{}'); } catch { sent = null; }
+    });
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(220);
+    await ctx.page.locator('input[name="cf-option"][value="允许"]').check();
+    await ctx.page.locator('#cf-comment').fill('按 B 做');
+    await ctx.page.locator('#cf-ok').click();
+    await ctx.page.locator('.id-confirm-card').waitFor({ state: 'detached', timeout: 5000 });
+    assert.deepEqual(sent, { decision: 'pass', comment: '允许\n按 B 做' });
+    assert.match(await ctx.page.locator('.toast').last().textContent(), /已确认，继续执行/);
+    assert.match(await ctx.page.locator('#id-body').innerText(), /第 1 轮/);
+    assert.match(await ctx.page.locator('#id-body').innerText(), /t-resume-n2-/);
+    assert.match(await ctx.page.locator('#id-body').innerText(), /确认请求/);
+    assert.match(await ctx.page.locator('.cv-node[data-node="n2"]').getAttribute('class'), /st-run/);
+    assert.match(await ctx.page.locator('.page-header').innerText(), /运行中/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0022T3(browser) {
+  const ctx = await openConfirmRun(browser, confirmRunFixture(RUN_CONFIRM));
+  let sent = null;
+  try {
+    ctx.page.on('request', function (req) {
+      if (req.method() !== 'POST' || !new URL(req.url()).pathname.endsWith('/nodes/n2/decision')) return;
+      try { sent = JSON.parse(req.postData() || '{}'); } catch { sent = null; }
+    });
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(220);
+    await ctx.page.locator('#cf-no').click();
+    await ctx.page.waitForTimeout(120);
+    assert.match(await ctx.page.locator('.toast').last().textContent(), /拒绝必须选择选项或填写说明/);
+    assert.equal(await ctx.page.locator('.id-confirm-card').count(), 1);
+
+    await ctx.page.locator('input[name="cf-option"][value="拒绝"]').check();
+    await ctx.page.locator('#cf-comment').fill('改为软删除');
+    await ctx.page.locator('#cf-no').click();
+    await ctx.page.locator('.id-confirm-card').waitFor({ state: 'detached', timeout: 5000 });
+    assert.deepEqual(sent, { decision: 'reject', comment: '拒绝\n改为软删除' });
+    assert.match(await ctx.page.locator('.toast').last().textContent(), /已拒绝，意见已反馈/);
+    const body = await ctx.page.locator('body').innerText();
+    assert.equal(body.includes('流程回退'), false, '执行中确认的 reject 不触发回退');
+    assert.match(await ctx.page.locator('.cv-node[data-node="n2"]').getAttribute('class'), /st-run/);
+    assert.match(await ctx.page.locator('.page-header').innerText(), /运行中/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0022T4(browser) {
+  const run = confirmRunFixture(RUN_CONFIRM_TEXT, {
+    verdict: { kind: 'confirmation_request', question: '本次改动目标环境？', allowFreeText: true },
+    message: ''
+  });
+  const ctx = await openConfirmRun(browser, run);
+  let sent = null;
+  try {
+    ctx.page.on('request', function (req) {
+      if (req.method() !== 'POST' || !new URL(req.url()).pathname.endsWith('/nodes/n2/decision')) return;
+      try { sent = JSON.parse(req.postData() || '{}'); } catch { sent = null; }
+    });
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(220);
+    assert.equal(await ctx.page.locator('.id-cf-opt').count(), 0, '无 options 时不渲染单选');
+    assert.equal(await ctx.page.locator('#cf-comment').count(), 1);
+    await ctx.page.locator('#cf-comment').fill('使用测试环境');
+    await ctx.page.locator('#cf-ok').click();
+    await ctx.page.locator('.id-confirm-card').waitFor({ state: 'detached', timeout: 5000 });
+    assert.deepEqual(sent, { decision: 'pass', comment: '使用测试环境' });
+    assert.equal(Object.prototype.hasOwnProperty.call(sent, 'answer'), false, '不得新增 answer 字段');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0022T5(browser) {
+  const ctx = await openRunPage(browser, 'instance-detail', 'id=' + RUN_WAIT);
+  try {
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(220);
+    const card = ctx.page.locator('.id-confirm-card');
+    const text = await card.innerText();
+    assert.match(text, /待人工确认 · 需求分析/);
+    assert.match(text, /请确认方案/);
+    assert.match(await ctx.page.locator('#cf-ok').innerText(), /批准，继续执行/);
+    assert.match(await ctx.page.locator('#cf-no').innerText(), /驳回/);
+    await ctx.page.locator('#cf-no').click();
+    await ctx.page.waitForTimeout(120);
+    assert.match(await ctx.page.locator('.toast').last().textContent(), /驳回必须填写意见/);
+    assert.equal(await card.count(), 1);
+
+    await ctx.page.locator('#cf-comment').fill('联调意见');
+    await ctx.page.locator('#cf-no').click();
+    await ctx.page.waitForTimeout(400);
+    assert.match(await ctx.page.locator('.toast').last().textContent(), /已驳回，流程回退/);
+    assert.equal(await ctx.page.locator('.id-confirm-card').count(), 0);
+    assert.match(await ctx.page.locator('body').innerText(), /已驳回，流程回退/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0022T6(browser) {
+  const run = confirmRunFixture(RUN_CONFIRM_BAD, {
+    verdict: { kind: 'needs_human', reason: '旧数据没有确认问题' },
+    message: '旧版确认说明'
+  });
+  const ctx = await openConfirmRun(browser, run);
+  let decisions = 0;
+  try {
+    ctx.page.on('request', function (req) {
+      if (req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/decision')) decisions++;
+    });
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(220);
+    const card = ctx.page.locator('.id-confirm-card');
+    assert.equal(await card.count(), 1);
+    assert.match(await card.innerText(), /缺少可识别的确认信息/);
+    assert.equal(await ctx.page.locator('#cf-ok').count(), 0);
+    assert.equal(await ctx.page.locator('#cf-no').count(), 0);
+    assert.equal(await ctx.page.locator('#cf-refresh').count(), 1);
+    await ctx.page.locator('#cf-refresh').click();
+    await ctx.page.waitForTimeout(500);
+    assert.equal(decisions, 0, '异常 verdict 不得提交决策');
+    assert.equal(await card.count(), 1);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0022T7(browser) {
+  const ctx = await openConfirmRun(browser, confirmRunFixture(RUN_CONFIRM));
+  let posts = 0;
+  try {
+    await ctx.page.route('**/api/v1/runs/*/nodes/*/decision', async function (route) {
+      posts++;
+      await new Promise(function (resolve) { setTimeout(resolve, 300); });
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'invalid_state', message: '当前状态不允许该操作' } })
+      });
+    });
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(220);
+    await ctx.page.locator('#cf-ok').click();
+    await ctx.page.waitForTimeout(80);
+    assert.equal(await ctx.page.locator('#cf-ok').isDisabled(), true, '提交中按钮应禁用');
+    assert.equal(await ctx.page.locator('#cf-no').isDisabled(), true);
+    await ctx.page.waitForTimeout(600);
+    assert.equal(posts, 1, '409 后不得自动重复提交');
+    assert.match(await ctx.page.locator('.toast').last().textContent(), /该确认已被处理或状态已变化，已刷新/);
+    assert.equal(await ctx.page.locator('#cf-ok').isDisabled(), false, '失败后恢复按钮供人工重试');
+    assert.equal(await ctx.page.locator('#cf-no').isDisabled(), false);
+    assert.equal(await ctx.page.locator('.id-confirm-card').count(), 1, '仍在等待时保留确认卡');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0022T8(browser) {
+  const ctx = await openConfirmRun(browser, confirmationHistoryRun());
+  try {
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(220);
+    assert.equal(await ctx.page.locator('.id-round-tab').count(), 2);
+    assert.equal(await ctx.page.locator('.id-confirm-card').count(), 1, '最新轮显示确认卡');
+    assert.match(await ctx.page.locator('.id-confirm-card').innerText(), /是否允许修改契约？/);
+
+    await ctx.page.locator('.id-round-tab[data-visit="1"]').click();
+    await ctx.page.waitForTimeout(150);
+    assert.equal(await ctx.page.locator('.id-confirm-card').count(), 0, '历史轮不得出现确认入口');
+    assert.match(await ctx.page.locator('.id-history-note').innerText(), /历史轮次/);
+
+    await ctx.page.locator('.id-round-tab[data-visit="2"]').click();
+    await ctx.page.waitForTimeout(150);
+    assert.equal(await ctx.page.locator('.id-confirm-card').count(), 1, '回到最新轮恢复确认卡');
+    assert.match(await ctx.page.locator('.id-confirm-card').innerText(), /是否允许修改契约？/);
     noErrors(ctx);
   } finally { await ctx.page.close(); }
 }
@@ -1481,6 +1744,16 @@ const SCENARIOS = [
     ['SCN-0004-T9', '正', '超时等待运行显示等待态与超时码，续跑后同一 task 回到已派发', scn0004T9],
     ['SCN-0004-T10', '反', '续跑 409 按 reason 提示并保留等待态', scn0004T10],
     ['SCN-0004-T11', '反', '续跑 503 保留按钮且不伪造成功', scn0004T11]
+  ]],
+  ['SCN-0022', '执行中确认点（MCP confirmation_request）', [
+    ['SCN-0022-T1', '正', '按 verdict.kind 识别执行中确认点并渲染问题/上下文/选项', scn0022T1],
+    ['SCN-0022-T2', '正', '确认并继续：comment=选项+补充，visit 不变、taskId 替换', scn0022T2],
+    ['SCN-0022-T3', '正', '拒绝并反馈：comment 必填，不回退、不写流程回退', scn0022T3],
+    ['SCN-0022-T4', '正', '无选项时只提交自由文本，不生成 answer 字段', scn0022T4],
+    ['SCN-0022-T5', '反', 'confirm 节点批准/驳回文案与回退行为不回归', scn0022T5],
+    ['SCN-0022-T6', '反', '异常 verdict 只读且不提交', scn0022T6],
+    ['SCN-0022-T7', '反', '提交中禁用按钮，409 只提交一次并刷新', scn0022T7],
+    ['SCN-0022-T8', '反', '历史轮不出现确认卡，最新轮恢复', scn0022T8]
   ]],
   ['SCN-0005', 'Skill 维护与渐进披露', [
     ['SCN-0005-T1', '正', '列表计数同源', scn0005T1],

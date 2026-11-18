@@ -27,7 +27,7 @@ updated: 2026-11-18
 | `CMP-ui-shell` | 13 页公共外壳 | `assets/js/ui.js` | 顶栏、左侧导航、面包屑/页头、用户区、待确认角标、字号缩放、`DF.*` 原语 |
 | `CMP-workflow-list` | `pages/workflow-list.html` | `workflow-list.js` | B3 工作流列表、筛选、统计、新建向导/复制/改名/删除/导入导出；无运行入口 |
 | `CMP-workflow-editor` | `pages/workflow-editor.html?id=` | `workflow-editor.js` + `workflow/views/*` | 画布阶段/节点/边编辑、双击 90% 属性弹层、本地校验、手动保存、DSL 预览与导出；无发布/版本/运行 |
-| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图、发起运行（工作流+Harness+路径+意图）、节点多轮历史弹层、文件/执行会话 Tab、页头任务文件、终止、人工确认、超时节点继续执行、按轮会话日志下载；后端未提供的控制入口置灰 |
+| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图、发起运行（工作流+Harness+路径+意图）、节点多轮历史弹层、文件/执行会话 Tab、页头任务文件、终止、人工确认（confirm 节点与 MCP 执行中确认点）、超时节点继续执行、按轮会话日志下载；后端未提供的控制入口置灰 |
 | `CMP-run-files` | `instance-detail.html` 节点弹层/页头任务文件 | `run/views/files.js` | 运行任务文件只读浏览：根切换、面包屑、目录懒加载、Markdown/文本/二进制/截断预览 |
 | `CMP-run-session` | `instance-detail.html` 节点弹层执行会话 | `run/views/session.js` | 执行会话只读：详情、历史事件、`EventSource` 实时追加、raw 下载；无 sessionId |
 | `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js` | Skill 列表、筛选、启停、删除、引用方；专门页承接查看/编辑/新建，正文用 Milkdown 渲染、编辑走草稿 |
@@ -171,7 +171,7 @@ updated: 2026-11-18
 | `CMP-workflow-editor` | ✓ | ✓ | `SCN-0019` verified（24/24） | — |
 | `CMP-workflow-data` | ✓ | — | `SCN-0018/0019` 页面路径 + 26 条纯逻辑 | — |
 | `CMP-run-data` | ✓ | — | `SCN-0004` 页面路径 | — |
-| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（11/11） | — |
+| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（11/11）+ `SCN-0022` verified（8/8） | — |
 | `CMP-skills` | ✓ | ✓ | `SCN-0005` 4/4 + `SCN-0014` 5/5 + `SCN-0015` 4/4 + `SCN-0016` 4/4 + `SCN-0017` 4/4；引擎 29/29；`SCN-0013` 已废弃 | — |
 | `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（4/4） | — |
 | `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（4/4） | — |

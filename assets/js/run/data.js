@@ -225,6 +225,16 @@ export function errorText(err) {
   return statusText(err);
 }
 
+/** 决策提交错误按 UI 对接约定映射；409 由页面刷新详情，不在本函数重试。 */
+export function decisionErrorText(err) {
+  if (!err) return '未知错误';
+  if (err.status === 400) return '决策参数不合法，请修正后重试';
+  if (err.status === 404) return '运行或节点已不存在';
+  if (err.status === 409) return '该确认已被处理或状态已变化，已刷新';
+  if (err.status === 503) return '服务暂不可用，请稍后重试';
+  return errorText(err);
+}
+
 /** 运行耗时：终态用 finishedAt，进行中用当前时间。 */
 export function durationMs(run, now) {
   if (!run || !run.startedAt) return null;
