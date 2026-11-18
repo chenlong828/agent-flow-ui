@@ -11,7 +11,7 @@
     "no-self-assign": "warn"
   },
   "overrides": [
-    { "files": ["assets/js/ui.js", "assets/js/pages/skill-detail.js", "assets/js/pages/experts.js", "assets/js/pages/workflow-editor.js"], "rules": { "max-lines": "off" } },
+    { "files": ["assets/js/ui.js", "assets/js/pages/skill-detail.js", "assets/js/pages/experts.js", "assets/js/pages/workflow-editor.js", "assets/js/pages/instance-detail.js"], "rules": { "max-lines": "off" } },
     { "files": ["assets/js/pages/keys.js", "assets/js/pages/workspaces.js", "assets/js/pages/analytics.js", "assets/js/pages/workspace-detail.js", "assets/js/pages/tools.js"], "rules": { "max-lines-per-function": "off" } },
     { "files": ["assets/js/pages/experts.js"], "rules": { "complexity": "off" } },
     { "files": ["assets/js/mock-data.js"], "rules": { "max-params": "off" } },

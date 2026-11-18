@@ -44,6 +44,7 @@ const state = {
   timer: null,
   version: 0,
   pending: 0,
+  resuming: false,
   modal: null,
   filesModal: null
 };
@@ -61,6 +62,23 @@ function syncBell() {
 
 /* ---------------- 载入 ---------------- */
 
+/** 同一节点可执行多轮（重新进入 / 打回重跑 / 超时续跑）：保留每一轮，按 visit 倒序。
+ * 画布着色只用最新一轮；弹层用轮次 Tab 切换，历史轮次只读。 */
+function indexNodes(run) {
+  state.nodeVisits = new Map();
+  (run.nodes || []).forEach(function (node) {
+    const visit = Number(node.visit) || 1;
+    const list = state.nodeVisits.get(node.nodeId) || [];
+    const same = list.findIndex(function (item) { return (Number(item.visit) || 1) === visit; });
+    if (same >= 0) list[same] = node;
+    else list.push(node);
+    state.nodeVisits.set(node.nodeId, list);
+  });
+  state.nodeVisits.forEach(function (list) {
+    list.sort(function (a, b) { return (Number(b.visit) || 1) - (Number(a.visit) || 1); });
+  });
+}
+
 async function load() {
   const token = ++state.version;
   try {
@@ -77,20 +95,7 @@ async function load() {
     state.workflow = wf;
     state.graph = toEditorGraph(wf.graph);
     state.experts = new Map((expertPage.items || []).map(function (e) { return [e.id, e]; }));
-    /* 同一节点可执行多轮（重新进入 / 打回重跑）：保留每一轮，按 visit 倒序。
-     * 画布着色只用最新一轮；弹层用轮次 Tab 切换，历史轮次只读。 */
-    state.nodeVisits = new Map();
-    (run.nodes || []).forEach(function (node) {
-      const visit = Number(node.visit) || 1;
-      const list = state.nodeVisits.get(node.nodeId) || [];
-      const same = list.findIndex(function (item) { return (Number(item.visit) || 1) === visit; });
-      if (same >= 0) list[same] = node;
-      else list.push(node);
-      state.nodeVisits.set(node.nodeId, list);
-    });
-    state.nodeVisits.forEach(function (list) {
-      list.sort(function (a, b) { return (Number(b.visit) || 1) - (Number(a.visit) || 1); });
-    });
+    indexNodes(run);
     state.error = null;
     if (!state.selectedId || !state.graph.nodes.some(function (n) { return n.id === state.selectedId; })) {
       state.selectedId = run.currentNodeId && state.graph.nodes.some(function (n) { return n.id === run.currentNodeId; })
@@ -159,15 +164,51 @@ function shellOptions(run, active) {
   };
 }
 
+function graphNodeName(nodeId) {
+  const node = state.graph && state.graph.nodes.find(function (n) { return n.id === nodeId; });
+  return node ? node.name : (nodeId || '当前节点');
+}
+
+/** 运行级等待横幅：run 为 waiting_resume 时替换为可操作的超时说明。 */
+function waitingBannerHTML(run) {
+  if (run.state !== 'waiting_resume') return '';
+  const record = latestVisit(run.currentNodeId);
+  const error = record && record.error ? record.error : null;
+  const code = error && error.code ? error.code : '';
+  const message = error && error.message ? error.message : '';
+  return '<div class="id-wait" id="id-wait-banner">' +
+    '<div class="id-wait-h">' + icon('warn', 15) + '<b>执行超时，等待继续</b>' +
+      '<span>' + esc(graphNodeName(run.currentNodeId)) + '</span>' +
+      (code ? tag(code, 'amber') : '') + '</div>' +
+    (message ? '<div class="id-wait-err">' + esc(message) + '</div>' : '') +
+    '<div class="id-wait-tip">使用原任务、原会话继续；不会新建运行。继续后仍可能再次超时。</div>' +
+    '<div class="id-wait-tip">等待期间该工作区不能启动新的运行，直到继续或取消。</div>' +
+    '<div class="id-wait-acts">' +
+      '<button type="button" class="btn primary" id="id-wait-resume"' + (state.resuming ? ' disabled' : '') + '>' +
+        icon('play', 14) + (state.resuming ? '正在继续…' : '继续执行') + '</button>' +
+      '<button type="button" class="btn danger" id="id-wait-stop"' + (state.resuming ? ' disabled' : '') + '>' +
+        icon('stop', 14) + '取消运行</button>' +
+      (record && record.taskId ? '<span class="sub">任务 <span class="mono">' + esc(record.taskId) + '</span></span>' : '') +
+    '</div></div>';
+}
+
 function traceHTML() {
   return '<div class="id-layout">' +
     '<div class="id-trace"><div class="cv-wrap" id="cvWrap"><div class="cv-canvas" id="cvCanvas"></div></div>' +
       '<div class="cv-legend">' +
         '<b>' + dot('green') + '成功</b><b>' + dot('blue') + '运行中</b><b>' + dot('orange') + '等待人工</b>' +
+        '<b>' + dot('amber') + '等待继续</b>' +
         '<b>' + dot('red') + '失败</b><b>' + dot('purple') + '已驳回</b><b>' + dot('gray') + '待执行</b>' +
         '<b>双击节点查看详情</b></div>' +
     '</div>' +
   '</div>';
+}
+
+function bindWaitingActions() {
+  const resumeBtn = document.getElementById('id-wait-resume');
+  if (resumeBtn) resumeBtn.onclick = resumeCurrentNode;
+  const stopBtn = document.getElementById('id-wait-stop');
+  if (stopBtn) stopBtn.onclick = stopRun;
 }
 
 function render() {
@@ -183,7 +224,8 @@ function render() {
   const filesBtn = document.getElementById('id-files');
   if (filesBtn) filesBtn.onclick = openRunFilesModal;
   body = document.getElementById('page-body');
-  body.innerHTML = traceHTML();
+  body.innerHTML = waitingBannerHTML(run) + traceHTML();
+  bindWaitingActions();
   paint();
   if (state.modal) syncNodeModal();
   syncBell();
@@ -194,7 +236,10 @@ function stateTag(run) {
     const color = run.outcome === 'succeeded' ? 'green' : run.outcome === 'cancelled' ? 'gray' : 'red';
     return tag(RUN_OUTCOME[run.outcome] || '已结束', color);
   }
-  return tag(RUN_STATE[run.state] || run.state, run.state === 'waiting_confirm' ? 'orange' : run.state === 'running' ? 'blue' : 'gray');
+  const tone = run.state === 'waiting_confirm' ? 'orange'
+    : run.state === 'waiting_resume' ? 'amber'
+    : run.state === 'running' ? 'blue' : 'gray';
+  return tag(RUN_STATE[run.state] || run.state, tone);
 }
 
 /* ---------------- 画布 ---------------- */
@@ -338,6 +383,8 @@ function bindModalShell(body) {
     syncNodeModal();
   };
   body.addEventListener('click', function (e) {
+    const resumeBtn = e.target.closest('[data-resume-node]');
+    if (resumeBtn) { e.preventDefault(); resumeNodeAction(resumeBtn.dataset.resumeNode); return; }
     if (e.target.closest('[data-act="open-files"]')) switchModalTab('files');
   });
 }
@@ -388,6 +435,7 @@ function resolveModal(modal) {
     st: st,
     isLatest: isLatest,
     confirmable: !!runNode && isLatest && runNode.state === 'waiting_confirm',
+    waitingResume: !!runNode && isLatest && runNode.state === 'waiting_resume' && state.run.state === 'waiting_resume',
     title: nodeModalTitle(node, runNode, isLatest, visits.length)
   };
 }
@@ -427,7 +475,12 @@ function renderModalPanels(modal, host, resolved) {
   const summaryPanel = host.querySelector('[data-panel="summary"]');
   const logPanel = host.querySelector('[data-panel="log"]');
   summaryPanel.innerHTML = modal.tab === 'summary'
-    ? historyNote + summaryTab(resolved.node, resolved.st, resolved.runNode, { isLatest: resolved.isLatest, count: resolved.visits.length }, state.experts)
+    ? historyNote + summaryTab(resolved.node, resolved.st, resolved.runNode, {
+        isLatest: resolved.isLatest,
+        count: resolved.visits.length,
+        waitingResume: resolved.waitingResume,
+        resuming: state.resuming
+      }, state.experts)
     : '';
   logPanel.innerHTML = modal.tab === 'log'
     ? historyNote + logTab(resolved.node, resolved.runNode, state.run.runId, runs.sessionLogUrl)
@@ -517,6 +570,40 @@ function bindConfirm(node) {
   };
   ok.onclick = function () { send('pass'); };
   no.onclick = function () { send('reject'); };
+}
+
+/* ---------------- 超时继续 ---------------- */
+
+function resumeCurrentNode() {
+  const run = state.run;
+  const record = run ? latestVisit(run.currentNodeId) : null;
+  if (!record) { DF.toast('找不到等待继续的节点，请刷新后重试', 'err'); return; }
+  resumeNodeAction(record.nodeId);
+}
+
+/** 续跑：不传 body；200 用响应 RunDetail 更新页面后再拉一次详情；409/503 保留按钮。 */
+function resumeNodeAction(nodeId) {
+  if (!state.run || !nodeId || state.resuming) return;
+  state.resuming = true;
+  render();
+  runs.resumeNode(state.run.runId, nodeId).then(function (detail) {
+    state.resuming = false;
+    state.run = detail;
+    indexNodes(detail);
+    DF.toast('已提交，等待客户端执行', 'ok');
+    render();
+    load();
+  }).catch(function (err) {
+    state.resuming = false;
+    const status = err && err.status;
+    DF.toast('继续失败：' + errorText(err), 'err');
+    render();
+    if (status === 404) {
+      setTimeout(function () { location.href = 'instances.html'; }, 900);
+      return;
+    }
+    load();
+  });
 }
 
 /* ---------------- 终止 ---------------- */

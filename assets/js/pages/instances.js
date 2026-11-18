@@ -24,10 +24,11 @@ const { esc, icon, tag } = DF;
 const runs = createRunData();
 const workflows = createWorkflowData();
 
-const TABS = ['全部', '进行中', '等待人工确认', '已结束'];
+const TABS = ['全部', '进行中', '等待人工确认', '等待继续', '已结束'];
 const TAB_STATE = {
   进行中: ['created', 'running'],
   等待人工确认: ['waiting_confirm'],
+  等待继续: ['waiting_resume'],
   已结束: ['done']
 };
 
@@ -143,7 +144,10 @@ function fmtDuration(run) {
 
 function stateTag(run) {
   if (run.state === 'done') return tag(RUN_OUTCOME[run.outcome] || '已结束', run.outcome === 'succeeded' ? 'green' : run.outcome === 'cancelled' ? 'gray' : 'red');
-  return tag(RUN_STATE[run.state] || run.state, run.state === 'waiting_confirm' ? 'orange' : run.state === 'running' ? 'blue' : 'gray');
+  const tone = run.state === 'waiting_confirm' ? 'orange'
+    : run.state === 'waiting_resume' ? 'amber'
+    : run.state === 'running' ? 'blue' : 'gray';
+  return tag(RUN_STATE[run.state] || run.state, tone);
 }
 
 /* ---------------- 载入 ---------------- */
@@ -220,8 +224,10 @@ function render() {
 function rowHTML(run) {
   const active = ACTIVE_STATES.indexOf(run.state) >= 0;
   const confirmable = run.state === 'waiting_confirm';
+  const resumable = run.state === 'waiting_resume';
   let act = '<button class="btn sm" data-act="view" data-id="' + esc(run.runId) + '">详情</button>';
   if (confirmable) act += '<button class="btn sm" data-act="view" data-id="' + esc(run.runId) + '">' + icon('warn', 12) + '去确认</button>';
+  if (resumable) act += '<button class="btn sm" data-act="view" data-id="' + esc(run.runId) + '">' + icon('play', 12) + '去继续</button>';
   if (active) act += '<button class="btn sm danger" data-act="stop" data-id="' + esc(run.runId) + '">' + icon('stop', 12) + '终止</button>';
   const archive = run.archiveState && run.archiveState !== 'none'
     ? '<div class="sub">' + esc(ARCHIVE_STATE[run.archiveState] || run.archiveState) + '</div>' : '';
@@ -230,7 +236,7 @@ function rowHTML(run) {
     '<td>' + esc(wfLabel(run)) + '<div class="sub">r' + esc(run.workflowRevision) + '</div></td>' +
     '<td>' + (run.clientId ? '<span class="mono">' + esc(run.clientId) + '</span>' : '<span class="sub">—</span>') + '</td>' +
     '<td>' + (run.currentNodeId ? '<span class="mono">' + esc(run.currentNodeId) + '</span>' : '<span class="sub">—</span>') +
-      (confirmable ? '<div class="sub">等待人工确认</div>' : '') + '</td>' +
+      (confirmable ? '<div class="sub">等待人工确认</div>' : resumable ? '<div class="sub">超时，等待继续</div>' : '') + '</td>' +
     '<td>' + stateTag(run) + archive + '</td>' +
     '<td>' + esc(fmtDuration(run)) + '</td>' +
     '<td class="sub">' + esc(fmtTime(run.startedAt)) + '</td>' +

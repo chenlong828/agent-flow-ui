@@ -85,9 +85,11 @@ svg.ic { width:16px; height:16px; vertical-align:-3px; fill:none; stroke:current
 .tag.purple { color:#6d28d9; background:#ede9fe; }
 .tag.gray { color:#4b5563; background:#eef1f5; }
 .tag.teal { color:#0f766e; background:#ccfbf1; }
+.tag.amber { color:#b45309; background:#fef3c7; }
 .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:1px; }
 .dot.blue { background:var(--c-run); } .dot.green { background:var(--c-ok); } .dot.red { background:var(--c-fail); }
 .dot.orange { background:var(--c-wait); } .dot.purple { background:var(--c-rollback); } .dot.gray { background:var(--t-3); }
+.dot.amber { background:#d97706; }
 
 /* ---------- 统计卡 ---------- */
 .stat-row { display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
@@ -262,6 +264,7 @@ textarea.inp { resize:vertical; min-height:64px; }
 .cv-node.t-plain { border-left:3px solid var(--t-3); }
 .cv-node.st-ok { border-color:#86efac; } .cv-node.st-fail { border-color:#fca5a5; }
 .cv-node.st-wait { border-color:#fdba74; box-shadow:0 0 0 2px rgba(234,88,12,.12); }
+.cv-node.st-timeout { border-color:#f59e0b; box-shadow:0 0 0 2px rgba(245,158,11,.16); }
 .cv-node.st-run { border-color:var(--c-run); box-shadow:0 0 0 2px rgba(37,99,235,.15); animation:pulse 1.6s infinite; }
 .cv-node.st-rollback { border-color:var(--c-rollback); }
 @keyframes pulse { 0%,100% { box-shadow:0 0 0 2px rgba(37,99,235,.15);} 50% { box-shadow:0 0 0 5px rgba(37,99,235,.07);} }

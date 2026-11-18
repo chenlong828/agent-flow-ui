@@ -46,6 +46,7 @@ const STATUS_TONE = {
   failed: 'red',
   rejected: 'purple',
   waiting_confirm: 'orange',
+  waiting_resume: 'amber',
   dispatched: 'blue'
 };
 
@@ -82,6 +83,29 @@ function errorBlock(runNode) {
     '<pre class="id-pre id-pre-err">' + esc((runNode.error.code || '') + '：' + (runNode.error.message || '')) + '</pre>';
 }
 
+function timeoutHint(error) {
+  if (error && error.code === 'prompt_timeout') return '提示词阶段超过执行节点超时阈值，本次执行已被中断。';
+  if (error && error.code === 'idle_timeout') return '执行节点长时间无活动，本次执行已被中断。';
+  return '节点执行超过超时阈值，被客户端中断。';
+}
+
+/** 超时等待继续卡：只在最新轮且 run 仍为 waiting_resume 时由页面传入 waitingResume。 */
+export function resumeNotice(runNode, resuming) {
+  const error = runNode.error || null;
+  const code = error && error.code ? error.code : 'timeout';
+  const message = error && error.message ? error.message : '';
+  return '<div class="id-wait" id="id-node-wait">' +
+    '<div class="id-wait-h">' + icon('warn', 14) + '<b>执行超时，等待继续</b>' + tag(code, 'amber') + '</div>' +
+    (message ? '<div class="id-wait-err">' + esc(message) + '</div>' : '') +
+    '<div class="id-wait-tip">' + esc(timeoutHint(error)) + '</div>' +
+    '<div class="id-wait-tip">使用原任务、原会话继续；不会新建运行。继续后仍可能再次超时。</div>' +
+    '<div class="id-wait-acts">' +
+      '<button type="button" class="btn primary" data-resume-node="' + esc(runNode.nodeId || '') + '"' +
+        (resuming ? ' disabled' : '') + '>' + icon('play', 14) + (resuming ? '正在继续…' : '继续执行') + '</button>' +
+      '<span class="sub">继续后节点回到「已派发」，等待执行节点领取。</span>' +
+    '</div></div>';
+}
+
 function summaryFooter() {
   return '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' +
     '<button class="btn sm" disabled title="后端未提供节点重试能力">' + icon('retry', 12) + '重试节点</button>' +
@@ -103,7 +127,11 @@ export function summaryTab(node, st, runNode, opt, experts) {
     DF.kv(summaryRows(node, st, runNode, { manyRounds: manyRounds, isLatest: isLatest }, experts));
   if (runNode && runNode.verdict) html += verdictBlock(runNode.verdict);
   if (runNode && runNode.message) html += mdBlock('节点消息', runNode.message);
-  if (runNode && runNode.error) html += errorBlock(runNode);
+  if (runNode && runNode.state === 'waiting_resume' && isLatest && opt.waitingResume) {
+    html += resumeNotice(runNode, opt.resuming);
+  } else if (runNode && runNode.error) {
+    html += errorBlock(runNode);
+  }
   return html + summaryFooter();
 }
 

@@ -3,7 +3,7 @@
  *
  * 运行实例两页唯一的 run API 入口：只做端点映射与错误归一，
  * 不渲染、不弹 Toast、不推断业务状态（状态机由 CMP-run 决定）。
- * 端点来自 B4 运行编排：API-42..API-53。
+ * 端点来自 B4 运行编排：API-42..API-54。
  */
 
 import { request } from '../shared/http.js';
@@ -14,6 +14,7 @@ export const RUN_STATE = {
   created: '已创建',
   running: '运行中',
   waiting_confirm: '等待人工确认',
+  waiting_resume: '执行超时，等待继续',
   done: '已结束'
 };
 
@@ -27,6 +28,7 @@ export const NODE_STATE = {
   queued: '待执行',
   dispatched: '运行中',
   waiting_confirm: '等待人工确认',
+  waiting_resume: '超时，等待继续',
   succeeded: '成功',
   rejected: '已驳回',
   failed: '失败'
@@ -39,7 +41,7 @@ export const ARCHIVE_STATE = {
   failed: '归档失败'
 };
 
-export const ACTIVE_STATES = ['created', 'running', 'waiting_confirm'];
+export const ACTIVE_STATES = ['created', 'running', 'waiting_confirm', 'waiting_resume'];
 
 const CODE_TEXT = {
   session_not_linked: '该节点结果未关联会话；任务文件仍可查看',
@@ -52,6 +54,15 @@ const CODE_TEXT = {
   client_observability_unavailable: '执行节点观测面不可用：请确认 client 已启动并开启观测面',
   client_observability_unauthorized: '执行节点观测面鉴权失败，请检查 client token',
   client_observability_disabled: '执行节点未开启观测面'
+};
+
+/** 409 invalid_state 的续跑细分原因；只匹配后端约定的 reason。 */
+const RESUME_REASON_TEXT = {
+  node_not_waiting_resume: '节点已不在等待继续状态，请刷新后重试',
+  task_missing: '该节点没有可续跑的任务，无法继续',
+  session_missing: '该节点超时结果缺少会话，无法继续',
+  instance_not_dispatchable: '执行节点已停用或不可用，请联系管理员',
+  task_not_resumable: '任务已不可重开，请刷新后重试或终止运行'
 };
 
 function queryString(params) {
@@ -97,6 +108,14 @@ function decide(runId, nodeId, input) {
     method: 'POST',
     path: BASE + '/runs/' + encodeURIComponent(runId) + '/nodes/' + encodeURIComponent(nodeId) + '/decision',
     body: input
+  });
+}
+
+/** 超时节点继续执行：无请求体，后端把同一 task 重开为下一 attempt。 */
+function resumeNode(runId, nodeId) {
+  return request({
+    method: 'POST',
+    path: BASE + '/runs/' + encodeURIComponent(runId) + '/nodes/' + encodeURIComponent(nodeId) + '/resume'
   });
 }
 
@@ -163,6 +182,7 @@ export function createRunData() {
     start: start,
     cancel: cancel,
     decide: decide,
+    resumeNode: resumeNode,
     sessionLogUrl: sessionLogUrl,
     listFiles: listFiles,
     readFile: readFile,
@@ -187,7 +207,11 @@ function statusText(err) {
     return err.message || '请求不合法';
   }
   if (err.status === 404) return err.code === 'run_not_found' ? '运行不存在或已删除' : '目标不存在或已被删除';
-  if (err.status === 409) return conflictText(err);
+  if (err.status === 409) {
+    const reason = err.details && err.details.reason;
+    if (reason && RESUME_REASON_TEXT[reason]) return RESUME_REASON_TEXT[reason];
+    return conflictText(err);
+  }
   if (err.status === 502 || err.status === 503) return '后端服务不可用，请检查运行服务';
   if (err.status === 504) return '请求超时，可稍后重试';
   return err.message || ('请求失败（HTTP ' + err.status + '）');

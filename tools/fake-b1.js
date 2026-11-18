@@ -116,6 +116,29 @@ for (const k of Object.keys(MOCK)) {
         nodes: [
           { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'failed', taskId: 't-7', verdict: null, message: '', error: { code: 'cancelled', message: '任务已取消' }, dispatchedAt: iso(90), finishedAt: iso(89) }
         ]
+      },
+      {
+        runId: 'aaaaaaaa-0000-4000-8000-000000000006',
+        workflowId: WORKFLOW_IN_RUNS,
+        workflowRevision: 3,
+        harnessId: 'h-1',
+        clientId: 'client-stub-01',
+        instanceId: 'bbbbbbbb-0000-4000-8000-000000000006',
+        state: 'waiting_resume',
+        outcome: null,
+        currentNodeId: 'n2',
+        archiveState: 'none',
+        createdAt: iso(24), startedAt: iso(24), finishedAt: null,
+        workspacePath: '/tmp/fake/ws-6',
+        taskSpacePath: '/tmp/fake/ws-6/.agent-flow/task/aaaaaaaa-0000-4000-8000-000000000006',
+        autoConfirm: false,
+        finalMessage: null,
+        error: null,
+        resumeDelayMs: 600,
+        nodes: [
+          { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-9', verdict: null, message: '开始', error: null, dispatchedAt: iso(24), finishedAt: iso(23) },
+          { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'waiting_resume', taskId: 't-10', verdict: null, message: '## 超时前输出\n\n- 已读取 intent.md\n- 等待继续', error: { code: 'timeout', message: 'prompt 超时（1800000ms）' }, dispatchedAt: iso(23), finishedAt: null }
+        ]
       }
     ];
   }
@@ -259,6 +282,26 @@ for (const k of Object.keys(MOCK)) {
     push(228, 'result', 'task.result', 'result: final', { status: 'succeeded' });
     return list;
   }
+  function after(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms || 0); });
+  }
+  function resumeNodeResult(run, nodeId) {
+    if (run.resumeError) return run.resumeError;
+    var node = run.nodes.filter(function (n) { return n.nodeId === nodeId; }).pop();
+    if (run.state !== 'waiting_resume' || !node || node.state !== 'waiting_resume') {
+      return { status: 409, body: { error: { code: 'invalid_state', message: '当前状态不允许该操作：node_not_waiting_resume', details: { reason: 'node_not_waiting_resume' } } } };
+    }
+    if (!node.taskId) {
+      return { status: 409, body: { error: { code: 'invalid_state', message: '当前状态不允许该操作：task_missing', details: { reason: 'task_missing' } } } };
+    }
+    node.state = 'dispatched';
+    node.error = null;
+    node.finishedAt = null;
+    run.state = 'running';
+    run.outcome = null;
+    run.finishedAt = null;
+    return { status: 200, body: runDetail(run) };
+  }
   function runResource(parts, method, body, headers, query) {
     var id = parts[1];
     if (method === 'GET' && parts.length === 1) {
@@ -301,6 +344,11 @@ for (const k of Object.keys(MOCK)) {
         run.nodes.push({ nodeId: 'n3', nodeType: 'end', visit: 1, state: 'dispatched', taskId: 't-8', verdict: null, message: '', error: null, dispatchedAt: new Date().toISOString(), finishedAt: null });
       }
       return Promise.resolve({ status: 200, body: runDetail(run) });
+    }
+    if (method === 'POST' && parts[2] === 'nodes' && parts[4] === 'resume') {
+      return after(run.resumeDelayMs).then(function () {
+        return resumeNodeResult(run, parts[3]);
+      });
     }
     if (method === 'GET' && parts[2] === 'nodes' && parts[4] === 'session-log') {
       var visit = Number(query.visit) || 0;
@@ -922,7 +970,7 @@ for (const k of Object.keys(MOCK)) {
     return resource(parts, method, body, headers);
   };
 
-/** 测试注入一条运行记录（不进入默认 4 条列表夹具，避免影响列表计数断言）。 */
+/** 测试注入一条运行记录（不进入默认 5 条列表夹具，避免影响列表计数断言）。 */
 export function addRunFixture(run) {
   runs.push(run);
   return run;

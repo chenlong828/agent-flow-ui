@@ -14,6 +14,7 @@ export const NODE_CLASS = {
   queued: 'st-pending',
   dispatched: 'st-run',
   waiting_confirm: 'st-wait',
+  waiting_resume: 'st-timeout',
   succeeded: 'st-ok',
   rejected: 'st-rollback',
   failed: 'st-fail'
@@ -23,6 +24,7 @@ export const NODE_DOT = {
   queued: 'gray',
   dispatched: 'blue',
   waiting_confirm: 'orange',
+  waiting_resume: 'amber',
   succeeded: 'green',
   rejected: 'purple',
   failed: 'red'

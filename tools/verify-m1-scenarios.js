@@ -94,6 +94,37 @@ const RUN_WAIT = 'aaaaaaaa-0000-4000-8000-000000000002';
 const RUN_RUNNING = 'aaaaaaaa-0000-4000-8000-000000000003';
 const RUN_HISTORY = 'aaaaaaaa-0000-4000-8000-000000000005';
 const HISTORY_WF = '99999999-9999-4999-8999-999999999999';
+const RUN_RESUME = 'aaaaaaaa-0000-4000-8000-000000000006';
+const RUN_RESUME_CONFLICT = 'aaaaaaaa-0000-4000-8000-000000000007';
+const RUN_RESUME_503 = 'aaaaaaaa-0000-4000-8000-000000000008';
+
+/** 超时等待态的可注入夹具：常见于续跑前的 run，带 taskId 与 timeout error。 */
+function resumeRunFixture(runId, extra) {
+  const iso = (min) => new Date(Date.now() - min * 60000).toISOString();
+  return Object.assign({
+    runId: runId,
+    workflowId: '11111111-1111-4111-8111-111111111111',
+    workflowRevision: 3,
+    harnessId: 'h-1',
+    clientId: 'client-stub-01',
+    instanceId: runId.replace('aaaaaaaa', 'bbbbbbbb'),
+    state: 'waiting_resume',
+    outcome: null,
+    currentNodeId: 'n2',
+    archiveState: 'none',
+    createdAt: iso(24), startedAt: iso(24), finishedAt: null,
+    workspacePath: '/tmp/fake/ws-resume',
+    taskSpacePath: '/tmp/fake/ws-resume/.agent-flow/task/' + runId,
+    autoConfirm: false,
+    finalMessage: null,
+    error: null,
+    nodes: [
+      { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-r1', verdict: null, message: '开始', error: null, dispatchedAt: iso(24), finishedAt: iso(23) },
+      { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'waiting_resume', taskId: 't-r2', verdict: null, message: '## 超时前输出\n\n- 等待继续', error: { code: 'timeout', message: 'prompt 超时（1800000ms）' }, dispatchedAt: iso(23), finishedAt: null }
+    ]
+  }, extra);
+}
+
 
 const HISTORY_GRAPH = {
   stages: [{ id: 's1', name: '多轮回退阶段', description: '演示重新进入与打回', layout: { x: 40, y: 40, width: 820, height: 260 } }],
@@ -186,13 +217,15 @@ function openRunPage(browser, page, query) {
 async function scn0004T1(browser) {
   const ctx = await openRunPage(browser, 'instances');
   try {
-    assert.equal(await ctx.page.locator('#page-body tbody tr').count(), 4);
+    assert.equal(await ctx.page.locator('#page-body tbody tr').count(), 5);
     const labels = await ctx.page.locator('#in-tabs .tab').allTextContents();
-    assert.ok(labels.some((x) => x.includes('全部') && x.includes('4')), '全部计数: ' + labels.join('|'));
+    assert.ok(labels.some((x) => x.includes('全部') && x.includes('5')), '全部计数: ' + labels.join('|'));
     assert.ok(labels.some((x) => x.includes('进行中') && x.includes('1')), '进行中计数: ' + labels.join('|'));
     assert.ok(labels.some((x) => x.includes('等待人工确认') && x.includes('1')), '等待确认计数: ' + labels.join('|'));
+    assert.ok(labels.some((x) => x.includes('等待继续') && x.includes('1')), '等待继续计数: ' + labels.join('|'));
     assert.ok(labels.some((x) => x.includes('已结束') && x.includes('2')), '已结束计数: ' + labels.join('|'));
     assert.match(await ctx.page.locator('#page-body').textContent(), /client-stub-01/);
+    assert.match(await ctx.page.locator('#page-body').textContent(), /执行超时，等待继续/);
     noErrors(ctx);
   } finally { await ctx.page.close(); }
 }
@@ -455,6 +488,110 @@ async function scn0004T8(browser) {
     assert.equal(await ctx.page.locator('.ws-path-pop').textContent().then(function (t) { return t.includes('/tmp/scn0004/other-only'); }), false);
     await ctx.page.fill('#rn-path', '/tmp/scn0004/manual-path');
     assert.equal(await ctx.page.locator('#rn-path').inputValue(), '/tmp/scn0004/manual-path', '无历史时仍可手输绝对路径');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0004T9(browser) {
+  const ctx = await openRunPage(browser, 'instance-detail', 'id=' + RUN_RESUME);
+  try {
+    const page = ctx.page;
+    const resumes = [];
+    page.on('request', (req) => {
+      if (req.method() !== 'POST') return;
+      if (/\/runs\/[^/]+\/nodes\/n2\/resume$/.test(new URL(req.url()).pathname)) resumes.push(new URL(req.url()).pathname);
+    });
+    assert.equal(await page.locator('.cv-node.st-timeout').count(), 1);
+    assert.match(await page.locator('.cv-node[data-node="n2"] .n-sub').textContent(), /超时，等待继续/);
+    const banner = page.locator('#id-wait-banner');
+    assert.equal(await banner.count(), 1);
+    const bannerText = await banner.innerText();
+    assert.match(bannerText, /执行超时，等待继续/);
+    assert.match(bannerText, /prompt 超时（1800000ms）/);
+    assert.match(bannerText, /使用原任务、原会话继续；不会新建运行/);
+    assert.match(bannerText, /等待期间该工作区不能启动新的运行/);
+    assert.match(bannerText, /t-10/);
+    assert.equal(await page.locator('#id-wait-resume').isDisabled(), false);
+    assert.equal(await page.locator('#id-wait-stop').count(), 1);
+
+    // 继续入口只出现在等待继续的节点上
+    await page.locator('.cv-node[data-node="n1"]').dblclick();
+    await page.waitForTimeout(200);
+    assert.equal(await page.locator('#id-node-wait').count(), 0, '非等待节点不得出现继续入口');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(120);
+    await page.locator('.cv-node[data-node="n2"]').dblclick();
+    await page.waitForTimeout(250);
+    assert.equal(await page.locator('#id-node-wait').count(), 1);
+    assert.equal(await page.locator('#id-node-wait [data-resume-node="n2"]').count(), 1);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(120);
+
+    await page.locator('#id-wait-resume').click();
+    assert.equal(await page.locator('#id-wait-resume').isDisabled(), true, '请求期间必须禁用按钮');
+    assert.match(await page.locator('#id-wait-resume').textContent(), /正在继续…/);
+    await banner.waitFor({ state: 'detached', timeout: 5000 });
+    assert.equal(resumes.length, 1, '一次点击只发一次续跑请求');
+    assert.match(resumes[0], /\/runs\/aaaaaaaa-0000-4000-8000-000000000006\/nodes\/n2\/resume$/);
+    assert.match(await page.locator('body').textContent(), /已提交，等待客户端执行/);
+    assert.equal(await page.locator('.cv-node.st-run').count(), 1);
+    assert.match(await page.locator('.page-header').textContent(), /运行中/);
+    assert.equal(await page.locator('.cv-node.st-timeout').count(), 0);
+
+    // 同一 taskId 保留：续跑不新建 run/task
+    await page.locator('.cv-node[data-node="n2"]').dblclick();
+    await page.waitForTimeout(250);
+    assert.match(await page.locator('.modal-screen').innerText(), /t-10/);
+    assert.equal(await page.locator('#id-node-wait').count(), 0, '续跑后节点弹层不再显示等待卡');
+    assert.equal(await page.locator('.modal-screen .id-confirm-card').count(), 0);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0004T10(browser) {
+  const ctx = await open(browser, 'instance-detail', 'id=' + RUN_RESUME_CONFLICT, {
+    b3: fakeB3,
+    setup: function () {
+      runFixtures();
+      addRunFixture(resumeRunFixture(RUN_RESUME_CONFLICT, {
+        resumeError: {
+          status: 409,
+          body: { error: { code: 'invalid_state', message: '当前状态不允许该操作：node_not_waiting_resume', details: { reason: 'node_not_waiting_resume' } } }
+        }
+      }));
+    },
+    wait: 900
+  });
+  try {
+    await ctx.page.locator('#id-wait-resume').click();
+    await ctx.page.waitForTimeout(500);
+    assert.match(await ctx.page.locator('.toast').last().textContent(), /继续失败：节点已不在等待继续状态，请刷新后重试/);
+    assert.equal(await ctx.page.locator('#id-wait-banner').count(), 1, '409 后保留等待态，不伪造成功');
+    assert.equal(await ctx.page.locator('#id-wait-resume').isDisabled(), false);
+    assert.equal(await ctx.page.locator('.toast', { hasText: '已提交，等待客户端执行' }).count(), 0);
+    assert.match(await ctx.page.locator('.page-header').textContent(), /执行超时，等待继续/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0004T11(browser) {
+  const ctx = await open(browser, 'instance-detail', 'id=' + RUN_RESUME_503, {
+    b3: fakeB3,
+    setup: function () {
+      runFixtures();
+      addRunFixture(resumeRunFixture(RUN_RESUME_503, {
+        resumeError: { status: 503, body: { error: { code: 'service_unavailable', message: '数据库暂不可用' } } }
+      }));
+    },
+    wait: 900
+  });
+  try {
+    await ctx.page.locator('#id-wait-resume').click();
+    await ctx.page.waitForTimeout(500);
+    assert.match(await ctx.page.locator('.toast').last().textContent(), /继续失败：后端服务不可用，请检查运行服务/);
+    assert.equal(await ctx.page.locator('#id-wait-banner').count(), 1);
+    assert.equal(await ctx.page.locator('#id-wait-resume').isDisabled(), false, '503 后保留按钮供重试');
+    assert.match(await ctx.page.locator('.page-header').textContent(), /执行超时，等待继续/);
     noErrors(ctx);
   } finally { await ctx.page.close(); }
 }
@@ -1340,7 +1477,10 @@ const SCENARIOS = [
     ['SCN-0004-T5', '正', '发起运行按 harness/路径/意图提交', scn0004T5],
     ['SCN-0004-T6', '正', '多轮节点可切最新/历史并保留打回前内容', scn0004T6],
     ['SCN-0004-T7', '正', '工作区路径历史按执行节点保存、可选择与删除，启动成功后置顶并封顶 10 条', scn0004T7],
-    ['SCN-0004-T8', '反', '损坏或他节点历史不进入下拉与表单，仍可手输路径', scn0004T8]
+    ['SCN-0004-T8', '反', '损坏或他节点历史不进入下拉与表单，仍可手输路径', scn0004T8],
+    ['SCN-0004-T9', '正', '超时等待运行显示等待态与超时码，续跑后同一 task 回到已派发', scn0004T9],
+    ['SCN-0004-T10', '反', '续跑 409 按 reason 提示并保留等待态', scn0004T10],
+    ['SCN-0004-T11', '反', '续跑 503 保留按钮且不伪造成功', scn0004T11]
   ]],
   ['SCN-0005', 'Skill 维护与渐进披露', [
     ['SCN-0005-T1', '正', '列表计数同源', scn0005T1],
