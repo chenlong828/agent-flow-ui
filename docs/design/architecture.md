@@ -27,7 +27,7 @@ updated: 2026-11-18
 | `CMP-ui-shell` | 13 页公共外壳 | `assets/js/ui.js` | 顶栏、左侧导航、面包屑/页头、用户区、待确认角标、字号缩放、`DF.*` 原语 |
 | `CMP-workflow-list` | `pages/workflow-list.html` | `workflow-list.js` | B3 工作流列表、筛选、统计、新建向导/复制/改名/删除/导入导出；无运行入口 |
 | `CMP-workflow-editor` | `pages/workflow-editor.html?id=` | `workflow-editor.js` + `workflow/views/*` | 画布阶段/节点/边编辑、双击 90% 属性弹层、本地校验、手动保存、DSL 预览与导出；无发布/版本/运行 |
-| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图、发起运行（工作流+Harness+路径+意图）、节点多轮历史弹层、文件/执行会话 Tab、页头任务文件、终止、人工确认（confirm 节点与 MCP 执行中确认点）、超时节点继续执行、按轮会话日志下载；后端未提供的控制入口置灰 |
+| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图、发起运行（工作流+Harness+路径+意图）、节点多轮历史弹层、文件/执行会话 Tab、页头任务文件、终止、人工确认（confirm 节点与 MCP 执行中确认点）、超时节点继续执行、历史运行快照展示（RunDetail.graph/workflowName/expertName）、按轮会话日志下载；后端未提供的控制入口置灰 |
 | `CMP-run-files` | `instance-detail.html` 节点弹层/页头任务文件 | `run/views/files.js` | 运行任务文件只读浏览：根切换、面包屑、目录懒加载、Markdown/文本/二进制/截断预览 |
 | `CMP-run-session` | `instance-detail.html` 节点弹层执行会话 | `run/views/session.js` | 执行会话只读：详情、历史事件、`EventSource` 实时追加、raw 下载；无 sessionId |
 | `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js` | Skill 列表、筛选、启停、删除、引用方；专门页承接查看/编辑/新建，正文用 Milkdown 渲染、编辑走草稿 |
@@ -69,7 +69,7 @@ updated: 2026-11-18
 | 运行两页 | `run/data` | B4 `/api/v1/runs*` 与启动端点 | HTTP，同源 | 唯一读写入口；不推断状态机、不缓存；含 client 文件/session 只读方法与 SSE/raw URL、超时续跑端点 |
 | 运行详情 | `run/views/files` | 文件只读视图 | 同步，ESM import | 只经 `run/data` 取数；不 import 页面 |
 | 运行详情 | `run/views/session` | 会话只读视图 + `EventSource` | 同步，ESM import | 只经 `run/data` 取数；unmount 必关流 |
-| 运行两页 | `workflow/data` / `workflow/model` | 工作流图与坐标 | HTTP + 同步 | 详情轨迹只读工作流图，不改图 |
+| 运行两页 | `workflow/data` / `workflow/model` | 工作流图与坐标 | HTTP + 同步 | 详情优先读 `RunDetail.graph`（冻结快照）；仅快照缺失时回退只读工作流图，不改图 |
 | Skill 正文 / 运行意图 | `shared/markdown-editor` | `mountMarkdown/destroyMarkdown` | 动态 import vendor | 只经适配层使用 Milkdown，页面不直接 import vendor |
 | 运行详情 | `shared/markdown` | `renderMarkdown` | 同步，ESM import | 节点消息只读渲染；不执行原始 HTML |
 | `CMP-workspaces` 两页 | `WSC` | 目录树/跨页联动 | 同步，ESM import | 不供其他页面使用 |
@@ -132,7 +132,7 @@ updated: 2026-11-18
 | 数据 | 写入口 | 读方 | 存储 | 一致性/复位 |
 |---|---|---|---|---|
 | B3 Workflow + Definition | `CMP-workflow-list`、`CMP-workflow-editor`（经 `workflow/data`） | 列表、编辑器、运行详情（只读图） | B3 PostgreSQL | revision + `If-Match`；`layout/viewport` 前端拥有/后端透传 |
-| B4 Run（列表/详情/决策） | 后端运行编排服务；页面只经 `run/data` 发起/终止/决策/续跑 | 运行列表、运行详情 | B4 PostgreSQL | 状态机在后端；页面不推断、不缓存；非终态（含 `waiting_resume`）5s 轮询 |
+| B4 Run（列表/详情/决策） | 后端运行编排服务；页面只经 `run/data` 发起/终止/决策/续跑 | 运行列表、运行详情 | B4 PostgreSQL | 状态机在后端；页面不推断、不缓存；非终态（含 `waiting_resume`）5s 轮询；`workflowName`/`harnessName`/`graph`/`expertName` 为启动时冻结快照 |
 | `MOCK.workflows` | 无（只读夹具） | 实例页（MOCK） | 内存 | 工作流两页已切 B3，不再写夹具 |
 | `MOCK.instances` | 无（运行两页已切 B4） | 其余 MOCK 页的外壳角标演示数据 | 内存 | 只读夹具；刷新复位 |
 | `MOCK.workspaces` | `CMP-workspaces` | 列表、编辑器、实例、Key 绑定 | 内存 | 单写；刷新复位 |
@@ -171,7 +171,7 @@ updated: 2026-11-18
 | `CMP-workflow-editor` | ✓ | ✓ | `SCN-0019` verified（24/24） | — |
 | `CMP-workflow-data` | ✓ | — | `SCN-0018/0019` 页面路径 + 26 条纯逻辑 | — |
 | `CMP-run-data` | ✓ | — | `SCN-0004` 页面路径 | — |
-| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（11/11）+ `SCN-0022` verified（8/8） | — |
+| `CMP-instances` | ✓ | ✓ | `SCN-0004` verified（16/16）+ `SCN-0022` verified（8/8） | — |
 | `CMP-skills` | ✓ | ✓ | `SCN-0005` 4/4 + `SCN-0014` 5/5 + `SCN-0015` 4/4 + `SCN-0016` 4/4 + `SCN-0017` 4/4；引擎 29/29；`SCN-0013` 已废弃 | — |
 | `CMP-experts` | ✓ | ✓ | `SCN-0006` verified（4/4） | — |
 | `CMP-harnesses` | ✓ | ✓ | `SCN-0007` verified（4/4） | — |
@@ -184,10 +184,10 @@ updated: 2026-11-18
 - 语法层：`node --check` 全部页面 JS、`bff/*.js`、`tests/bff/*.js`。
 - 结构层：`node tools/smoke-test.js`（Playwright WebKit；13/13 页面）。
 - 引擎层：`node tools/verify-user-menu.js`（需 Playwright WebKit 与运行中的 `:3000`）。
-- 业务场景层：`node tools/verify-m1-scenarios.js`（Playwright，58/58；各场景至少 3 正 1 反）；工作流：`npm run test:workflow`（纯逻辑 32/32 + SCN-0018 15/15 + SCN-0019 24/24）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）；`tools/verify-b1-writes.js`（写 4/4，2026-10-30 已确认并清理）。
+- 业务场景层：`node tools/verify-m1-scenarios.js`（Playwright，71/71；各场景至少 3 正 1 反）；工作流：`npm run test:workflow`（纯逻辑 32/32 + SCN-0018 15/15 + SCN-0019 24/24）；B1 真实验证：`tools/verify-b1-pages.js`（读 4/4）；`tools/verify-b1-writes.js`（写 4/4，2026-10-30 已确认并清理）。
 - BFF 层：`npm run test:bff`（Node `node:test` + stub 上游；12 条契约断言，含 `If-None-Match`/304）。
 - 人工层：Safari 走查为发布门禁；未完成不宣称“浏览器全兼容”。
-- **M1 十页 + B1/Skill v2/Skill 专门页场景已 verified**：M1 40/40；全量 Playwright 58/58（数量见 `design/scenarios/_index.md`）；专门页另加引擎层 29/29。
+- **M1 十页 + B1/Skill v2/Skill 专门页场景已 verified**：M1 40/40；全量 Playwright 71/71（数量见 `design/scenarios/_index.md`）；专门页另加引擎层 29/29。
 
 ## 8 已知偏差与基线登记
 

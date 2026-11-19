@@ -252,7 +252,16 @@
     errorText: function (error) {
       if (!error) return '操作失败';
       if (error.status === 404) return '目标不存在或已被删除';
-      if (error.status === 409) return error.message || '数据已被其他操作修改，请刷新后重试';
+      if (error.status === 409) {
+        var refs = error.details && Array.isArray(error.details.references) ? error.details.references : [];
+        var runs = refs.filter(function (ref) { return ref && ref.type === 'run'; });
+        if (runs.length) {
+          var ids = runs.slice(0, 3).map(function (ref) { return ref.name || ref.id; }).join('、');
+          return '有未结束的运行正在使用该资产，请先取消或结束运行' + (ids ? '（' + ids + '）' : '');
+        }
+        if (error.code === 'referenced') return error.message || '资产仍被引用，不能删除';
+        return error.message || '数据已被其他操作修改，请刷新后重试';
+      }
       if (error.status === 428) return '缺少版本信息，请刷新后重试';
       if (error.status === 410) return '草稿已过期，请重新编辑';
       if (error.status === 413) return '文件或整包超过大小限制';

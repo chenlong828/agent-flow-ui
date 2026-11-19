@@ -45,7 +45,6 @@ const POLL_MS = 5000;
 const state = {
   runId: null,
   run: null,
-  workflow: null,
   graph: null,
   experts: new Map(),
   nodeVisits: new Map(),
@@ -96,19 +95,24 @@ async function load() {
     const run = await runs.get(state.runId);
     if (token !== state.version) return;
     state.run = run;
+    /* 优先用 RunDetail.graph 快照；旧后端没有 graph 时才回查工作流。两者都没有时只显示无图占位，不把详情页置为错误。 */
+    const fallback = run.graph ? Promise.resolve(null) :
+      workflows.get(run.workflowId).catch(function () { return null; });
     const [wf, expertPage, pendingPage] = await Promise.all([
-      workflows.get(run.workflowId),
+      fallback,
       request({ method: 'GET', path: '/api/v1/experts?limit=200' }).catch(function () { return { items: [] }; }),
       runs.list({ state: 'waiting_confirm', limit: 1 }).catch(function () { return { total: 0 }; })
     ]);
     state.pending = pendingPage.total || 0;
     if (token !== state.version) return;
-    state.workflow = wf;
-    state.graph = toEditorGraph(wf.graph);
+    const graph = run.graph || (wf && wf.graph) || null;
+    state.graph = graph ? toEditorGraph(graph) : null;
     state.experts = new Map((expertPage.items || []).map(function (e) { return [e.id, e]; }));
     indexNodes(run);
     state.error = null;
-    if (!state.selectedId || !state.graph.nodes.some(function (n) { return n.id === state.selectedId; })) {
+    if (!state.graph) {
+      state.selectedId = null;
+    } else if (!state.selectedId || !state.graph.nodes.some(function (n) { return n.id === state.selectedId; })) {
       state.selectedId = run.currentNodeId && state.graph.nodes.some(function (n) { return n.id === run.currentNodeId; })
         ? run.currentNodeId
         : (state.graph.nodes[0] ? state.graph.nodes[0].id : null);
@@ -163,7 +167,7 @@ function headerActions(run, active) {
 }
 
 function shellOptions(run, active) {
-  const wfName = state.workflow ? state.workflow.name : shortId(run.workflowId);
+  const wfName = run.workflowName || shortId(run.workflowId);
   return {
     pendingCount: state.pending,
     active: 'instances',
@@ -204,6 +208,11 @@ function waitingBannerHTML(run) {
 }
 
 function traceHTML() {
+  if (!state.graph) {
+    return '<div class="id-layout"><div class="id-trace"><div class="cv-wrap" style="display:flex;align-items:center;justify-content:center;min-height:320px">' +
+      '<div class="empty"><div class="e-ic">🗂</div>该运行没有可用的图快照<br>' +
+      '<span class="sub">仍可通过页头「任务文件」查看执行产物。</span></div></div></div></div>';
+  }
   return '<div class="id-layout">' +
     '<div class="id-trace"><div class="cv-wrap" id="cvWrap"><div class="cv-canvas" id="cvCanvas"></div></div>' +
       '<div class="cv-legend">' +
@@ -237,7 +246,7 @@ function render() {
   body = document.getElementById('page-body');
   body.innerHTML = waitingBannerHTML(run) + traceHTML();
   bindWaitingActions();
-  paint();
+  if (state.graph) paint();
   if (state.modal) syncNodeModal();
   syncBell();
 }
@@ -282,6 +291,7 @@ function nodeState(nodeId) {
 }
 
 function paint() {
+  if (!state.graph) return;
   paintCanvas({
     canvas: document.getElementById('cvCanvas'),
     graph: state.graph,

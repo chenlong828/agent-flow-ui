@@ -146,8 +146,11 @@ for (const k of Object.keys(MOCK)) {
 
   function runSummary(run) {
     return {
-      runId: run.runId, workflowId: run.workflowId, workflowRevision: run.workflowRevision,
-      harnessId: run.harnessId, clientId: run.clientId, instanceId: run.instanceId,
+      runId: run.runId, workflowId: run.workflowId,
+      workflowName: run.workflowName || '研发四阶段主流程',
+      workflowRevision: run.workflowRevision,
+      harnessId: run.harnessId, harnessName: run.harnessName || '本机研发 Harness',
+      clientId: run.clientId, instanceId: run.instanceId,
       state: run.state, outcome: run.outcome, currentNodeId: run.currentNodeId,
       archiveState: run.archiveState, createdAt: run.createdAt, startedAt: run.startedAt, finishedAt: run.finishedAt
     };
@@ -155,7 +158,7 @@ for (const k of Object.keys(MOCK)) {
   function runDetail(run) {
     return Object.assign(runSummary(run), {
       workspacePath: run.workspacePath, taskSpacePath: run.taskSpacePath, autoConfirm: run.autoConfirm,
-      finalMessage: run.finalMessage, error: run.error, nodes: run.nodes.slice()
+      finalMessage: run.finalMessage, error: run.error, graph: run.graph || null, nodes: run.nodes.slice()
     });
   }
   function runNotFound() {
@@ -925,6 +928,10 @@ for (const k of Object.keys(MOCK)) {
     }
     if (method === 'DELETE') {
       if (!ifMatch(kindName, id, headers)) return Promise.resolve(conflict());
+      if (existing._runRefs && existing._runRefs.length) {
+        var assetType = kind === 'experts' ? 'expert' : kind === 'harnesses' ? 'harness' : kindName;
+        return Promise.resolve({ status: 409, body: { error: { code: 'referenced', message: '资产仍被引用，不能删除', details: { asset: { type: assetType, id: existing.id, name: existing.name }, references: existing._runRefs } } } });
+      }
       if (kind === 'tools' && (existing.refCount || 0) > 0) {
         return Promise.resolve({ status: 409, body: { error: { code: 'referenced', message: '该工具被 ' + existing.refCount + ' 个专家引用，禁止删除' } } });
       }

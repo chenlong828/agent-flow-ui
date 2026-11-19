@@ -679,7 +679,7 @@ import { API } from '../api.js';
     if (rev == null) rev = dto.revision;
     DF.modal.confirm({
       title: '删除专家',
-      message: '确定删除专家「' + dto.name + '」？该操作不可恢复。',
+      message: '确定删除专家「' + dto.name + '」？该操作不可恢复。被当前工作流或未结束的运行引用时不能删除。',
       danger: true,
       okText: '删除'
     }).then(function (ok) {

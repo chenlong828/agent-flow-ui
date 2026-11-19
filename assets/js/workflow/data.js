@@ -152,6 +152,13 @@ export function errorText(err) {
   if (err.status === 404) return '工作流不存在或已删除';
   if (err.status === 409) {
     if (err.code === 'name_conflict') return '名称已存在，请换一个名称';
+    const refs = err.details && Array.isArray(err.details.references) ? err.details.references : [];
+    const runs = refs.filter(function (ref) { return ref && ref.type === 'run'; });
+    if (runs.length) {
+      const ids = runs.slice(0, 3).map(function (ref) { return ref.name || ref.id; }).join('、');
+      return '有未结束的运行正在使用该工作流，请先取消或结束运行' + (ids ? '（' + ids + '）' : '');
+    }
+    if (err.code === 'referenced') return '工作流仍被引用，不能删除';
     return '工作流已被他人修改，请刷新后重试';
   }
   if (err.status === 428) return '缺少版本条件，请刷新后重试';

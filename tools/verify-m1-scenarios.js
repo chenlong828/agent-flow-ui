@@ -125,6 +125,70 @@ function resumeRunFixture(runId, extra) {
   }, extra);
 }
 
+
+const RUN_SNAPSHOT = 'aaaaaaaa-0000-4000-8000-000000000013';
+const RUN_SNAPSHOT_LIST = 'aaaaaaaa-0000-4000-8000-000000000014';
+const RUN_DELETE_HISTORY = 'aaaaaaaa-0000-4000-8000-000000000015';
+const RUN_NO_GRAPH = 'aaaaaaaa-0000-4000-8000-000000000016';
+const DELETED_WF = '77777777-7777-4777-8777-777777777777';
+const WORKFLOW_IN_RUNS = '11111111-1111-4111-8111-111111111111';
+
+const SNAPSHOT_GRAPH = {
+  stages: [{ id: 's1', name: '快照阶段', description: '运行冻结图', layout: { x: 40, y: 40, width: 700, height: 240 } }],
+  nodes: [
+    { id: 'n1', type: 'start', name: '启动', stageId: 's1', expertId: null, layout: { x: 60, y: 120 } },
+    { id: 'n2', type: 'agent', name: '开发', stageId: 's1', expertId: '00000000-0000-4000-8000-00000000dead', layout: { x: 300, y: 120 } },
+    { id: 'n3', type: 'end', name: '收尾', stageId: null, expertId: null, layout: { x: 540, y: 120 } }
+  ],
+  edges: [
+    { id: 'e1', from: 'n1', to: 'n2', kind: 'seq' },
+    { id: 'e2', from: 'n2', to: 'n3', kind: 'seq' }
+  ],
+  viewport: { x: 16, y: 12, zoom: 1 }
+};
+
+/** 已删除工作流/专家的运行快照：RunDetail.graph + workflowName + 节点 expertName。 */
+function snapshotRun(runId, extra) {
+  const iso = (min) => new Date(Date.now() - min * 60000).toISOString();
+  return Object.assign({
+    runId: runId,
+    workflowId: DELETED_WF,
+    workflowName: '已删除工作流快照',
+    workflowRevision: 7,
+    harnessId: 'h-1',
+    harnessName: '本机研发 Harness',
+    clientId: 'client-stub-01',
+    instanceId: runId.replace('aaaaaaaa', 'bbbbbbbb'),
+    state: 'done',
+    outcome: 'succeeded',
+    currentNodeId: 'n3',
+    archiveState: 'stored',
+    createdAt: iso(40), startedAt: iso(40), finishedAt: iso(35),
+    workspacePath: '/tmp/fake/ws-snapshot',
+    taskSpacePath: '/tmp/fake/ws-snapshot/.agent-flow/task/' + runId,
+    autoConfirm: false,
+    finalMessage: '完成',
+    error: null,
+    graph: SNAPSHOT_GRAPH,
+    nodes: [
+      { nodeId: 'n1', nodeType: 'start', visit: 1, state: 'succeeded', taskId: 't-s1', verdict: null, message: '开始', error: null, expertName: null, dispatchedAt: iso(40), finishedAt: iso(39) },
+      { nodeId: 'n2', nodeType: 'agent', visit: 1, state: 'succeeded', taskId: 't-s2', verdict: null, message: '完成', error: null, expertName: '已删除的专家', dispatchedAt: iso(39), finishedAt: iso(36) },
+      { nodeId: 'n3', nodeType: 'end', visit: 1, state: 'succeeded', taskId: 't-s3', verdict: null, message: '完成', error: null, expertName: null, dispatchedAt: iso(36), finishedAt: iso(35) }
+    ]
+  }, extra);
+}
+
+function conflictB3() {
+  return {
+    handle: async function (method, path, body, headers) {
+      if (method === 'DELETE' && path === '/workflows/' + WORKFLOW_IN_RUNS) {
+        return { status: 409, body: { error: { code: 'referenced', message: '资产仍被引用，不能删除', details: { references: [{ type: 'run', id: 'run-conflict', name: 'run-conflict' }] } } } };
+      }
+      return fakeB3.handle(method, path, body, headers);
+    }
+  };
+}
+
 const HISTORY_GRAPH = {
   stages: [{ id: 's1', name: '多轮回退阶段', description: '演示重新进入与打回', layout: { x: 40, y: 40, width: 820, height: 260 } }],
   nodes: [
@@ -593,6 +657,162 @@ async function scn0004T11(browser) {
     assert.match(await ctx.page.locator('.page-header').textContent(), /执行超时，等待继续/);
     noErrors(ctx);
   } finally { await ctx.page.close(); }
+}
+
+
+async function scn0004T12(browser) {
+  const ctx = await open(browser, 'instance-detail', 'id=' + RUN_SNAPSHOT, {
+    b3: fakeB3,
+    setup: function () { runFixtures(); addRunFixture(snapshotRun(RUN_SNAPSHOT)); },
+    wait: 900
+  });
+  try {
+    const wfRequests = [];
+    ctx.page.on('request', function (req) {
+      const p = new URL(req.url()).pathname;
+      if (p.includes('/api/v1/workflows/')) wfRequests.push(p);
+    });
+    assert.equal(await ctx.page.locator('.cv-node').count(), 3, '应使用 RunDetail.graph 渲染画布');
+    assert.match(await ctx.page.locator('.page-header h1').textContent(), /已删除工作流快照/);
+    assert.match(await ctx.page.locator('.page-header h1').textContent(), /r7/);
+    assert.equal(await ctx.page.locator('#page-body .empty').count(), 0, '有 graph 时不显示无图占位');
+    assert.equal(wfRequests.length, 0, '有 run.graph 时不得再请求 GET /workflows/{id}');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+
+  const noGraph = await open(browser, 'instance-detail', 'id=' + RUN_NO_GRAPH, {
+    b3: fakeB3,
+    setup: function () {
+      runFixtures();
+      addRunFixture(snapshotRun(RUN_NO_GRAPH, { graph: null, workflowName: '无图快照运行' }));
+    },
+    wait: 900
+  });
+  try {
+    assert.match(await noGraph.page.locator('.page-header h1').textContent(), /无图快照运行/);
+    assert.match(await noGraph.page.locator('#page-body').innerText(), /该运行没有可用的图快照/);
+    assert.doesNotMatch(await noGraph.page.locator('#page-body').innerText(), /运行不存在或已删除/);
+    noErrors(noGraph);
+  } finally { await noGraph.page.close(); }
+}
+
+async function scn0004T13(browser) {
+  const ctx = await open(browser, 'instance-detail', 'id=' + RUN_SNAPSHOT, {
+    b3: fakeB3,
+    setup: function () { runFixtures(); addRunFixture(snapshotRun(RUN_SNAPSHOT)); },
+    wait: 900
+  });
+  try {
+    await ctx.page.locator('.cv-node[data-node="n2"]').dblclick();
+    await ctx.page.waitForTimeout(250);
+    const text = await ctx.page.locator('.modal-screen').innerText();
+    assert.match(text, /已删除的专家/);
+    assert.equal(text.includes('00000000-0000-4000-8000-00000000dead'), false, '专家已删时不得显示裸 UUID');
+    assert.match(text, /开发/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0004T14(browser) {
+  const ctx = await open(browser, 'instances', '', {
+    b3: fakeB3,
+    setup: function () { runFixtures(); addRunFixture(snapshotRun(RUN_SNAPSHOT_LIST)); },
+    wait: 900
+  });
+  try {
+    assert.match(await ctx.page.locator('#page-body').innerText(), /已删除工作流快照/);
+    await ctx.page.goto(BASE + '/pages/instances.html?wfId=' + encodeURIComponent(DELETED_WF), { waitUntil: 'networkidle' });
+    await ctx.page.waitForTimeout(700);
+    assert.match(await ctx.page.locator('.notice').innerText(), /已删除工作流快照/);
+    assert.equal(await ctx.page.locator('#page-body tbody tr').count(), 1, '按历史 workflowId 过滤仍能命中');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0004T15(browser) {
+  const ctx = await open(browser, 'workflow-list', '', {
+    b3: fakeB3,
+    setup: function () {
+      runFixtures();
+      addRunFixture(snapshotRun(RUN_DELETE_HISTORY, {
+        workflowId: WORKFLOW_IN_RUNS,
+        workflowName: '研发四阶段主流程',
+        workflowRevision: 3
+      }));
+    },
+    wait: 800
+  });
+  try {
+    const card = ctx.page.locator('.wl-card', { hasText: '研发四阶段主流程' }).first();
+    await card.locator('[data-act="more"]').click();
+    await clickMenu(ctx.page, '删除');
+    assert.match(await ctx.page.locator('.modal').innerText(), /未结束的运行/);
+    await ctx.page.locator('#mc-no').click();
+    await ctx.page.waitForTimeout(120);
+
+    await card.locator('[data-act="more"]').click();
+    await clickMenu(ctx.page, '删除');
+    await ctx.page.locator('#mc-ok').click();
+    await ctx.page.waitForTimeout(600);
+    assert.match(await ctx.page.locator('body').innerText(), /已删除/);
+    assert.equal(await ctx.page.locator('.wl-card', { hasText: '研发四阶段主流程' }).count(), 0);
+
+    await ctx.page.goto(BASE + '/pages/instance-detail.html?id=' + RUN_DELETE_HISTORY, { waitUntil: 'networkidle' });
+    await ctx.page.waitForTimeout(800);
+    assert.match(await ctx.page.locator('.page-header h1').textContent(), /研发四阶段主流程/);
+    assert.equal(await ctx.page.locator('.cv-node').count(), 3, '工作流删除后历史运行仍用快照渲染');
+    assert.equal(await ctx.page.locator('#page-body .empty').count(), 0);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+
+  const ex = await open(browser, 'experts', '', { setup: runFixtures, wait: 600 });
+  try {
+    await ex.page.locator('[data-act="detail"]').first().click();
+    await ex.page.waitForTimeout(250);
+    await ex.page.locator('#ex-delete').click();
+    assert.match(await ex.page.locator('.modal').innerText(), /未结束的运行/);
+    await ex.page.locator('#mc-no').click();
+    noErrors(ex);
+  } finally { await ex.page.close(); }
+
+  const ha = await open(browser, 'harnesses', '', { setup: runFixtures, wait: 600 });
+  try {
+    await ha.page.locator('[data-act="del"]').first().click();
+    assert.match(await ha.page.locator('.modal').innerText(), /未结束的运行/);
+    await ha.page.locator('#mc-no').click();
+    noErrors(ha);
+  } finally { await ha.page.close(); }
+}
+
+async function scn0004T16(browser) {
+  const ctx = await open(browser, 'workflow-list', '', { b3: conflictB3(), setup: runFixtures, wait: 800 });
+  try {
+    const card = ctx.page.locator('.wl-card', { hasText: '研发四阶段主流程' }).first();
+    await card.locator('[data-act="more"]').click();
+    await clickMenu(ctx.page, '删除');
+    await ctx.page.locator('#mc-ok').click();
+    await ctx.page.waitForTimeout(500);
+    assert.match(await ctx.page.locator('.toast').last().innerText(), /有未结束的运行/);
+    assert.equal(await ctx.page.locator('.wl-card', { hasText: '研发四阶段主流程' }).count(), 1, '409 后列表保留');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+
+  const ex = await open(browser, 'experts', '', {
+    setup: function () {
+      runFixtures();
+      MOCK.experts[0]._runRefs = [{ type: 'run', id: 'run-expert', name: 'run-expert' }];
+    },
+    wait: 600
+  });
+  try {
+    await ex.page.locator('[data-act="detail"]').first().click();
+    await ex.page.waitForTimeout(250);
+    await ex.page.locator('#ex-delete').click();
+    await ex.page.locator('#mc-ok').click();
+    await ex.page.waitForTimeout(500);
+    assert.match(await ex.page.locator('.toast').last().innerText(), /有未结束的运行/);
+    noErrors(ex);
+  } finally { await ex.page.close(); }
 }
 
 /* ----------------------------- SCN-0022 ----------------------------- */
@@ -1743,7 +1963,12 @@ const SCENARIOS = [
     ['SCN-0004-T8', '反', '损坏或他节点历史不进入下拉与表单，仍可手输路径', scn0004T8],
     ['SCN-0004-T9', '正', '超时等待运行显示等待态与超时码，续跑后同一 task 回到已派发', scn0004T9],
     ['SCN-0004-T10', '反', '续跑 409 按 reason 提示并保留等待态', scn0004T10],
-    ['SCN-0004-T11', '反', '续跑 503 保留按钮且不伪造成功', scn0004T11]
+    ['SCN-0004-T11', '反', '续跑 503 保留按钮且不伪造成功', scn0004T11],
+    ['SCN-0004-T12', '正', 'RunDetail.graph 渲染详情且不再回查已删除工作流', scn0004T12],
+    ['SCN-0004-T13', '正', '节点专家名优先 expertName，已删除专家不显示裸 UUID', scn0004T13],
+    ['SCN-0004-T14', '正', '运行列表与筛选横幅优先 workflowName', scn0004T14],
+    ['SCN-0004-T15', '正', '删除弹窗提示未结束运行；删除后历史运行仍可读', scn0004T15],
+    ['SCN-0004-T16', '反', '409 references 含 run 时提示有未结束的运行且不删除', scn0004T16]
   ]],
   ['SCN-0022', '执行中确认点（MCP confirmation_request）', [
     ['SCN-0022-T1', '正', '按 verdict.kind 识别执行中确认点并渲染问题/上下文/选项', scn0022T1],

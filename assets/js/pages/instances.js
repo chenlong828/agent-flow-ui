@@ -126,8 +126,17 @@ function wfOf(run) {
 }
 
 function wfLabel(run) {
+  if (run.workflowName) return run.workflowName;
   const wf = wfOf(run);
   return wf ? wf.name : shortId(run.workflowId);
+}
+
+/** 筛选横幅的工作流名：工作流已删除时从历史运行快照里找，仍找不到再回落短 ID。 */
+function wfNameById(workflowId) {
+  const run = state.runs.find(function (r) { return r.workflowId === workflowId; });
+  if (run && run.workflowName) return run.workflowName;
+  const wf = state.workflows.get(workflowId);
+  return wf ? wf.name : shortId(workflowId);
 }
 
 function fmtTime(iso) {
@@ -201,7 +210,7 @@ function render() {
   const list = state.runs.filter(function (r) { return inTab(r, tab); });
   body.innerHTML =
     DF.tabsHtml(TABS.map(function (t) { return { k: t, label: t, count: countOf(t) || null }; }), tab, 'data-t', 'id="in-tabs"') +
-    (wfId ? '<div class="notice" style="margin-bottom:10px">正在筛选工作流「' + esc(wfLabel({ workflowId: wfId })) +
+    (wfId ? '<div class="notice" style="margin-bottom:10px">正在筛选工作流「' + esc(wfNameById(wfId)) +
       '」的实例 <a href="instances.html" style="margin-left:8px">清除筛选</a></div>' : '') +
     DF.table(
       ['运行', '工作流 / 版本', '执行节点', '当前节点', '状态', '耗时', '开始时间', '操作'],

@@ -50,13 +50,22 @@ const STATUS_TONE = {
   dispatched: 'blue'
 };
 
-function expertCell(node, experts) {
-  if (!node.expertId) return '—';
-  const expert = experts.get(node.expertId);
-  if (!expert) return '<span class="mono">' + esc(node.expertId) + '</span>';
-  return '<span class="expert-dot" style="background:' + esc(expert.color) +
+function expertBadge(color, name) {
+  return '<span class="expert-dot" style="background:' + esc(color) +
     ';width:16px;height:16px;font-size:9px;border-radius:4px">' +
-    esc(String(expert.name).slice(0, 1)) + '</span> ' + esc(expert.name);
+    esc(String(name).slice(0, 1)) + '</span> ' + esc(name);
+}
+
+/**
+ * 专家名优先用 RunNodeView.expertName（启动时冻结，资产删除后仍在）；
+ * 其次查当前专家列表；都没有时显示「—」，不展示裸 UUID。
+ */
+function expertCell(node, runNode, experts) {
+  const snapshot = runNode && runNode.expertName ? String(runNode.expertName) : '';
+  const expert = node.expertId ? experts.get(node.expertId) : null;
+  if (snapshot) return expert ? expertBadge(expert.color, snapshot) : expertBadge('#cbd5e1', snapshot);
+  if (expert) return expertBadge(expert.color, expert.name);
+  return '<span class="sub" title="专家已删除或未记录">—</span>';
 }
 
 function summaryRows(node, st, runNode, opt, experts) {
@@ -64,7 +73,7 @@ function summaryRows(node, st, runNode, opt, experts) {
   return [
     ['状态', tag(st.label, STATUS_TONE[st.key] || 'gray')],
     ['节点类型', esc((NODE_META[node.type] || { label: node.type }).label)],
-    ['专家', expertCell(node, experts)],
+    ['专家', expertCell(node, runNode, experts)],
     ['访问轮次', runNode ? '第 ' + esc(runNode.visit) + ' 轮' + roundSuffix : '—'],
     ['任务 ID', runNode && runNode.taskId ? '<span class="mono">' + esc(runNode.taskId) + '</span>' : '—'],
     ['下发时间', esc(fmtTime(runNode && runNode.dispatchedAt))],

@@ -441,7 +441,7 @@ import { API } from '../api.js';
       title: '删除 Harness',
       danger: true,
       okText: '确认删除',
-      html: '确定删除 <b>' + DF.esc(h.name) + '</b>（' + DF.esc(h.address) + '）？删除后不可恢复；仍被工具引用时将删除失败。'
+      html: '确定删除 <b>' + DF.esc(h.name) + '</b>（' + DF.esc(h.address) + '）？删除后不可恢复；仍被工具或未结束的运行引用时将删除失败。'
     }).then(function (ok) {
       if (!ok) return;
       if (!pendingGuard(h.id)) return;

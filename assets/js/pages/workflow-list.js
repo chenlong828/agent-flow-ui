@@ -365,7 +365,7 @@ function removeWorkflow(w) {
     title: '删除工作流',
     danger: true,
     okText: '删除',
-    html: '确定删除 <b>' + esc(w.name) + '</b>（r' + w.revision + '）？<br>删除后不可恢复；不会自动迁移旧图。'
+    html: '确定删除 <b>' + esc(w.name) + '</b>（r' + w.revision + '）？<br>删除后不可恢复；不会自动迁移旧图。<br>被未结束的运行引用时不能删除；已结束的运行保留快照，不影响历史页。'
   }).then(async function (ok) {
     if (!ok) return;
     try {
