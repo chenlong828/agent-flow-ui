@@ -11,9 +11,11 @@
  *   viewport                   {x,y,zoom}
  */
 
+import { NODE_SIDES } from '../shared/canvas-geometry.js';
+
 export const NODE_TYPES = ['start', 'end', 'agent', 'split', 'review', 'confirm', 'fanout'];
 export const EDGE_KINDS = ['seq', 'rollback'];
-export const NODE_SIDES = ['top', 'right', 'bottom', 'left'];
+export { NODE_SIDES };
 export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const MAX_STAGES = 100;

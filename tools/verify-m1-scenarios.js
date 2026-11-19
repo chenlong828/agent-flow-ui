@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { startStaticServer, launchBrowser, openPage } from './test-harness.js';
 import { MOCK } from '../assets/js/mock-data.js';
 import { fakeB1, addRunFixture } from './fake-b1.js';
-import { fakeB3, prepareUuidExperts } from './fake-b3.js';
+import { addWorkflow, fakeB3, prepareUuidExperts } from './fake-b3.js';
 
 let BASE = '';
 
@@ -1950,6 +1950,189 @@ async function scn0011T4(browser) {
   } finally { await ctx.page.close(); }
 }
 
+
+/* SCN-0023：同一份图（保存锚点 + 回退边 + viewport）供编辑器与运行详情跨页对照。 */
+const TRACE_WF = '88888888-8888-4888-8888-888888888888';
+const TRACE_RUN = 'aaaaaaaa-0000-4000-8000-000000000023';
+const TRACE_GRAPH = {
+  stages: [{ id: 's1', name: '同源阶段', layout: { x: 20, y: 60, width: 700, height: 460 } }],
+  nodes: [
+    { id: 'n1', type: 'start', name: '启动', stageId: 's1', expertId: null, layout: { x: 60, y: 120, outSide: 'right' } },
+    { id: 'n2', type: 'agent', name: '需求', stageId: 's1', expertId: null, layout: { x: 260, y: 120, inSide: 'left', outSide: 'bottom' } },
+    { id: 'n3', type: 'review', name: '方案评审', stageId: 's1', expertId: null, layout: { x: 260, y: 420, inSide: 'top', outSide: 'right' } },
+    { id: 'n4', type: 'agent', name: '实现', stageId: 's1', expertId: null, layout: { x: 520, y: 420 } },
+    { id: 'n5', type: 'end', name: '收尾', stageId: null, expertId: null, layout: { x: 760, y: 120, inSide: 'left' } }
+  ],
+  edges: [
+    { id: 'e1', from: 'n1', to: 'n2', kind: 'seq' },
+    { id: 'e2', from: 'n2', to: 'n3', kind: 'seq' },
+    { id: 'e3', from: 'n3', to: 'n4', kind: 'seq' },
+    { id: 'e4', from: 'n4', to: 'n5', kind: 'seq' },
+    { id: 'r1', from: 'n3', to: 'n2', kind: 'rollback' }
+  ],
+  viewport: { x: 16, y: 12, zoom: 0.8 }
+};
+/* 抽出共享几何前的编辑器输出，作为两个画布的基准。 */
+const TRACE_GOLDEN = [
+  'M 228 149 C 264 149, 224 149, 260 149',
+  'M 344 178 C 344 286.9, 344 311.1, 344 420',
+  'M 428 449 C 469.4 449, 478.6 449, 520 449',
+  'M 604 420 C 604 279.2880868582905, 619.2880868582905 149, 760 149',
+  'M 406 478 C 446 598, 304 298, 344 178'
+];
+
+function traceSetup() {
+  runFixtures();
+  addWorkflow({
+    id: TRACE_WF,
+    name: '轨迹同源夹具',
+    type: '研发主流程',
+    description: 'SCN-0023 跨页连线对照',
+    revision: 3,
+    createdAt: new Date(Date.now() - 3000000).toISOString(),
+    updatedAt: new Date(Date.now() - 60000).toISOString(),
+    graph: structuredClone(TRACE_GRAPH)
+  });
+}
+
+function traceRun(extra) {
+  const iso = (min) => new Date(Date.now() - min * 60000).toISOString();
+  return Object.assign({
+    runId: TRACE_RUN,
+    workflowId: TRACE_WF,
+    workflowName: '轨迹同源夹具',
+    workflowRevision: 3,
+    harnessId: 'h-1',
+    harnessName: '本机研发 Harness',
+    clientId: 'client-stub-01',
+    instanceId: 'bbbbbbbb-0000-4000-8000-000000000023',
+    state: 'done',
+    outcome: 'succeeded',
+    currentNodeId: 'n5',
+    archiveState: 'stored',
+    createdAt: iso(20), startedAt: iso(20), finishedAt: iso(10),
+    workspacePath: '/tmp/fake/ws-trace',
+    taskSpacePath: '/tmp/fake/ws-trace/.agent-flow/task/' + TRACE_RUN,
+    autoConfirm: false,
+    finalMessage: '完成',
+    error: null,
+    graph: structuredClone(TRACE_GRAPH),
+    nodes: TRACE_GRAPH.nodes.map(function (n) {
+      return {
+        nodeId: n.id, nodeType: n.type, visit: 1, state: 'succeeded', taskId: 't-' + n.id,
+        verdict: null, message: '完成', error: null, expertName: null,
+        dispatchedAt: iso(20), finishedAt: iso(10)
+      };
+    })
+  }, extra || {});
+}
+
+async function tracePaths(page) {
+  return page.locator('svg.cv-edges path.e-seq, svg.cv-edges path.e-rb').evaluateAll(function (els) {
+    return els.map(function (el) { return el.getAttribute('d'); });
+  });
+}
+
+async function scn0023T1(browser) {
+  const editor = await open(browser, 'workflow-editor', 'id=' + TRACE_WF, {
+    b3: fakeB3, setup: traceSetup, wait: 900
+  });
+  let editorPaths;
+  try {
+    assert.equal(await editor.page.locator('.cv-node').count(), 5);
+    editorPaths = await tracePaths(editor.page);
+    assert.equal(editorPaths.length, 5, '编辑器应画出 5 条边');
+    noErrors(editor);
+  } finally { await editor.page.close(); }
+
+  const ctx = await open(browser, 'instance-detail', 'id=' + TRACE_RUN, {
+    b3: fakeB3, setup: function () { runFixtures(); addRunFixture(traceRun()); }, wait: 900
+  });
+  try {
+    const runPaths = await tracePaths(ctx.page);
+    assert.deepEqual(runPaths, editorPaths, '运行页与编辑器连线必须逐字一致');
+    assert.deepEqual(runPaths, TRACE_GOLDEN, '连线必须等于抽出共享几何前的基准');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0023T2(browser) {
+  const ctx = await open(browser, 'instance-detail', 'id=' + TRACE_RUN, {
+    b3: fakeB3, setup: function () { runFixtures(); addRunFixture(traceRun()); }, wait: 900
+  });
+  const page = ctx.page;
+  try {
+    assert.equal(await page.locator('path.e-seq[marker-end="url(#arw)"]').count(), 4, '4 条 seq 边带灰箭头');
+    assert.equal(await page.locator('path.e-rb[marker-end="url(#arw-rb)"]').count(), 1, '回退边带紫箭头');
+    assert.equal(await page.locator('svg.cv-edges marker#arw').count(), 1);
+    assert.equal(await page.locator('svg.cv-edges marker#arw-rb').count(), 1);
+    assert.equal((await page.locator('text.edge-label').textContent()).trim(), '↺ 回退');
+    const dash = await page.locator('path.e-rb').evaluate(function (el) { return getComputedStyle(el).strokeDasharray; });
+    assert.match(dash, /6/, '回退边必须是虚线，实际 ' + dash);
+    noErrors(ctx);
+  } finally { await page.close(); }
+}
+
+async function scn0023T3(browser) {
+  const editor = await open(browser, 'workflow-editor', 'id=' + TRACE_WF, {
+    b3: fakeB3, setup: traceSetup, wait: 900
+  });
+  let editorWidth = 0;
+  try {
+    editorWidth = await editor.page.locator('.cv-node[data-node="n1"]').evaluate(function (el) {
+      return el.getBoundingClientRect().width;
+    });
+    assert.ok(Math.abs(editorWidth - 168 * 0.8) <= 1, '编辑器节点宽度应为 168×0.8');
+    noErrors(editor);
+  } finally { await editor.page.close(); }
+
+  const ctx = await open(browser, 'instance-detail', 'id=' + TRACE_RUN, {
+    b3: fakeB3, setup: function () { runFixtures(); addRunFixture(traceRun()); }, wait: 900
+  });
+  const page = ctx.page;
+  try {
+    const matrix = await page.locator('#cvScaler').evaluate(function (el) { return getComputedStyle(el).transform; });
+    assert.match(matrix, /matrix\(0\.8,\s*0,\s*0,\s*0\.8,\s*16,\s*12\)/, '视口 transform 应为 0.8 + (16,12)，实际 ' + matrix);
+    const width = await page.locator('.cv-node[data-node="n1"]').evaluate(function (el) {
+      return el.getBoundingClientRect().width;
+    });
+    assert.ok(Math.abs(width - editorWidth) <= 1, '运行页与编辑器同视口节点宽度一致');
+    const gap = await page.evaluate(function () {
+      const a = document.querySelector('.cv-node[data-node="n1"]').getBoundingClientRect();
+      const b = document.querySelector('.cv-node[data-node="n4"]').getBoundingClientRect();
+      return b.left - a.left;
+    });
+    assert.ok(Math.abs(gap - (520 - 60) * 0.8) <= 1, '节点屏幕距离应按 0.8 缩放，实际 ' + gap);
+    noErrors(ctx);
+  } finally { await page.close(); }
+}
+
+async function scn0023T4(browser) {
+  const broken = structuredClone(TRACE_GRAPH);
+  broken.viewport = { x: 'bad', y: null, zoom: -1 };
+  broken.nodes.forEach(function (n) {
+    if (n.id === 'n2') n.layout.inSide = 'sideways';
+  });
+  const ctx = await open(browser, 'instance-detail', 'id=' + TRACE_RUN, {
+    b3: fakeB3,
+    setup: function () { runFixtures(); addRunFixture(traceRun({ graph: broken })); },
+    wait: 900
+  });
+  const page = ctx.page;
+  try {
+    const matrix = await page.locator('#cvScaler').evaluate(function (el) { return getComputedStyle(el).transform; });
+    assert.match(matrix, /matrix\(0\.85,\s*0,\s*0,\s*0\.85,\s*0,\s*0\)/, '非法视口应回落 0.85 + (0,0)，实际 ' + matrix);
+    const paths = await tracePaths(page);
+    assert.equal(paths.length, 5);
+    assert.equal(paths.some(function (d) { return d.indexOf('NaN') >= 0; }), false, '非法锚点不得产生 NaN');
+    assert.equal(await page.locator('path.e-seq[marker-end="url(#arw)"]').count(), 4);
+    assert.equal(await page.locator('text.edge-label').count(), 1);
+    assert.equal(await page.locator('.cv-node').count(), 5);
+    assert.equal(await page.locator('#page-body .empty').count(), 0, '有图时不得显示无图占位');
+    noErrors(ctx);
+  } finally { await page.close(); }
+}
+
 /* ----------------------------- registry ----------------------------- */
 const SCENARIOS = [
   ['SCN-0004', '实例监控与运行控制', [
@@ -1979,6 +2162,12 @@ const SCENARIOS = [
     ['SCN-0022-T6', '反', '异常 verdict 只读且不提交', scn0022T6],
     ['SCN-0022-T7', '反', '提交中禁用按钮，409 只提交一次并刷新', scn0022T7],
     ['SCN-0022-T8', '反', '历史轮不出现确认卡，最新轮恢复', scn0022T8]
+  ]],
+  ['SCN-0023', '运行轨迹图与编辑器画布同源', [
+    ['SCN-0023-T1', '正', '同一份图在编辑器与运行详情画出的边路径逐字一致', scn0023T1],
+    ['SCN-0023-T2', '正', '运行页 seq 边带箭头、回退边为紫色虚线并带「↺ 回退」标签', scn0023T2],
+    ['SCN-0023-T3', '正', '运行页按保存视口缩放/平移，节点宽度与编辑器一致', scn0023T3],
+    ['SCN-0023-T4', '反', '视口非法与非法锚点时回落默认视口/自动选边，无 NaN', scn0023T4]
   ]],
   ['SCN-0005', 'Skill 维护与渐进披露', [
     ['SCN-0005-T1', '正', '列表计数同源', scn0005T1],

@@ -27,7 +27,7 @@ updated: 2026-11-18
 | `CMP-ui-shell` | 13 页公共外壳 | `assets/js/ui.js` | 顶栏、左侧导航、面包屑/页头、用户区、待确认角标、字号缩放、`DF.*` 原语 |
 | `CMP-workflow-list` | `pages/workflow-list.html` | `workflow-list.js` | B3 工作流列表、筛选、统计、新建向导/复制/改名/删除/导入导出；无运行入口 |
 | `CMP-workflow-editor` | `pages/workflow-editor.html?id=` | `workflow-editor.js` + `workflow/views/*` | 画布阶段/节点/边编辑、双击 90% 属性弹层、本地校验、手动保存、DSL 预览与导出；无发布/版本/运行 |
-| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图、发起运行（工作流+Harness+路径+意图）、节点多轮历史弹层、文件/执行会话 Tab、页头任务文件、终止、人工确认（confirm 节点与 MCP 执行中确认点）、超时节点继续执行、历史运行快照展示（RunDetail.graph/workflowName/expertName）、按轮会话日志下载；后端未提供的控制入口置灰 |
+| `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图（共享画布几何 + 保存视口）、发起运行（工作流+Harness+路径+意图）、节点多轮历史弹层、文件/执行会话 Tab、页头任务文件、终止、人工确认（confirm 节点与 MCP 执行中确认点）、超时节点继续执行、历史运行快照展示（RunDetail.graph/workflowName/expertName）、按轮会话日志下载；后端未提供的控制入口置灰 |
 | `CMP-run-files` | `instance-detail.html` 节点弹层/页头任务文件 | `run/views/files.js` | 运行任务文件只读浏览：根切换、面包屑、目录懒加载、Markdown/文本/二进制/截断预览 |
 | `CMP-run-session` | `instance-detail.html` 节点弹层执行会话 | `run/views/session.js` | 执行会话只读：详情、历史事件、`EventSource` 实时追加、raw 下载；无 sessionId |
 | `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js` | Skill 列表、筛选、启停、删除、引用方；专门页承接查看/编辑/新建，正文用 Milkdown 渲染、编辑走草稿 |
@@ -54,6 +54,7 @@ updated: 2026-11-18
 | Markdown 显示渲染 | `assets/js/shared/markdown.js` | `renderMarkdown/renderInline` | 只读渲染模型输出（运行节点消息）；先转义后出标签，链接只放行 http(s)/mailto/站内路径 |
 | 工作流领域模型/校验 | `assets/js/workflow/model.js`、`validate.js` | 图映射、ID、DSL、B3 规则镜像 | 无 DOM/network；供数据服务与编辑器复用 |
 | 工作流视图 | `assets/js/workflow/views/{canvas,inspector,dsl}.js` | 画布/属性/DSL 纯视图 | 编辑器按领域与视图拆分；交互编排留在页面 |
+| 画布几何 | `assets/js/shared/canvas-geometry.js` | `NODE_W/NODE_H/NODE_SIDES`、`canvasSize/portPos/autoSides/edgeSides/edgePath/edgeMarkers/rollbackLabelPos/viewportTransform` | 编辑器与运行轨迹共用的纯几何；无 DOM/网络/状态；`workflow/model` 的 `NODE_SIDES` 从这里转出 |
 | 同源 HTTP 传输 | `assets/js/shared/http.js` | `request/requestText/ApiError` | B3 工作流复用；B1 仍走 `api.js` 的 ETag/文档缓存 |
 | 验证工具 | `tools/check-docs.js`、`tools/smoke-test.js`、`tools/verify-user-menu.js`、`tools/gen-scenario-index.js` | npm scripts | 不参与页面运行 |
 
@@ -66,6 +67,7 @@ updated: 2026-11-18
 | 页面 JS（B1 四类资产） | `API` | `/api/v1` DTO + `/skills/{id}/document` | HTTP，同源 | 四页直接用 DTO；文档视图只用 API-31 原文；不建客户端视图模型；不直连 3100 |
 | 工作流两页 | `workflow/data` | B3 `/api/v1/workflows*` | HTTP，同源 | 唯一读写入口；写带 `If-Match`；不直连 3100 |
 | 工作流两页 | `workflow/model` / `validate` / `views` | 图映射、本地规则、纯视图 | 同步，ESM import | 不碰网络；`validate` 镜像 B3 规则 |
+| 工作流两页 / 运行详情 | `shared/canvas-geometry` | 画布几何与视口 transform | 同步，ESM import | 同一份连线几何；编辑器与运行页只各自组装 SVG/节点 HTML |
 | 运行两页 | `run/data` | B4 `/api/v1/runs*` 与启动端点 | HTTP，同源 | 唯一读写入口；不推断状态机、不缓存；含 client 文件/session 只读方法与 SSE/raw URL、超时续跑端点 |
 | 运行详情 | `run/views/files` | 文件只读视图 | 同步，ESM import | 只经 `run/data` 取数；不 import 页面 |
 | 运行详情 | `run/views/session` | 会话只读视图 + `EventSource` | 同步，ESM import | 只经 `run/data` 取数；unmount 必关流 |

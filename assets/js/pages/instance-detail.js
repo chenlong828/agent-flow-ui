@@ -214,7 +214,7 @@ function traceHTML() {
       '<span class="sub">仍可通过页头「任务文件」查看执行产物。</span></div></div></div></div>';
   }
   return '<div class="id-layout">' +
-    '<div class="id-trace"><div class="cv-wrap" id="cvWrap"><div class="cv-canvas" id="cvCanvas"></div></div>' +
+    '<div class="id-trace"><div class="cv-wrap" id="cvWrap"><div id="cvScaler"><div class="cv-canvas" id="cvCanvas"></div></div></div>' +
       '<div class="cv-legend">' +
         '<b>' + dot('green') + '成功</b><b>' + dot('blue') + '运行中</b><b>' + dot('orange') + '等待人工</b>' +
         '<b>' + dot('amber') + '等待继续</b>' +
@@ -294,6 +294,7 @@ function paint() {
   if (!state.graph) return;
   paintCanvas({
     canvas: document.getElementById('cvCanvas'),
+    scaler: document.getElementById('cvScaler'),
     graph: state.graph,
     experts: state.experts,
     selectedId: state.selectedId,

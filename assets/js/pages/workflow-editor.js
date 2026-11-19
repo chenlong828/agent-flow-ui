@@ -17,7 +17,8 @@ import {
   toDsl,
   toEditorGraph
 } from '../workflow/model.js';
-import { NODE_W, autoSides, canvasSize, edgeSvg, linkPreviewPath, nodeHtml, portPos, stageHtml } from '../workflow/views/canvas.js';
+import { edgeSvg, linkPreviewPath, nodeHtml, stageHtml } from '../workflow/views/canvas.js';
+import { NODE_W, autoSides, canvasSize, portPos, viewportTransform } from '../shared/canvas-geometry.js';
 import { edgeInspector, nodeInspector, stageInspector } from '../workflow/views/inspector.js';
 import { dslHtml } from '../workflow/views/dsl.js';
 import {
@@ -284,7 +285,7 @@ function paint() {
   document.getElementById('z-val').textContent = Math.round(vp.zoom * 100) + '%';
   canvas.style.width = size.w + 'px';
   canvas.style.height = size.h + 'px';
-  document.getElementById('cvScaler').style.transform = 'translate(' + vp.x + 'px,' + vp.y + 'px) scale(' + vp.zoom + ')';
+  document.getElementById('cvScaler').style.transform = viewportTransform(vp);
   canvas.innerHTML = stageHtml(state.graph, state.sel, marked) + edgeSvg(state.graph, state.sel, marked) +
     nodeHtml(state.graph, state.sel, marked, expertOf);
   renderBlocker();

@@ -204,6 +204,12 @@ export function prepareUuidExperts() {
 
 export function resetFakeB3() { reset(); }
 
+/** 测试注入一条工作流（按 id 读取详情）；不参与默认列表计数断言，调用方先 reset。 */
+export function addWorkflow(workflow) {
+  workflows.unshift(clone(workflow));
+  return workflow;
+}
+
 export const fakeB3 = {
   reset: resetFakeB3,
   handle: async function (method, path, body, headers) {

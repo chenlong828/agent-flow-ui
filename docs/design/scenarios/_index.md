@@ -3,7 +3,7 @@ layer: design
 module: global
 status: current
 generated: true
-updated: 2026-11-18
+updated: 2026-11-19
 ---
 
 # 场景索引
@@ -12,9 +12,9 @@ updated: 2026-11-18
 
 ## 统计
 
-- 场景：20
-- 文档用例：112
-- Playwright runner：77
+- 场景：21
+- 文档用例：116
+- Playwright runner：81
 - 其他执行层：35（引擎 / BFF / 真实 B1）
 
 ## 清单
@@ -41,3 +41,4 @@ updated: 2026-11-18
 | SCN-0020 | SCN-0020 MOCK 演示页关闭与演示模式 | shell / navigation | verified | `design/scenarios/shell/navigation/mock-pages-gate/scenario.md` |
 | SCN-0021 | SCN-0021 运行节点文件与执行会话审查 | operations / instances | verified | `design/scenarios/operations/instances/inspect-node-observability/scenario.md` |
 | SCN-0022 | SCN-0022 执行中确认点（MCP confirmation_request） | operations / instances | verified | `design/scenarios/operations/instances/confirm-during-execution/scenario.md` |
+| SCN-0023 | SCN-0023 运行轨迹图与编辑器画布同源 | operations / instances | verified | `design/scenarios/operations/instances/inspect-run-trace/scenario.md` |
