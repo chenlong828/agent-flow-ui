@@ -97,9 +97,12 @@ async function fulfill(route, result) {
   let payload;
   if (body == null) payload = '';
   else if (typeof body === 'string') payload = body;
+  else if (Buffer.isBuffer(body)) payload = body;
   else payload = JSON.stringify(body);
   if (!headers['Content-Type'] && !headers['content-type']) {
-    headers['Content-Type'] = typeof body === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8';
+    headers['Content-Type'] = typeof body === 'string'
+      ? 'text/plain; charset=utf-8'
+      : Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json; charset=utf-8';
   }
   await route.fulfill({ status: result.status || 200, headers, body: payload });
 }

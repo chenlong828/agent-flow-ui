@@ -2,7 +2,7 @@
 layer: history
 module: global
 status: frozen
-updated: 2026-11-17
+updated: 2026-11-19
 ---
 
 # 坑档案
@@ -167,6 +167,12 @@ updated: 2026-11-17
 - **根因**：运行中的 3100 是旧进程/旧路由，数据库已按新迁移删除旧列；旧代码查询已删列或没有新端点，于是 500/404。
 - **存续条件**：后端代码、路由或迁移更新后未重启常驻进程即复发；与页面和 BFF 无关。
 - **对策落点**：验证前先探测 `/healthz`、新端点与列表响应；重启后端或另起临时端口验证，不把旧进程的 500 当成前端缺陷。2026-10-26 用 3101 + 3002 完成真实读写验证，未重启用户的 3100。
+
+### ENV-8 · Playwright WebKit 拦截 multipart 上传时拿不到文件字节
+- **现象**：页面用 XHR/FormData 上传图片，`tools/test-harness.js` 的 Playwright route 截获后，`request.postDataBuffer()` 的长度比文件本身还小；body 里只有 boundary、`Content-Disposition` 与 `Content-Type`，文件内容为空。`new Request(...).formData()` 解析出的 `File.size === 0`，fake B1 因此拿到空文件。
+- **根因**：本机 Playwright WebKit 构建对 multipart 请求体的 `postDataBuffer()` 捕获不完整（真实网络请求不受影响；同一段 multipart 在 Node 的 `FormData → Request → formData()` 往返中字节完整）。
+- **存续条件**：用 `page.route` 拦截 multipart 上传并在 fake 后端读取文件内容时成立（2026-11-19 实测）。需要真字节的验证必须走真实后端/本地非拦截服务器。
+- **对策落点**：`tools/fake-b1.js` 只依赖文件名、`mediaType` 与张数，内容接口返回内置占位 PNG；`SCN-0024` 断言只看 UI 状态、`inputId` 顺序与绑定结果，不断言上传字节；`tools/verify-m1-scenarios.js#scn0024T1` 的粘贴/拖放用合成载荷，不依赖真实剪贴板。
 
 ## 流程类
 

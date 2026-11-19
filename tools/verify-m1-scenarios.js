@@ -815,6 +815,178 @@ async function scn0004T16(browser) {
   } finally { await ex.page.close(); }
 }
 
+/* ----------------------------- SCN-0024 ----------------------------- */
+const SCN0024_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+async function openLaunchWithImages(browser) {
+  const ctx = await open(browser, 'instances', '', {
+    b3: fakeB3, setup: runFixtures, initScript: launchEditorInit, wait: 900
+  });
+  await ctx.page.locator('#in-launch').click();
+  await ctx.page.locator('#stub-intent').waitFor({ timeout: 5000 });
+  return ctx;
+}
+
+async function addImages(page, names) {
+  await page.setInputFiles('#rn-inputs-file', names.map(function (name) {
+    return { name: name, mimeType: 'image/png', buffer: SCN0024_PNG };
+  }));
+  await page.waitForTimeout(150);
+}
+
+async function dispatchImageTransfer(page, type, name) {
+  await page.evaluate(function (args) {
+    const bytes = Uint8Array.from(atob(args.base64), function (c) { return c.charCodeAt(0); });
+    const file = new File([bytes], args.name, { type: 'image/png' });
+    /* 合成 DataTransfer 载荷：只实现页面读取的 types/files 契约，避免真实拖放在无头引擎里依赖操作系统手势。 */
+    const transfer = { types: ['Files'], files: [file], dropEffect: '' };
+    const event = new Event(args.type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: transfer });
+    document.querySelector('.modal .d-body').dispatchEvent(event);
+  }, { type: type, name: name, base64: SCN0024_PNG.toString('base64') });
+  await page.waitForTimeout(150);
+}
+
+async function pasteImage(page, name) {
+  await page.evaluate(function (args) {
+    const bytes = Uint8Array.from(atob(args.base64), function (c) { return c.charCodeAt(0); });
+    const file = new File([bytes], args.name, { type: 'image/png' });
+    /* 合成 clipboardData：只实现页面读取的 items[].kind/type/getAsFile 契约。 */
+    const clipboard = {
+      items: [{ kind: 'file', type: 'image/png', getAsFile: function () { return file; } }]
+    };
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: clipboard });
+    document.querySelector('.modal .d-body').dispatchEvent(event);
+  }, { name: name, base64: SCN0024_PNG.toString('base64') });
+  await page.waitForTimeout(150);
+}
+
+async function scn0024T1(browser) {
+  const ctx = await openLaunchWithImages(browser);
+  try {
+    await pasteImage(ctx.page, 'pasted.png');
+    await dispatchImageTransfer(ctx.page, 'drop', 'dropped.png');
+    await addImages(ctx.page, ['picked.png']);
+    assert.equal(await ctx.page.locator('.rn-thumb').count(), 3, '粘贴/拖放/选择都应入栏');
+    assert.match(await ctx.page.locator('#rn-inputs-count').textContent(), /已选 3\/8/);
+    assert.equal(fakeB1.runInputStats().uploaded, 0, '提交前不得上传');
+    const prevented = await ctx.page.evaluate(function () {
+      const clipboard = { items: [{ kind: 'string', type: 'text/plain', getAsFile: function () { return null; } }] };
+      const event = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: clipboard });
+      document.querySelector('.modal .d-body').dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    assert.equal(prevented, false, '纯文本粘贴不应被图片逻辑拦截');
+    await ctx.page.locator('.rn-thumb-del').first().click({ force: true });
+    await ctx.page.waitForTimeout(100);
+    assert.equal(await ctx.page.locator('.rn-thumb').count(), 2);
+    assert.equal(fakeB1.runInputStats().uploaded, 0);
+    assert.deepEqual(fakeB1.runInputStats().deleted, [], '删除本地暂存不得发 DELETE');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0024T2(browser) {
+  const ctx = await openLaunchWithImages(browser);
+  try {
+    await addImages(ctx.page, ['a.png', 'b.png', 'c.png']);
+    await ctx.page.locator('.rn-thumb-del').nth(1).click({ force: true });
+    await ctx.page.waitForTimeout(100);
+    await ctx.page.fill('#stub-intent', '## 带图启动\n\n- 两张初始资料');
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
+    await ctx.page.waitForURL(/instance-detail\.html\?id=/, { timeout: 10000 });
+    await ctx.page.waitForTimeout(400);
+    const start = fakeB1.lastStartRequest();
+    assert.ok(start, '未捕获 start 请求');
+    assert.ok(Array.isArray(start.body.inputs), 'start 必须带 inputs');
+    assert.equal(start.body.inputs.length, 2);
+    const stats = fakeB1.runInputStats();
+    assert.equal(stats.uploaded, 2);
+    assert.deepEqual(stats.bound.map(function (item) { return item.name; }), ['a.png', 'c.png']);
+    assert.deepEqual(start.body.inputs.map(function (ref) { return ref.inputId; }),
+      stats.bound.map(function (item) { return item.inputId; }), 'inputs 顺序必须与列表一致');
+    assert.deepEqual(stats.deleted, []);
+    await ctx.page.locator('#id-inputs').waitFor({ timeout: 4000 });
+    assert.equal(await ctx.page.locator('#id-inputs .id-input').count(), 2);
+    const href = await ctx.page.locator('#id-inputs .id-input').first().getAttribute('href');
+    assert.match(href, /^\/api\/v1\/runs\/[^/]+\/inputs\/[^/]+\/content$/);
+    assert.match(await ctx.page.locator('#id-inputs').textContent(), /初始资料（2）/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0024T3(browser) {
+  const ctx = await openRunPage(browser, 'instance-detail', 'id=' + RUN_RUNNING);
+  try {
+    assert.equal(await ctx.page.locator('#id-inputs').count(), 0, '无初始资料时不得渲染区块');
+    assert.equal(await ctx.page.locator('.id-trace .cv-node').count() > 0, true);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0024T4(browser) {
+  const ctx = await openLaunchWithImages(browser);
+  try {
+    const names = ['1.png', '2.png', '3.png', '4.png', '5.png', '6.png', '7.png', '8.png', '9.png'];
+    await addImages(ctx.page, names);
+    assert.equal(await ctx.page.locator('.rn-thumb').count(), 8, '最多保留 8 张');
+    await ctx.page.locator('.toast').last().waitFor({ timeout: 3000 });
+    assert.match(await ctx.page.locator('.toast').last().innerText(), /最多 8 张图片/);
+    assert.equal(fakeB1.runInputStats().uploaded, 0);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0024T5(browser) {
+  const ctx = await openLaunchWithImages(browser);
+  try {
+    fakeB1.failNextInputUpload(500, 'internal_error', '上传失败');
+    await addImages(ctx.page, ['a.png']);
+    await ctx.page.fill('#stub-intent', '上传失败后重试');
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
+    await ctx.page.locator('.toast.err').last().waitFor({ timeout: 5000 });
+    assert.match(await ctx.page.locator('.toast.err').last().innerText(), /上传失败/);
+    const failed = fakeB1.runInputStats();
+    assert.equal(failed.staged.length, 0, '上传失败不得留下暂存项');
+    assert.equal(failed.bound.length, 0);
+    assert.equal(await ctx.page.locator('.modal').count(), 1, '失败后弹窗保留');
+    assert.equal(await ctx.page.locator('.rn-thumb').count(), 1, '本地图片保留供重试');
+    const retry = ctx.page.locator('.modal .d-foot .btn.primary');
+    assert.equal(await retry.isDisabled(), false);
+    assert.equal(await retry.textContent(), '发起运行');
+    await retry.click();
+    await ctx.page.waitForURL(/instance-detail\.html\?id=/, { timeout: 10000 });
+    await ctx.page.waitForTimeout(300);
+    assert.equal(fakeB1.runInputStats().bound.length, 1, '重试应重新上传并绑定');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0024T6(browser) {
+  const ctx = await openLaunchWithImages(browser);
+  try {
+    fakeB1.failNextStart(409, 'client_unsupported', { capability: 'run-inputs', reason: 'capability_missing' });
+    await addImages(ctx.page, ['only.png']);
+    await ctx.page.fill('#stub-intent', '启动失败后重试');
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
+    await ctx.page.locator('.toast.err').last().waitFor({ timeout: 5000 });
+    assert.match(await ctx.page.locator('.toast.err').last().innerText(), /暂不支持图片/);
+    const failed = fakeB1.runInputStats();
+    assert.equal(failed.uploaded, 1);
+    assert.equal(failed.deleted.length, 1, '启动失败必须回滚已上传暂存');
+    assert.equal(failed.bound.length, 0);
+    assert.equal(await ctx.page.locator('.modal').count(), 1);
+    assert.equal(await ctx.page.locator('.rn-thumb').count(), 1);
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
+    await ctx.page.waitForURL(/instance-detail\.html\?id=/, { timeout: 10000 });
+    await ctx.page.waitForTimeout(300);
+    assert.equal(fakeB1.runInputStats().bound.length, 1);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
 /* ----------------------------- SCN-0022 ----------------------------- */
 const RUN_CONFIRM = 'aaaaaaaa-0000-4000-8000-000000000009';
 const RUN_CONFIRM_HISTORY = 'aaaaaaaa-0000-4000-8000-000000000010';
@@ -2168,6 +2340,14 @@ const SCENARIOS = [
     ['SCN-0023-T2', '正', '运行页 seq 边带箭头、回退边为紫色虚线并带「↺ 回退」标签', scn0023T2],
     ['SCN-0023-T3', '正', '运行页按保存视口缩放/平移，节点宽度与编辑器一致', scn0023T3],
     ['SCN-0023-T4', '反', '视口非法与非法锚点时回落默认视口/自动选边，无 NaN', scn0023T4]
+  ]],
+  ['SCN-0024', '发起运行的图片初始资料（提交时上传）', [
+    ['SCN-0024-T1', '正', '粘贴/拖放/选择入栏，提交前零上传，删除只改本地', scn0024T1],
+    ['SCN-0024-T2', '正', '提交时按列表顺序上传并绑定，详情显示缩略图', scn0024T2],
+    ['SCN-0024-T3', '正', '无初始资料的运行详情不渲染区块', scn0024T3],
+    ['SCN-0024-T4', '反', '第 9 张图片被本地拒绝且已有 8 张不变', scn0024T4],
+    ['SCN-0024-T5', '反', '上传失败保留本地图片、重试时重新上传', scn0024T5],
+    ['SCN-0024-T6', '反', '启动失败回滚暂存、保留弹窗并可重试', scn0024T6]
   ]],
   ['SCN-0005', 'Skill 维护与渐进披露', [
     ['SCN-0005-T1', '正', '列表计数同源', scn0005T1],

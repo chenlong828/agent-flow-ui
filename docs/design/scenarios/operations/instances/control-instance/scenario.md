@@ -4,7 +4,7 @@ module: instances
 status: verified
 flow: control-instance
 scenario: SCN-0004
-updated: 2026-11-18
+updated: 2026-11-19
 ---
 
 # SCN-0004 运行实例监控与发起运行（B4 live）
@@ -20,7 +20,7 @@ updated: 2026-11-18
 ## 运行序
 
 1. 打开列表：并发加载 `GET /runs?limit=200` 与 `GET /workflows?limit=200`；按状态分组渲染五个 Tab（全部 / 进行中 / 等待人工确认 / 等待继续 / 已结束），工作流名优先取 `RunSummary.workflowName`，缺省才在页面侧 join；行内操作随状态出现：详情、去确认（`waiting_confirm`）、去继续（`waiting_resume`）、终止（非终态）。
-2. 发起运行：选工作流（B3 列表）、选执行 Harness（`/harnesses` 中 `enabled && clientId`）、填绝对路径（或从该 Harness 执行节点最近 10 条路径下拉中选择、用小叉删除单条）、在 Milkdown 编辑器写启动意图；提交 `POST /workflows/{id}/runs`，成功后把本次路径置顶记入该 `clientId` 的历史并跳转详情。
+2. 发起运行：选工作流（B3 列表）、选执行 Harness（`/harnesses` 中 `enabled && clientId`）、填绝对路径（或从该 Harness 执行节点最近 10 条路径下拉中选择、用小叉删除单条）、在 Milkdown 编辑器写启动意图；可选在「初始资料（图片）」粘贴/拖放/选择图片，点「发起运行」时才上传并随 `inputs` 绑定（`REQ-0029` / `SCN-0024`）。提交 `POST /workflows/{id}/runs`，成功后把本次路径置顶记入该 `clientId` 的历史并跳转详情。
 3. 详情：`GET /runs/{id}`；有 `RunDetail.graph` 时直接按 `toEditorGraph` 布局，标题用 `RunSummary.workflowName`，不再请求 `GET /workflows/{workflowId}`；`run.graph` 缺失时才回退 `GET /workflows/{workflowId}`，回退也失败则显示「该运行没有可用的图快照」占位。轨迹图占满内容区，画布颜色取 `run.nodes` 中该节点最大 `visit`；单击节点只切换选中高亮，双击节点打开 90% × 90% 弹层（`DF.modal size:'screen'`，窗口 resize 重算，内容超出在弹层主体内滚动，Esc/遮罩/× 关闭）。同一节点按 `nodeId + visit` 保留全部执行轮次：多轮时弹层显示「最新 · 第 N 轮 / 第 N-1 轮…」Tab，默认最新轮；切到历史轮显示该轮的状态、消息、判定结论、错误与会话日志，历史轮只读。节点消息与确认说明按 Markdown 渲染，不再提供二次「全屏」；非终态每 5s 轮询，弹层打开时按最新数据重绘（停留在最新则跟随新轮，停留在历史则保持）。
 4. 人工确认：双击 `waiting_confirm` 节点，弹层顶部出现橙色卡片；节点「专家」优先显示 `RunNodeView.expertName`，没有快照时才查当前专家列表，仍无则显示「—」而不显示裸 UUID；仅最新轮可提交，批准/驳回提交 `POST /runs/{id}/nodes/{nodeId}/decision`，成功后刷新详情，节点状态与 run 状态由后端推进。
 5. 终止：二次确认后 `POST /runs/{id}/cancel`，成功刷新；终态 run 不再显示终止。
@@ -32,7 +32,7 @@ updated: 2026-11-18
 ## 不可变引用
 
 - B4 `RunSummary` / `RunDetail` / `RunNodeView` 字段与状态闭集（`CMP-run-data` §2）；资产删除场景额外依赖 `RunSummary.workflowName`/`harnessName`、`RunDetail.graph`、`RunNodeView.expertName` 与删除 409 `details.references` 的 `type="run"`。
-- API-42–API-47 的路径、错误码与 `If-Match` 无关（运行编排不使用 revision 头）；API-54 `resumeRunNode` 无请求体，成功返回 `RunDetail`，`409 invalid_state` 的 `details.reason` 用于区分续跑失败原因。
+- API-42–API-47 的路径、错误码与 `If-Match` 无关（运行编排不使用 revision 头）；API-54 `resumeRunNode` 无请求体，成功返回 `RunDetail`，`409 invalid_state` 的 `details.reason` 用于区分续跑失败原因。图片初始资料的 `API-55`–`API-58` 由 `SCN-0024` 引用，本场景只在无图启动时不带 `inputs`。
 - `DF.renderShell`、`DF.modal`、`DF.tag`、`DF.fmtDur`、`DF.fmtClock` 的展示语义。
 - Milkdown 适配层 `shared/markdown-editor.js` 的 `mountMarkdown/destroyMarkdown`。
 

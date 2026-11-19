@@ -13,12 +13,14 @@ import { mountMarkdown, destroyMarkdown } from '../shared/markdown-editor.js';
 import {
   createRunData,
   errorText,
+  uploadErrorText,
   durationMs,
   RUN_STATE,
   RUN_OUTCOME,
   ARCHIVE_STATE,
   ACTIVE_STATES
 } from '../run/data.js';
+import { launchInputsFieldHTML, mountLaunchInputs } from '../run/views/launch-inputs.js';
 
 const { esc, icon, tag } = DF;
 const runs = createRunData();
@@ -97,7 +99,16 @@ function harnessClientId(harnesses, harnessId) {
   return h && h.clientId ? h.clientId : null;
 }
 
-const state = { runs: [], workflows: new Map(), loading: true, error: null, now: Date.now(), editor: null, wsPickerDispose: null };
+const state = {
+  runs: [],
+  workflows: new Map(),
+  loading: true,
+  error: null,
+  now: Date.now(),
+  editor: null,
+  wsPickerDispose: null,
+  launchView: null
+};
 
 function currentTab() {
   const t = DF.qs('tab');
@@ -379,6 +390,108 @@ function mountWorkspacePicker(body, harnesses) {
   };
 }
 
+/* ---------------- 发起运行（含图片初始资料） ---------------- */
+
+function launchBodyHTML(wfList, harnesses, usable) {
+  const options = harnesses.map(function (h) {
+    const bound = Boolean(h.enabled && h.clientId);
+    return '<option value="' + esc(h.id) + '"' + (bound ? '' : ' disabled') + '>' +
+      esc(h.name) + '（' + esc(h.kind) + (h.clientId ? ' · ' + esc(h.clientId) : ' · 未绑定执行节点') + (h.enabled ? '' : ' · 已停用') + '）</option>';
+  }).join('');
+  return DF.field('工作流',
+      '<select class="inp" id="rn-wf">' + wfList.map(function (w) {
+        return '<option value="' + esc(w.id) + '">' + esc(w.name) + '（r' + esc(w.revision) + ' · ' + esc(w.nodeCount) + ' 节点）</option>';
+      }).join('') + '</select>',
+      { required: true, hint: '启动时冻结当前图快照；split/fanout 节点暂不可执行' }) +
+    DF.field('执行 Harness',
+      '<select class="inp" id="rn-harness">' + options + '</select>',
+      { required: true, hint: usable.length ? '只列出已绑定执行节点且启用的 Harness' : '没有可用的执行节点：请先在 Harness 详情登记 clientId 与凭据' }) +
+    DF.field('工作区路径',
+      '<div class="ws-path" id="rn-path-wrap">' +
+        '<input class="inp mono" id="rn-path" value="' + esc(DEFAULT_WORKSPACE_PATH) + '" placeholder="' + esc(DEFAULT_WORKSPACE_PATH) + '" autocomplete="off">' +
+        '<button type="button" class="ws-path-toggle" id="rn-path-toggle" title="选择最近使用的工作区路径" aria-label="选择最近使用的工作区路径" aria-expanded="false">' + icon('down', 14) + '</button>' +
+        '<div class="ws-path-pop" id="rn-path-pop" hidden></div>' +
+      '</div>',
+      { required: true, hint: '执行节点上的绝对路径；下拉列出该执行节点最近 10 条，同一 clientId + 路径已有实例时复用' }) +
+    DF.field('启动意图（Markdown）',
+      '<div class="rn-editor" id="rn-intent"></div>',
+      { required: true, hint: '所见即所得编辑，保存后作为 intentMarkdown 传给 start 节点' }) +
+    launchInputsFieldHTML() +
+    '<label class="rn-check"><input type="checkbox" id="rn-auto"> 自动通过人工确认节点（autoConfirm）</label>';
+}
+
+function mountLaunchForm(body, harnesses, usable) {
+  if (usable.length) document.getElementById('rn-harness').value = usable[0].id;
+  state.wsPickerDispose = mountWorkspacePicker(body, harnesses);
+  state.editor = null;
+  state.launchView = mountLaunchInputs(body, {
+    upload: function (file, opts) { return runs.uploadInput(file, opts); },
+    remove: function (inputId) { return runs.deleteInput(inputId); }
+  });
+  mountMarkdown(document.getElementById('rn-intent'), {
+    markdown: '',
+    editable: true,
+    onChange: function (md) { state.intent = md; }
+  }).then(function (handle) {
+    state.editor = handle;
+    if (handle && typeof handle.focus === 'function') handle.focus();
+  }).catch(function (err) {
+    const box = document.getElementById('rn-intent');
+    if (box) box.innerHTML = '<div class="notice">编辑器初始化失败：' + esc(err && err.message ? err.message : '未知错误') + '</div>';
+  });
+}
+
+async function submitLaunch(body, close, harnesses) {
+  const view = state.launchView;
+  if (!view || view.isBusy()) return;
+  const wfId = body.querySelector('#rn-wf').value;
+  const harnessId = body.querySelector('#rn-harness').value;
+  const workspacePath = body.querySelector('#rn-path').value.trim();
+  const autoConfirm = body.querySelector('#rn-auto').checked;
+  const intentMarkdown = state.editor && typeof state.editor.getMarkdown === 'function'
+    ? String(state.editor.getMarkdown() || '')
+    : (state.intent != null ? String(state.intent) : '');
+  if (!wfId) { DF.toast('请选择工作流', 'warn'); return; }
+  if (!harnessId) { DF.toast('请选择已绑定执行节点的 Harness', 'warn'); return; }
+  if (!workspacePath || workspacePath.charAt(0) !== '/') { DF.toast('工作区路径必须是绝对路径', 'warn'); return; }
+  if (!intentMarkdown.trim()) { DF.toast('请填写启动意图', 'warn'); return; }
+
+  view.setBusy(true, 'upload');
+  let inputIds;
+  try {
+    inputIds = await view.staging.uploadAll();
+  } catch (err) {
+    if (state.launchView !== view) return; // 弹窗已关闭
+    view.setBusy(false);
+    DF.toast(uploadErrorText(err), 'err');
+    return;
+  }
+  view.setBusy(true, 'start');
+
+  const payload = {
+    harnessId: harnessId,
+    workspacePath: workspacePath,
+    intentMarkdown: intentMarkdown,
+    autoConfirm: autoConfirm
+  };
+  if (inputIds.length) payload.inputs = inputIds.map(function (id) { return { inputId: id }; });
+  try {
+    const result = await runs.start(wfId, payload);
+    if (state.launchView !== view) return; // 启动期间被关闭：不跳转，避免把用户带走
+    view.staging.markBound();
+    rememberWorkspacePath(harnessClientId(harnesses, harnessId), workspacePath);
+    closeRunModal(close);
+    DF.toast('已发起运行 ' + shortId(result.runId), 'ok');
+    state.now = Date.now();
+    setTimeout(function () { location.href = 'instance-detail.html?id=' + encodeURIComponent(result.runId); }, 300);
+  } catch (err) {
+    if (state.launchView !== view) return; // 弹窗已关闭
+    if (inputIds.length) await view.staging.rollback().catch(function () { /* 回滚失败不阻塞提示 */ });
+    view.setBusy(false);
+    DF.toast(errorText(err), 'err');
+  }
+}
+
 async function openLaunch() {
   let wfList;
   let harnesses;
@@ -396,87 +509,19 @@ async function openLaunch() {
   if (!wfList.length) { DF.toast('还没有工作流，请先在编辑器创建', 'warn'); return; }
 
   const usable = harnesses.filter(function (h) { return h.enabled && h.clientId; });
-  const options = harnesses.map(function (h) {
-    const bound = Boolean(h.enabled && h.clientId);
-    return '<option value="' + esc(h.id) + '"' + (bound ? '' : ' disabled') + '>' +
-      esc(h.name) + '（' + esc(h.kind) + (h.clientId ? ' · ' + esc(h.clientId) : ' · 未绑定执行节点') + (h.enabled ? '' : ' · 已停用') + '）</option>';
-  }).join('');
-
   DF.modal.form({
     title: '发起运行',
     width: 760,
     okText: '发起运行',
     okDisabled: !usable.length,
-    body:
-      DF.field('工作流',
-        '<select class="inp" id="rn-wf">' + wfList.map(function (w) {
-          return '<option value="' + esc(w.id) + '">' + esc(w.name) + '（r' + esc(w.revision) + ' · ' + esc(w.nodeCount) + ' 节点）</option>';
-        }).join('') + '</select>',
-        { required: true, hint: '启动时冻结当前图快照；split/fanout 节点暂不可执行' }) +
-      DF.field('执行 Harness',
-        '<select class="inp" id="rn-harness">' + options + '</select>',
-        { required: true, hint: usable.length ? '只列出已绑定执行节点且启用的 Harness' : '没有可用的执行节点：请先在 Harness 详情登记 clientId 与凭据' }) +
-      DF.field('工作区路径',
-        '<div class="ws-path" id="rn-path-wrap">' +
-          '<input class="inp mono" id="rn-path" value="' + esc(DEFAULT_WORKSPACE_PATH) + '" placeholder="' + esc(DEFAULT_WORKSPACE_PATH) + '" autocomplete="off">' +
-          '<button type="button" class="ws-path-toggle" id="rn-path-toggle" title="选择最近使用的工作区路径" aria-label="选择最近使用的工作区路径" aria-expanded="false">' + icon('down', 14) + '</button>' +
-          '<div class="ws-path-pop" id="rn-path-pop" hidden></div>' +
-        '</div>',
-        { required: true, hint: '执行节点上的绝对路径；下拉列出该执行节点最近 10 条，同一 clientId + 路径已有实例时复用' }) +
-      DF.field('启动意图（Markdown）',
-        '<div class="rn-editor" id="rn-intent"></div>',
-        { required: true, hint: '所见即所得编辑，保存后作为 intentMarkdown 传给 start 节点' }) +
-      '<label class="rn-check"><input type="checkbox" id="rn-auto"> 自动通过人工确认节点（autoConfirm）</label>',
-    onMount: function (body, _close) {
-      if (usable.length) document.getElementById('rn-harness').value = usable[0].id;
-      state.wsPickerDispose = mountWorkspacePicker(body, harnesses);
-      state.editor = null;
-      mountMarkdown(document.getElementById('rn-intent'), {
-        markdown: '',
-        editable: true,
-        onChange: function (md) { state.intent = md; }
-      }).then(function (handle) {
-        state.editor = handle;
-        if (handle && typeof handle.focus === 'function') handle.focus();
-      }).catch(function (err) {
-        const box = document.getElementById('rn-intent');
-        if (box) box.innerHTML = '<div class="notice">编辑器初始化失败：' + esc(err && err.message ? err.message : '未知错误') + '</div>';
-      });
-    },
-    onOk: function (body, close) {
-      const wfId = body.querySelector('#rn-wf').value;
-      const harnessId = body.querySelector('#rn-harness').value;
-      const workspacePath = body.querySelector('#rn-path').value.trim();
-      const autoConfirm = body.querySelector('#rn-auto').checked;
-      const intentMarkdown = state.editor && typeof state.editor.getMarkdown === 'function'
-        ? String(state.editor.getMarkdown() || '')
-        : (state.intent != null ? String(state.intent) : '');
-      if (!wfId) { DF.toast('请选择工作流', 'warn'); return; }
-      if (!harnessId) { DF.toast('请选择已绑定执行节点的 Harness', 'warn'); return; }
-      if (!workspacePath || workspacePath.charAt(0) !== '/') { DF.toast('工作区路径必须是绝对路径', 'warn'); return; }
-      if (!intentMarkdown.trim()) { DF.toast('请填写启动意图', 'warn'); return; }
-      const okBtn = body.closest('.modal').querySelector('.d-foot .btn.primary');
-      if (okBtn) { okBtn.disabled = true; okBtn.textContent = '启动中…'; }
-      runs.start(wfId, {
-        harnessId: harnessId,
-        workspacePath: workspacePath,
-        intentMarkdown: intentMarkdown,
-        autoConfirm: autoConfirm
-      }).then(function (result) {
-        rememberWorkspacePath(harnessClientId(harnesses, harnessId), workspacePath);
-        closeRunModal(close);
-        DF.toast('已发起运行 ' + shortId(result.runId), 'ok');
-        state.now = Date.now();
-        setTimeout(function () { location.href = 'instance-detail.html?id=' + encodeURIComponent(result.runId); }, 300);
-      }).catch(function (err) {
-        if (okBtn) { okBtn.disabled = false; okBtn.textContent = '发起运行'; }
-        DF.toast(errorText(err), 'err');
-      });
-    },
+    body: launchBodyHTML(wfList, harnesses, usable),
+    onMount: function (body) { mountLaunchForm(body, harnesses, usable); },
+    onOk: function (body, close) { return submitLaunch(body, close, harnesses); },
     onClose: function () {
       if (state.wsPickerDispose) { state.wsPickerDispose(); state.wsPickerDispose = null; }
       if (state.editor) { destroyMarkdown(state.editor); state.editor = null; }
       state.intent = '';
+      if (state.launchView) { state.launchView.dispose(); state.launchView = null; }
     }
   });
 }

@@ -12,9 +12,9 @@ updated: 2026-11-19
 
 ## 统计
 
-- 场景：21
-- 文档用例：116
-- Playwright runner：81
+- 场景：22
+- 文档用例：122
+- Playwright runner：87
 - 其他执行层：35（引擎 / BFF / 真实 B1）
 
 ## 清单
@@ -42,3 +42,4 @@ updated: 2026-11-19
 | SCN-0021 | SCN-0021 运行节点文件与执行会话审查 | operations / instances | verified | `design/scenarios/operations/instances/inspect-node-observability/scenario.md` |
 | SCN-0022 | SCN-0022 执行中确认点（MCP confirmation_request） | operations / instances | verified | `design/scenarios/operations/instances/confirm-during-execution/scenario.md` |
 | SCN-0023 | SCN-0023 运行轨迹图与编辑器画布同源 | operations / instances | verified | `design/scenarios/operations/instances/inspect-run-trace/scenario.md` |
+| SCN-0024 | SCN-0024 发起运行的图片初始资料（提交时上传） | operations / instances | verified | `design/scenarios/operations/instances/start-run-with-images/scenario.md` |

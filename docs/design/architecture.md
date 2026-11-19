@@ -2,7 +2,7 @@
 layer: design
 module: global
 status: current
-updated: 2026-11-18
+updated: 2026-11-19
 ---
 
 # 系统架构（现行真相）
@@ -13,7 +13,7 @@ updated: 2026-11-18
 
 - 形态：agent-flow 前端（13 个 HTML 页面 + 同源 BFF）；原生 HTML/CSS/ESM，无构建步骤；第三方运行时依赖默认零，例外须经准入（`design/dependencies.md`）并自托管到 `assets/vendor/`，禁止 CDN 外链。
 - 模块系统（2026-10-30 完成迁移）：全站原生 ESM，`package.json` 为 `"type":"module"`，Node 侧 `server.js` / `bff/` / `tools/` / `tests/` 同为 ESM；页面只通过显式 `import` 取依赖，无 `window.DF/MOCK/API/WSC`，无构建与 `.cjs` 兼容层。迁移记录见 `history/works/2026-10-30-frontend-esm/`，决策见 `history/decisions/2026-10-30-frontend-esm.md`。
-- 数据：Harness / Tool / Skill / Expert 四页直接消费 B1 DTO（经 `CMP-bff` 同源访问），写操作走 B1 并带 `If-Match`；工作流列表/编辑器经 `workflow/data` 消费 B3 `/api/v1/workflows*`；运行列表/详情/发起运行经 `run/data` 消费 B4 `/api/v1/runs` 与 `/api/v1/workflows/{id}/runs`（状态机与节点推进由后端运行编排服务 拥有）；`layout/viewport` 由前端拥有/后端透传。效能看板、工作区两页、个人 Key 管理仍由 `assets/js/mock-data.js` 的 `MOCK` 具名导出提供，写操作只改内存；这四页自 2026-11-12 起**默认关闭**（导航隐藏、直达显示占位页），地址带 `?demo=1` 才恢复，开关存 sessionStorage `df-demo-pages`（`REQ-0018` / `SCN-0020`）。前端不直接持有数据库或鉴权态。
+- 数据：Harness / Tool / Skill / Expert 四页直接消费 B1 DTO（经 `CMP-bff` 同源访问），写操作走 B1 并带 `If-Match`；工作流列表/编辑器经 `workflow/data` 消费 B3 `/api/v1/workflows*`；运行列表/详情/发起运行经 `run/data` 消费 B4 `/api/v1/runs`、`/api/v1/workflows/{id}/runs` 与 `/api/v1/run-inputs`（图片初始资料：提交时上传、启动绑定、详情读取；状态机与节点推进由后端运行编排服务 拥有）；`layout/viewport` 由前端拥有/后端透传。效能看板、工作区两页、个人 Key 管理仍由 `assets/js/mock-data.js` 的 `MOCK` 具名导出提供，写操作只改内存；这四页自 2026-11-12 起**默认关闭**（导航隐藏、直达显示占位页），地址带 `?demo=1` 才恢复，开关存 sessionStorage `df-demo-pages`（`REQ-0018` / `SCN-0020`）。前端不直接持有数据库或鉴权态。
 - 服务：`server.js`（Node 原生 `http`）是组合根，做静态托管、`/` 302 与 `CMP-bff` 挂载；`CMP-bff` 只透明转发 `/api/v1/*` 与 `/healthz`，不承载业务逻辑。
 - 验证：`tools/check-docs.js`（五态文档）、`tools/check-deps.js`（依赖准入）、`tools/check-architecture.js`（ESM import 图与边界）、`tools/check-scenario-trace.js`（核对场景卡 / Playwright runner / 外部执行层；统计以 `design/scenarios/_index.md` 为准）、`npm run test:bff`（BFF stub 上游）、`tools/smoke-test.js`（Playwright 13 页结构冒烟）、`tools/verify-user-menu.js`（Playwright WebKit，SCN-0001 45 条断言）、`tools/verify-workflow-list.js` / `tools/verify-workflow-editor.js`（SCN-0018/0019，fake B3 + Playwright）；`npm test` 串联零运行时依赖门禁、oxlint 风格门禁、BFF 单测、Playwright 业务场景与工作流场景；人工 Safari 走查为发布门禁。
 - 明确不做：真实工作流执行引擎、Agent 运行时、CI/CD 触发、权限体系、密钥加密存储、移动端适配、前端持久化；BFF 不做 CORS、鉴权、TLS、DTO 映射、revision 缓存或聚合。
@@ -49,7 +49,7 @@ updated: 2026-11-18
 | 静态服务 | `server.js` | 静态文件 + `/` 302 | 只服务 `pages/` 与 `assets/`，绑定 `127.0.0.1`；拒绝点文件与越界路径 |
 | 同源网关 | `bff/`（`CMP-bff`） | `/api/v1/*`、`/healthz` 透明转发 | 与 `server.js` 同进程；不做 DTO 映射、revision、重试、聚合；详见 `components/bff/spec.md` |
 | 工作流数据服务 | `assets/js/workflow/data.js` | `CMP-workflow-data` §1 的 11 个操作 | B3 工作流唯一读写入口；页面不得直接 `fetch /api/v1/workflows*`；规格见 `components/workflow-data/spec.md` |
-| 运行数据服务 | `assets/js/run/data.js` | `CMP-run-data` §0 的 12 个操作 + 状态词表 | B4 run 唯一读写入口；页面不得直接 `fetch /api/v1/runs*`；含 client 文件/session 只读方法；规格见 `components/run-data/spec.md` |
+| 运行数据服务 | `assets/js/run/data.js` | `CMP-run-data` §0 的 16 个操作 + 状态词表 | B4 run 唯一读写入口；页面不得直接 `fetch /api/v1/runs*`；含初始资料上传/删除/列表/内容 URL 与 client 文件/session 只读方法；规格见 `components/run-data/spec.md` |
 | Markdown 编辑器适配 | `assets/js/shared/markdown-editor.js` | `mountMarkdown/destroyMarkdown` | Milkdown 7.7.0（`DEP-0001`）唯一入口；Skill 正文与运行意图共用；不泄漏第三方类型 |
 | Markdown 显示渲染 | `assets/js/shared/markdown.js` | `renderMarkdown/renderInline` | 只读渲染模型输出（运行节点消息）；先转义后出标签，链接只放行 http(s)/mailto/站内路径 |
 | 工作流领域模型/校验 | `assets/js/workflow/model.js`、`validate.js` | 图映射、ID、DSL、B3 规则镜像 | 无 DOM/network；供数据服务与编辑器复用 |
@@ -68,7 +68,7 @@ updated: 2026-11-18
 | 工作流两页 | `workflow/data` | B3 `/api/v1/workflows*` | HTTP，同源 | 唯一读写入口；写带 `If-Match`；不直连 3100 |
 | 工作流两页 | `workflow/model` / `validate` / `views` | 图映射、本地规则、纯视图 | 同步，ESM import | 不碰网络；`validate` 镜像 B3 规则 |
 | 工作流两页 / 运行详情 | `shared/canvas-geometry` | 画布几何与视口 transform | 同步，ESM import | 同一份连线几何；编辑器与运行页只各自组装 SVG/节点 HTML |
-| 运行两页 | `run/data` | B4 `/api/v1/runs*` 与启动端点 | HTTP，同源 | 唯一读写入口；不推断状态机、不缓存；含 client 文件/session 只读方法与 SSE/raw URL、超时续跑端点 |
+| 运行两页 | `run/data` | B4 `/api/v1/runs*`、启动端点与 `/api/v1/run-inputs` | HTTP，同源 | 唯一读写入口；不推断状态机、不缓存；含初始资料上传/删除/列表/内容 URL、client 文件/session 只读方法与 SSE/raw URL、超时续跑端点 |
 | 运行详情 | `run/views/files` | 文件只读视图 | 同步，ESM import | 只经 `run/data` 取数；不 import 页面 |
 | 运行详情 | `run/views/session` | 会话只读视图 + `EventSource` | 同步，ESM import | 只经 `run/data` 取数；unmount 必关流 |
 | 运行两页 | `workflow/data` / `workflow/model` | 工作流图与坐标 | HTTP + 同步 | 详情优先读 `RunDetail.graph`（冻结快照）；仅快照缺失时回退只读工作流图，不改图 |

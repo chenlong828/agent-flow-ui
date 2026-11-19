@@ -26,6 +26,14 @@ for (const k of Object.keys(MOCK)) {
   var WORKFLOW_IN_RUNS = '11111111-1111-4111-8111-111111111111';
   var runs = [];
   var lastStart = null;
+  /* 初始资料（图片）夹具：暂存项 + 上传/启动失败注入 */
+  var runInputs = [];
+  var runInputSeq = 0;
+  var inputUploadCount = 0;
+  var inputDeleteLog = [];
+  var inputUploadFailures = [];
+  var startFailures = [];
+  var TINY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
   function resetRuns() {
     runs = [
@@ -318,6 +326,19 @@ for (const k of Object.keys(MOCK)) {
     }
     var run = runs.find(function (r) { return r.runId === id; });
     if (!run) return Promise.resolve(runNotFound());
+    if (method === 'GET' && parts[2] === 'inputs') {
+      if (parts.length === 3) {
+        var bound = runInputs.filter(function (input) { return input.runId === run.runId; })
+          .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
+          .map(inputView);
+        return Promise.resolve({ status: 200, body: { items: bound } });
+      }
+      if (parts.length === 5 && parts[4] === 'content') {
+        var found = runInputs.find(function (input) { return input.inputId === parts[3] && input.runId === run.runId; });
+        if (!found) return Promise.resolve({ status: 404, body: { error: { code: 'input_not_found', message: '初始资料不存在' } } });
+        return Promise.resolve({ status: 200, body: found.bytes && found.bytes.length ? Buffer.from(found.bytes) : TINY_PNG, headers: { 'Content-Type': found.mediaType } });
+      }
+    }
     if (method === 'GET' && parts.length === 2) return Promise.resolve({ status: 200, body: runDetail(run) });
     if (method === 'POST' && parts[2] === 'cancel') {
       if (run.state !== 'done') {
@@ -406,11 +427,98 @@ for (const k of Object.keys(MOCK)) {
     }
     return Promise.resolve(notFound());
   }
+  function inputView(input) {
+    return {
+      inputId: input.inputId,
+      name: input.name,
+      mediaType: input.mediaType,
+      sizeBytes: input.sizeBytes,
+      sha256: input.sha256,
+      createdAt: input.createdAt
+    };
+  }
+  async function stageRunInput(body) {
+    inputUploadCount += 1;
+    if (inputUploadFailures.length) {
+      var failure = inputUploadFailures.shift();
+      return {
+        status: failure.status,
+        body: { error: { code: failure.code || 'payload_too_large', message: failure.message || '上传失败', details: failure.details || {} } }
+      };
+    }
+    var file = body && typeof body.get === 'function' ? body.get('file') : null;
+    if (!file || typeof file.size !== 'number') {
+      return { status: 400, body: { error: { code: 'validation_error', message: '字段 file 不合法：缺少 file 字段', details: { field: 'file', reason: '缺少 file 字段' } } } };
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      return { status: 413, body: { error: { code: 'payload_too_large', message: '请求内容超过限制', details: { limit: 'run_input_file_bytes', limitValue: 8388608, actualValue: file.size } } } };
+    }
+    var mediaType = file.type || 'image/png';
+    if (mediaType.indexOf('image/') !== 0 || ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].indexOf(mediaType) < 0) {
+      return { status: 400, body: { error: { code: 'validation_error', message: '字段 file 不合法：只支持 PNG/JPEG/WebP/GIF 图片', details: { field: 'file', reason: '只支持 PNG/JPEG/WebP/GIF 图片' } } } };
+    }
+    var bytes = new Uint8Array(await file.arrayBuffer());
+    var input = {
+      inputId: 'in-' + (++runInputSeq),
+      name: file.name || ('image-' + runInputSeq + '.png'),
+      mediaType: mediaType,
+      sizeBytes: file.size,
+      bytes: bytes,
+      sha256: 'f'.repeat(64),
+      createdAt: new Date().toISOString(),
+      runId: null,
+      position: null
+    };
+    runInputs.push(input);
+    return { status: 201, body: inputView(input) };
+  }
+  function deleteRunInput(inputId) {
+    var index = runInputs.findIndex(function (input) { return input.inputId === inputId; });
+    if (index < 0) return { status: 404, body: { error: { code: 'input_not_found', message: '初始资料不存在', details: { inputId: inputId } } } };
+    if (runInputs[index].runId) return { status: 409, body: { error: { code: 'invalid_state', message: '当前状态不允许该操作：已绑定' } } };
+    inputDeleteLog.push(inputId);
+    runInputs.splice(index, 1);
+    return { status: 204, body: null };
+  }
+  function bindStartInputs(refs) {
+    if (!Array.isArray(refs) || !refs.length) return null;
+    var picked = [];
+    for (var i = 0; i < refs.length; i++) {
+      var ref = refs[i] || {};
+      var input = runInputs.find(function (item) { return item.inputId === ref.inputId && item.runId === null; });
+      if (!input) {
+        return { status: 400, body: { error: { code: 'validation_error', message: '字段 inputs 不合法：包含不存在的暂存项', details: { field: 'inputs' } } } };
+      }
+      picked.push(input);
+    }
+    var total = picked.reduce(function (sum, item) { return sum + item.sizeBytes; }, 0);
+    if (picked.length > 8) {
+      return { status: 413, body: { error: { code: 'payload_too_large', message: '请求内容超过限制', details: { limit: 'run_input_count', limitValue: 8, actualValue: picked.length } } } };
+    }
+    if (total > 20 * 1024 * 1024) {
+      return { status: 413, body: { error: { code: 'payload_too_large', message: '请求内容超过限制', details: { limit: 'run_input_bytes', limitValue: 20971520, actualValue: total } } } };
+    }
+    return { picked: picked };
+  }
+  function runInputsResource(parts, method, body) {
+    if (parts.length === 1) {
+      if (method !== 'POST') return { status: 404, body: { error: { code: 'not_found', message: '路径不存在' } } };
+      return stageRunInput(body);
+    }
+    if (parts.length === 2 && method === 'DELETE') return deleteRunInput(parts[1]);
+    return { status: 404, body: { error: { code: 'not_found', message: '路径不存在' } } };
+  }
   function startRun(workflowId, body) {
     lastStart = { workflowId: workflowId, body: body };
+    if (startFailures.length) {
+      var failure = startFailures.shift();
+      return Promise.resolve({ status: failure.status, body: { error: { code: failure.code, message: failure.message || '启动失败', details: failure.details || {} } } });
+    }
     if (!body || !body.harnessId || !body.workspacePath || body.intentMarkdown == null) {
       return Promise.resolve({ status: 400, body: { error: { code: 'validation_error', message: '缺少必填字段' } } });
     }
+    var bound = bindStartInputs(body.inputs);
+    if (bound && bound.status) return Promise.resolve(bound);
     var id = 'aaaaaaaa-0000-4000-8000-' + String(100 + (++seq)).padStart(12, '0');
     var run = {
       runId: id, workflowId: workflowId, workflowRevision: 1, harnessId: body.harnessId,
@@ -421,6 +529,9 @@ for (const k of Object.keys(MOCK)) {
       autoConfirm: Boolean(body.autoConfirm), finalMessage: null, error: null,
       nodes: [{ nodeId: 'n1', nodeType: 'start', visit: 1, state: 'dispatched', taskId: 't-' + id, verdict: null, message: '', error: null, dispatchedAt: new Date().toISOString(), finishedAt: null }]
     };
+    if (bound && bound.picked) {
+      bound.picked.forEach(function (input, index) { input.runId = id; input.position = index + 1; });
+    }
     runs.unshift(run);
     return Promise.resolve({ status: 201, body: { runId: id }, headers: { Location: '/api/v1/runs/' + id } });
   }
@@ -949,7 +1060,21 @@ for (const k of Object.keys(MOCK)) {
     expireDrafts: function () {
       Object.keys(drafts).forEach(function (id) { drafts[id].expiresAt = Date.now() - 1; });
     },
-    draftCount: function () { return Object.keys(drafts).length; }
+    draftCount: function () { return Object.keys(drafts).length; },
+    runInputStats: function () {
+      return {
+        uploaded: inputUploadCount,
+        deleted: inputDeleteLog.slice(),
+        staged: runInputs.filter(function (input) { return input.runId === null; }).map(inputView),
+        bound: runInputs.filter(function (input) { return input.runId !== null; }).map(inputView)
+      };
+    },
+    failNextInputUpload: function (status, code, details) {
+      inputUploadFailures.push({ status: status, code: code, details: details });
+    },
+    failNextStart: function (status, code, details) {
+      startFailures.push({ status: status, code: code, details: details });
+    }
   };
 
   export function handle(method, path, body, headers) {
@@ -972,6 +1097,7 @@ for (const k of Object.keys(MOCK)) {
       ] } });
     }
     if (parts[0] === 'skill-drafts') return draftResource(parts, method, body, headers, query);
+    if (parts[0] === 'run-inputs') return Promise.resolve(runInputsResource(parts, method, body));
     if (parts[0] === 'runs') return runResource(parts, method, body, headers, query);
     if (parts[0] === 'workflows' && parts[2] === 'runs' && method === 'POST') return startRun(parts[1], body);
     if (parts[0] === 'skills' && parts[2] === 'document' && method === 'GET') {
@@ -997,6 +1123,12 @@ export function resetFakeB1() {
   revs = Object.create(null);
   seq = 0;
   resetRuns();
+  runInputs = [];
+  runInputSeq = 0;
+  inputUploadCount = 0;
+  inputDeleteLog = [];
+  inputUploadFailures = [];
+  startFailures = [];
   drafts = Object.create(null);
   for (const k of Object.keys(SEED)) MOCK[k] = structuredClone(SEED[k]);
 }

@@ -56,7 +56,8 @@ const state = {
   pending: 0,
   resuming: false,
   modal: null,
-  filesModal: null
+  filesModal: null,
+  inputs: null
 };
 
 function shortId(id) {
@@ -98,11 +99,16 @@ async function load() {
     /* 优先用 RunDetail.graph 快照；旧后端没有 graph 时才回查工作流。两者都没有时只显示无图占位，不把详情页置为错误。 */
     const fallback = run.graph ? Promise.resolve(null) :
       workflows.get(run.workflowId).catch(function () { return null; });
-    const [wf, expertPage, pendingPage] = await Promise.all([
+    const inputsPromise = state.inputs === null
+      ? runs.listInputs(state.runId).catch(function () { return { items: [] }; })
+      : Promise.resolve(null);
+    const [wf, expertPage, pendingPage, inputPage] = await Promise.all([
       fallback,
       request({ method: 'GET', path: '/api/v1/experts?limit=200' }).catch(function () { return { items: [] }; }),
-      runs.list({ state: 'waiting_confirm', limit: 1 }).catch(function () { return { total: 0 }; })
+      runs.list({ state: 'waiting_confirm', limit: 1 }).catch(function () { return { total: 0 }; }),
+      inputsPromise
     ]);
+    if (inputPage) state.inputs = Array.isArray(inputPage.items) ? inputPage.items : [];
     state.pending = pendingPage.total || 0;
     if (token !== state.version) return;
     const graph = run.graph || (wf && wf.graph) || null;
@@ -207,6 +213,21 @@ function waitingBannerHTML(run) {
     '</div></div>';
 }
 
+/** 本次运行的初始资料（图片）；只读、空则不占位。 */
+function inputsHTML() {
+  const items = state.inputs || [];
+  if (!items.length) return '';
+  return '<div class="id-inputs" id="id-inputs">' +
+    '<div class="id-inputs-h">' + icon('image', 14) + '初始资料（' + items.length + '）</div>' +
+    '<div class="id-inputs-strip">' + items.map(function (item) {
+      const url = runs.inputContentUrl(state.run.runId, item.inputId);
+      const label = item.name + ' · ' + DF.fmtBytes(item.sizeBytes);
+      return '<a class="id-input" href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(label) + '">' +
+        '<img loading="lazy" src="' + esc(url) + '" alt="' + esc(item.name) + '">' +
+        '</a>';
+    }).join('') + '</div></div>';
+}
+
 function traceHTML() {
   if (!state.graph) {
     return '<div class="id-layout"><div class="id-trace"><div class="cv-wrap" style="display:flex;align-items:center;justify-content:center;min-height:320px">' +
@@ -244,7 +265,7 @@ function render() {
   const filesBtn = document.getElementById('id-files');
   if (filesBtn) filesBtn.onclick = openRunFilesModal;
   body = document.getElementById('page-body');
-  body.innerHTML = waitingBannerHTML(run) + traceHTML();
+  body.innerHTML = waitingBannerHTML(run) + inputsHTML() + traceHTML();
   bindWaitingActions();
   if (state.graph) paint();
   if (state.modal) syncNodeModal();

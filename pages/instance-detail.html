@@ -115,6 +115,13 @@
 .id-wait-tip{font-size:12px;color:var(--t-2);margin-top:6px;}
 .id-wait-acts{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;}
 .id-wait-acts .sub{color:var(--t-3);font-size:12px;}
+/* 初始资料（图片）：运行级只读缩略图，空不占位 */
+.id-inputs{display:flex;align-items:center;gap:10px;border:1px solid var(--c-line);border-radius:8px;background:var(--c-panel);padding:8px 10px;margin-bottom:12px;}
+.id-inputs-h{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--t-2);white-space:nowrap;flex:0 0 auto;}
+.id-inputs-strip{display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;min-width:0;}
+.id-inputs-strip::-webkit-scrollbar{display:none;}
+.id-input{display:block;width:48px;height:48px;border-radius:6px;overflow:hidden;border:1px solid var(--c-line-2);background:var(--c-bg);flex:0 0 auto;}
+.id-input img{width:100%;height:100%;object-fit:cover;display:block;}
 .id-confirm-card h4{font-size:14px;margin-bottom:8px;}
 /* 执行中确认点（MCP confirmation_request）：问题/上下文/候选答案/补充说明 */
 .id-confirm-point .id-cf-q{font-size:14px;font-weight:600;margin:2px 0 8px;}
