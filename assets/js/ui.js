@@ -402,8 +402,10 @@
       const unitBase = mm && mm[2] === 'vh' ? window.innerHeight : base;
       return mm ? (parseFloat(mm[1]) / 100 * unitBase / (zK0 || 1)) + 'px' : v;
     };
-    /* size:'screen' = 视口 90% × 90%，头部/底部固定、内容区滚动；opt.width/height 可覆盖 */
+    /* size:'screen' = 视口 90% × 90%，头部/底部固定、内容区滚动；opt.width/height 可覆盖
+     * opt.height（普通弹窗）= 固定高度，头部/底部固定、内容区滚动，尺寸不随内容变化 */
     const screen = opt.size === 'screen';
+    if (opt.height != null) m.classList.add('modal-fixed');
     const applySize = () => {
       m.style.width = resolveDim(screen ? (opt.width || '90vw') : (opt.width || 480), window.innerWidth);
       if (screen || opt.height) m.style.height = resolveDim(screen ? (opt.height || '90vh') : opt.height, window.innerHeight);

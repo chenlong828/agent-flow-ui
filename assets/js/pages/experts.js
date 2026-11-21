@@ -278,6 +278,7 @@ import { API } from '../api.js';
     DF.modal.open({
       title: '专家详情' + (st.dto ? ' · ' + st.dto.name : ''),
       width: '80vw',
+      height: '90vh',
       resizable: true,
       body: initial,
       footer: drawerFooterHtml(),

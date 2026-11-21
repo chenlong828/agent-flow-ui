@@ -1710,6 +1710,40 @@ async function scn0006T4(browser) {
   } finally { await ctx.page.close(); }
 }
 
+/** 详情弹窗固定为视口 90% 高：页头页脚不出视口，长表单只在主体内滚动（不再靠内容自适应撑高）。 */
+async function scn0006T5(browser) {
+  const ctx = await open(browser, 'experts', '', { wait: 600 });
+  const box = () => ctx.page.evaluate(() => {
+    const modal = document.querySelector('.modal');
+    const body = modal.querySelector('.d-body');
+    const foot = modal.querySelector('.d-foot');
+    const m = modal.getBoundingClientRect();
+    return {
+      vh: innerHeight,
+      height: m.height,
+      top: m.top,
+      footBottom: foot.getBoundingClientRect().bottom,
+      body: [body.clientHeight, body.scrollHeight]
+    };
+  });
+  try {
+    await ctx.page.locator('#ex-grid [data-act="detail"]').first().click();
+    await ctx.page.waitForSelector('#ex-edit');
+    await ctx.page.waitForTimeout(220); // 等 0.15s 弹层 pop 动画结束，尺寸断言才不受 transform 影响
+    const view = await box();
+    assert.ok(Math.abs(view.height - view.vh * 0.9) <= 2, '详情弹窗高度应为视口 90%（实测 ' + view.height + ' / ' + view.vh + '）');
+    assert.ok(view.top > 0 && view.footBottom <= view.vh, '查看态页头页脚必须在视口内');
+    await ctx.page.locator('#ex-edit').click();
+    await ctx.page.waitForSelector('#ex-save');
+    await ctx.page.waitForTimeout(220);
+    const edit = await box();
+    assert.ok(Math.abs(edit.height - edit.vh * 0.9) <= 2, '编辑态弹窗高度应保持视口 90%');
+    assert.ok(edit.top > 0 && edit.footBottom <= edit.vh, '编辑态「取消/保存」必须留在视口内');
+    assert.ok(edit.body[1] > edit.body[0], '编辑态内容超高时只在主体内滚动');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
 /* ----------------------------- SCN-0007 ----------------------------- */
 async function scn0007T1(browser) {
   const ctx = await open(browser, 'harnesses', '', { wait: 600 });
@@ -2361,7 +2395,8 @@ const SCENARIOS = [
     ['SCN-0006-T1', '正', '卡片计数与搜索', scn0006T1],
     ['SCN-0006-T2', '正', '五区详情齐全', scn0006T2],
     ['SCN-0006-T3', '正', '停用写回 enabled=false', scn0006T3],
-    ['SCN-0006-T4', '反', '取消停用保持启用', scn0006T4]
+    ['SCN-0006-T4', '反', '取消停用保持启用', scn0006T4],
+    ['SCN-0006-T5', '正', '详情弹窗 90% 视口高、页脚不出视口', scn0006T5]
   ]],
   ['SCN-0014', 'Skill 专门页面查看、编辑与下载', [
     ['SCN-0014-T1', '正', '查看态正文与文件清单', scn0014T1],

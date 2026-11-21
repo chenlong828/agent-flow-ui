@@ -3,7 +3,7 @@ layer: design
 module: global
 status: current
 generated: true
-updated: 2026-11-19
+updated: 2026-11-21
 ---
 
 # 场景索引
@@ -13,8 +13,8 @@ updated: 2026-11-19
 ## 统计
 
 - 场景：22
-- 文档用例：122
-- Playwright runner：87
+- 文档用例：123
+- Playwright runner：88
 - 其他执行层：35（引擎 / BFF / 真实 B1）
 
 ## 清单
