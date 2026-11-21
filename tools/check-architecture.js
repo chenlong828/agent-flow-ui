@@ -111,8 +111,11 @@ for (const p of walk(path.join(ROOT, 'assets', 'js'), (f) => f.endsWith('.js')))
 /* 6. 受限共享模块只能被声明页面使用 */
 const restricted = [
   { symbol: 'WSC', owners: ['workspaces', 'workspace-detail'] },
-  { symbol: 'SK', owners: ['skills', 'skill-detail'] },
-  { symbol: 'SKILL_MD', owners: ['skills', 'skill-detail'] },
+  // SK / SKILL_MD 由共享 Skill 面板实现并对外复用，页面不得各自挂载编辑器
+  { symbol: 'SK', owners: ['skills', 'skill-detail', 'skill-panel', 'skill-panel-render'] },
+  { symbol: 'SKILL_MD', owners: ['skill-panel'] },
+  { symbol: 'SKP', owners: ['skill-detail'] },
+  { symbol: 'SKPM', owners: ['experts'] },
 ];
 for (const p of walk(path.join(ROOT, 'assets', 'js', 'pages'), (f) => f.endsWith('.js'))) {
   const base = path.basename(p, '.js');

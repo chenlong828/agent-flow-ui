@@ -1744,6 +1744,93 @@ async function scn0006T5(browser) {
   } finally { await ctx.page.close(); }
 }
 
+/* ----------------------------- SCN-0025 ----------------------------- */
+/** 打开第一位专家的详情弹层（专家弹层里的 Skill 行指向共享 Skill 面板）。 */
+async function openExpertDetail(browser, opts) {
+  const ctx = await open(browser, 'experts', '', Object.assign({ initScript: editorInit, wait: 600 }, opts || {}));
+  await ctx.page.locator('#ex-grid [data-act="detail"]').first().click();
+  await ctx.page.waitForSelector('#ex-edit');
+  await ctx.page.waitForTimeout(150);
+  return ctx;
+}
+
+async function openSkillRowPanel(ctx) {
+  const row = ctx.page.locator('[data-sopen]').first();
+  const name = (await row.locator('b').textContent()).trim();
+  await row.click();
+  await ctx.page.waitForSelector('#sk-panel-root');
+  await ctx.page.waitForTimeout(350);
+  return { name };
+}
+
+async function scn0025T1(browser) {
+  const ctx = await openExpertDetail(browser);
+  try {
+    const { name } = await openSkillRowPanel(ctx);
+    assert.equal(await ctx.page.locator('.modal').count(), 1, '同一时刻只应有一个弹层');
+    assert.match(await ctx.page.locator('.modal .d-head').textContent(), new RegExp('Skill 详情 · ' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.equal(await ctx.page.locator('#sk-body .sk-md-stub').count(), 1, '正文应由共享编辑器适配层渲染');
+    assert.equal(await ctx.page.locator('#skm-edit').count(), 1, '查看态底部应有编辑入口');
+    assert.equal(await ctx.page.locator('#skm-close').count(), 1);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0025T2(browser) {
+  const ctx = await openExpertDetail(browser);
+  try {
+    await openSkillRowPanel(ctx);
+    await ctx.page.locator('#skm-edit').click();
+    await ctx.page.waitForSelector('#sk-name');
+    await ctx.page.waitForTimeout(150);
+    await ctx.page.locator('#sk-name').fill('需求到场景·弹层改名');
+    await ctx.page.locator('#skm-save').click();
+    await ctx.page.waitForSelector('#skm-close', { timeout: 5000 });
+    await ctx.page.waitForTimeout(300);
+    assert.match(await ctx.page.locator('.modal .d-head').textContent(), /需求到场景·弹层改名/, '保存后弹层标题应更新');
+    await ctx.page.locator('#skm-close').click();
+    await ctx.page.waitForTimeout(500);
+    assert.equal(await ctx.page.locator('#ex-sec-skill').count(), 1, '关闭后应回到专家详情弹层');
+    assert.equal((await ctx.page.locator('[data-sopen]').first().locator('b').textContent()).trim(), '需求到场景·弹层改名');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0025T3(browser) {
+  const ctx = await openExpertDetail(browser);
+  try {
+    await ctx.page.locator('#ex-edit').click();
+    await ctx.page.waitForSelector('#ex-duty');
+    await ctx.page.locator('#ex-duty').fill('草稿职责在打开 Skill 弹层后仍保留');
+    await ctx.page.waitForTimeout(120);
+    await openSkillRowPanel(ctx);
+    await ctx.page.locator('#skm-close').click();
+    await ctx.page.waitForTimeout(500);
+    assert.equal(await ctx.page.locator('#ex-save').count(), 1, '应回到专家编辑态');
+    assert.equal(await ctx.page.locator('#ex-duty').inputValue(), '草稿职责在打开 Skill 弹层后仍保留');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0025T4(browser) {
+  const ctx = await openExpertDetail(browser);
+  try {
+    await openSkillRowPanel(ctx);
+    await ctx.page.locator('#skm-edit').click();
+    await ctx.page.waitForSelector('#sk-name');
+    await ctx.page.locator('#sk-name').fill('临时未保存的名称');
+    await ctx.page.waitForTimeout(150);
+    await ctx.page.locator('.modal .d-head .x').click();
+    await ctx.page.waitForTimeout(250);
+    assert.equal(await ctx.page.locator('.modal').count(), 1, '有未保存修改时不得直接关闭');
+    assert.equal(await ctx.page.locator('#skm-discard').count(), 1, '应出现放弃确认');
+    await ctx.page.locator('#skm-keep').click();
+    await ctx.page.waitForTimeout(200);
+    assert.equal(await ctx.page.locator('#sk-name').inputValue(), '临时未保存的名称', '继续编辑应保留草稿');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
 /* ----------------------------- SCN-0007 ----------------------------- */
 async function scn0007T1(browser) {
   const ctx = await open(browser, 'harnesses', '', { wait: 600 });
@@ -2397,6 +2484,12 @@ const SCENARIOS = [
     ['SCN-0006-T3', '正', '停用写回 enabled=false', scn0006T3],
     ['SCN-0006-T4', '反', '取消停用保持启用', scn0006T4],
     ['SCN-0006-T5', '正', '详情弹窗 90% 视口高、页脚不出视口', scn0006T5]
+  ]],
+  ['SCN-0025', '从专家弹层查看与编辑 Skill', [
+    ['SCN-0025-T1', '正', '点 Skill 行打开全文弹层', scn0025T1],
+    ['SCN-0025-T2', '正', '弹层内编辑保存后回填专家详情', scn0025T2],
+    ['SCN-0025-T3', '正', '关闭后回到专家弹层且草稿不丢', scn0025T3],
+    ['SCN-0025-T4', '反', '未保存时关闭被拦截', scn0025T4]
   ]],
   ['SCN-0014', 'Skill 专门页面查看、编辑与下载', [
     ['SCN-0014-T1', '正', '查看态正文与文件清单', scn0014T1],

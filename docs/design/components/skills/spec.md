@@ -5,7 +5,7 @@ component: CMP-skills
 requirement: REQ-0005
 scenario: SCN-0005
 status: active
-updated: 2026-11-17
+updated: 2026-11-21
 ---
 
 # Skill 库
@@ -14,21 +14,21 @@ updated: 2026-11-17
 
 ## 0 模块卡
 
-> 追溯：`REQ-0005` / `SCN-0005`（verified）+ `REQ-0015` / `SCN-0016`、`SCN-0017`（verified；`SCN-0013` 已废弃）。
+> 追溯：`REQ-0005` / `SCN-0005`（verified）+ `REQ-0015` / `SCN-0016`、`SCN-0017`（verified；`SCN-0013` 已废弃）+ `REQ-0030` / `SCN-0025`（面板抽成共享实现，专家弹层复用）。
 
 - 状态：active
 - 单元 / 层：组件 / L2 页面组件
 - 业务价值：为专家与流程设计者提供可复用能力单元的沉淀、检索与组合入口；没有它，专家只能把能力内联写进指令，无法复用、版本化与审计。
-- 负责 / 不负责：负责 Skill 列表（分类 + 标签 + 搜索 + 计数）、启停、删除、引用计数弹窗；负责专门页 `pages/skill-detail.html` 的查看/编辑/新建：元数据、`SKILL.md` 正文、`scripts/` + `references/` 附件清单、草稿保存、整包下载；不负责专家侧组合与挂载（`CMP-experts`）、工作流节点引用配置（`CMP-workflow-editor`）、外壳/菜单/弹窗原语（`CMP-ui-shell`）、包构建与存储（B1）。
-- 内部逻辑：分类计数与列表同源；`slug` 是英文名/系统标识（kebab-case，1–64），列表展示与搜索、详情展示、编辑/新建输入均使用它；`description` 1–400；正文上限 16 KiB（UTF-8 字节，含 frontmatter），编辑态实时计数，超限阻断保存并提示把长内容放进 `references/`；保存必须走草稿：建草稿 → 改元数据/正文 → 上传或整理附件 → `save` 带 `If-Match`；版本由服务端递增；同名附件上传即覆盖；附件支持按钮选择与拖入附件区（同样落到 `scripts/`/`references/`）；取消即丢弃草稿，有未保存修改时先确认；`Ctrl/Cmd+S` 保存；编辑态操作栏吸顶；保存成功草稿被消费，页面重拉详情。
+- 负责 / 不负责：负责 Skill 列表（分类 + 标签 + 搜索 + 计数）、启停、删除、引用计数弹窗；负责专门页 `pages/skill-detail.html` 与共享面板 `assets/js/pages/skill-panel*.js`（`SKP.mount` / `SKPM.open`，纯渲染与附件操作拆在 `skill-panel-render.js`、`skill-panel-files.js`）的查看/编辑/新建：元数据、`SKILL.md` 正文、`scripts/` + `references/` 附件清单、草稿保存、整包下载；面板同时供 `CMP-experts` 的 Skill 弹层复用（同一份实现，不复制）；不负责专家侧组合与挂载（`CMP-experts`）、工作流节点引用配置（`CMP-workflow-editor`）、外壳/菜单/弹窗原语（`CMP-ui-shell`）、包构建与存储（B1）。
+- 内部逻辑：查看/编辑/新建只有一份实现（`skill-panel.js#mountSkillPanel`），页面宿主只做外壳（query/面包屑/页头/URL/离开提醒），专家弹层宿主只做弹层与页脚；Markdown 编辑一律经 `SKILL_MD`（`shared/markdown-editor.js` 的薄适配层），页面与弹层不得各自挂载编辑器；分类计数与列表同源；`slug` 是英文名/系统标识（kebab-case，1–64），列表展示与搜索、详情展示、编辑/新建输入均使用它；`description` 1–400；正文上限 16 KiB（UTF-8 字节，含 frontmatter），编辑态实时计数，超限阻断保存并提示把长内容放进 `references/`；保存必须走草稿：建草稿 → 改元数据/正文 → 上传或整理附件 → `save` 带 `If-Match`；版本由服务端递增；同名附件上传即覆盖；附件支持按钮选择与拖入附件区（同样落到 `scripts/`/`references/`）；取消即丢弃草稿，有未保存修改时先确认；`Ctrl/Cmd+S` 保存；编辑态操作栏吸顶；保存成功草稿被消费，页面重拉详情。
 - 数据所有权：页面状态直接保存 B1 `SkillListItem` / `SkillDetail`（`body` + `files`）/ `SkillDraft` / `SkillCategory` DTO；列表 `GET /skills`、详情 `GET /skills/{id}`、分类 `GET /skill-categories`、引用 `GET /skills/{id}/references`、启停 `PATCH /enabled`、删除 `DELETE`、下载 `GET /skills/{id}/download`、文档原文 `GET /skills/{id}/document`；草稿 `POST /skill-drafts`、`GET/DELETE /skill-drafts/{id}`、`POST/PATCH/DELETE /skill-drafts/{id}/files`、`POST /skill-drafts/{id}/save`，均经 `window.API`；DTO 的 `slug` 原样展示与回填。不读 `MOCK`，不建第二套视图模型；草稿是服务端资源（TTL 24 小时），页面只持有 draft id 与文件清单，不做本地深拷贝；版本号由服务端生成，页面不本地递增。
-- 公开契约：页面入口 `pages/skills.html`、`pages/skill-detail.html?id=&mode=`；操作 `CMP-skills#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#draft`、`#download`；不变量 ①分类只使用 API 返回的 `code/label`，`data-cat` 使用 code（全部=`all`）；②保存 body 为 `name/slug?/categoryCode/description/tags/body`，`slug` 可选且必须 kebab-case（1–64），留空由服务端派生，不带 `version/enabled`；`description` 必填 1–400 字，页面 trim 后提交；③查看态 = 元数据条 + 正文渲染 + 文件清单 + 下载，不再有结构化五章与「结构化/文档」双 Tab；④编辑/新建 = 草稿，`SKILL.md` 只读，附件只能落在 `scripts/`、`references/`，同名上传覆盖；⑤正文超 16 KiB 阻断保存并提示放 `references/`；⑥引用只显示 `usedByCount`；⑦删除被引用 Skill 由 B1 返回 409 `referenced`，页面提示引用数并保留数据；⑧启停/删除/保存带 revision，`If-Match` 由 API 层生成；⑨不提供单文件下载与附件预览；⑩正文渲染边界：内容最大宽度 860px、长串自动换行、代码块与表格内部自适应，页面不得出现横向滚动；⑪编辑态未保存修改时取消/离开需确认；⑫缺图显示占位而不是裸破图；⑬列表行「更多」菜单右对齐触发按钮、向左展开，由 `DF.menu` 钳入视口四边；⑭列表名称下方展示英文名（`slug`），搜索同时匹配名称/英文名/描述/标签；查看态元数据条展示英文名；编辑/新建提供英文名输入，非法 kebab-case 前端拦截。
-- 依赖：`DF`（`renderShell`、`table`、`empty`、`field`、`modal`、`menu`、`toast`、`tag`、`esc`、`icon`）/ `window.API` / `window.SKILL_MD`（编辑器适配层）/ `DEP-0001`（7.7.0 单包，只读与编辑共用）；不依赖 `MOCK` 或其他页面组件。
+- 公开契约：页面入口 `pages/skills.html`、`pages/skill-detail.html?id=&mode=`；共享面板入口 `assets/js/pages/skill-panel.js`：`SKP.mount(root, {id, mode, onState, onSaved}) -> {enterEdit, exitEdit, save, isDirty, getMode, getSkill, getState, reload, destroy}`；弹层入口 `assets/js/pages/skill-panel-modal.js`：`SKPM.open({id, mode?, onSaved, onClose}) -> {close, getHandle}`；操作 `CMP-skills#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#draft`、`#download`、`#panel`；不变量 ①分类只使用 API 返回的 `code/label`，`data-cat` 使用 code（全部=`all`）；②保存 body 为 `name/slug?/categoryCode/description/tags/body`，`slug` 可选且必须 kebab-case（1–64），留空由服务端派生，不带 `version/enabled`；`description` 必填 1–400 字，页面 trim 后提交；③查看态 = 元数据条 + 正文渲染 + 文件清单 + 下载，不再有结构化五章与「结构化/文档」双 Tab；④编辑/新建 = 草稿，`SKILL.md` 只读，附件只能落在 `scripts/`、`references/`，同名上传覆盖；⑤正文超 16 KiB 阻断保存并提示放 `references/`；⑥引用只显示 `usedByCount`；⑦删除被引用 Skill 由 B1 返回 409 `referenced`，页面提示引用数并保留数据；⑧启停/删除/保存带 revision，`If-Match` 由 API 层生成；⑨不提供单文件下载与附件预览；⑩正文渲染边界：内容最大宽度 860px、长串自动换行、代码块与表格内部自适应，页面不得出现横向滚动；⑪编辑态未保存修改时取消/离开需确认；⑫缺图显示占位而不是裸破图；⑬列表行「更多」菜单右对齐触发按钮、向左展开，由 `DF.menu` 钳入视口四边；⑭列表名称下方展示英文名（`slug`），搜索同时匹配名称/英文名/描述/标签；查看态元数据条展示英文名；编辑/新建提供英文名输入，非法 kebab-case 前端拦截。
+- 依赖：`DF`（`renderShell`、`table`、`empty`、`field`、`modal`、`menu`、`toast`、`tag`、`esc`、`icon`）/ `window.API` / `shared/markdown-editor.js`（`SKILL_MD` 适配层）/ `DEP-0001`（7.7.0 单包，只读与编辑共用）/ `skill-common.js`（`SK` 纯渲染 helpers）；不依赖 `MOCK` 或其他页面组件；`CMP-experts` 反向依赖本组件的 `SKP` 面板（见架构依赖矩阵）。
 - 冷热属性：冷（管理面用户触发）；编辑器按需加载 `DEP-0001`，不占首屏。
 - 变化轴：正文渲染主题、附件清单策略（大小/排序）、下载与复制、草稿自动保存。
 - 验证入口：`npm start` + `/pages/skills.html`、`/pages/skill-detail.html?id=sk-cres`；`node tools/verify-m1-scenarios.js SCN-0005|SCN-0014|SCN-0015|SCN-0016|SCN-0017`；`npm run test:skill-render`；`npm run test:skill-engine`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-pages.js`；`BASE_URL=http://127.0.0.1:3000 node tools/verify-b1-writes.js`。
-- 验证计划：列表/启停/删除→SCN-0005；专门页三态→SCN-0014 + `test:skill-engine`；正文渲染→SCN-0015 + `test:skill-render`；草稿编辑与保存→SCN-0016；整包下载→SCN-0017；真实 B1→`test:b1-pages/writes`。
-- 预算：`skills.js` 约 12 KB + `skill-detail.js` 约 14 KB + `skill-common.js` 约 3 KB + 本规格约 9 KB；`DEP-0001` 177.3 KiB gzip 按需加载，低于 500 KiB 观测阈值（只 WARN）。
+- 验证计划：列表/启停/删除→SCN-0005；专门页三态→SCN-0014 + `test:skill-engine`；共享面板（弹层内查看/编辑/关闭回填）→SCN-0025；正文渲染→SCN-0015 + `test:skill-render`；草稿编辑与保存→SCN-0016；整包下载→SCN-0017；真实 B1→`test:b1-pages/writes`。
+- 预算：`skills.js` 约 12 KB + `skill-panel*.js` 约 27 KB（559+139+92+76 行）+ `skill-detail.js` 约 5 KB + `skill-common.js` 约 3 KB + 本规格约 10 KB；`DEP-0001` 177.3 KiB gzip 按需加载，低于 500 KiB 观测阈值（只 WARN）。
 - 单独运行：`npm start` → `/pages/skills.html` 或 `/pages/skill-detail.html?id=sk-cres`。
 - 删除测试：删除后专家与工作流节点失去可引用的能力单元，复杂度会集中到 `CMP-experts` 与编辑器，故保留为独立组件。
 - 已知偏差：编辑器不提供格式工具栏，依赖 Markdown 快捷输入；取消的草稿与刷新后的编辑不跨会话恢复（仅服务端 TTL 24h）；B1 不提供版本历史、引用方明细与单文件读取；详情/文档/下载都整包 inflate，大包读取有延迟；`scripts/` 在 zip 内无执行位（0644），执行侧自行处理；`usedByCount` 只做计数；M1 场景使用 `tools/fake-b1.js` 内存传输，真实读写由 `verify-b1-*` 覆盖；`DEP-0001` 已升级为 7.7.0 单包（查看与编辑共用），旧 7.22.3 只读包已移除。

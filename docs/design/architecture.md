@@ -30,8 +30,8 @@ updated: 2026-11-19
 | `CMP-instances` | `instances.html` + `instance-detail.html?id=` | `instances.js`、`instance-detail.js` | 运行列表、轨迹图（共享画布几何 + 保存视口）、发起运行（工作流+Harness+路径+意图）、节点多轮历史弹层、文件/执行会话 Tab、页头任务文件、终止、人工确认（confirm 节点与 MCP 执行中确认点）、超时节点继续执行、历史运行快照展示（RunDetail.graph/workflowName/expertName）、按轮会话日志下载；后端未提供的控制入口置灰 |
 | `CMP-run-files` | `instance-detail.html` 节点弹层/页头任务文件 | `run/views/files.js` | 运行任务文件只读浏览：根切换、面包屑、目录懒加载、Markdown/文本/二进制/截断预览 |
 | `CMP-run-session` | `instance-detail.html` 节点弹层执行会话 | `run/views/session.js` | 执行会话只读：详情、历史事件、`EventSource` 实时追加、raw 下载；无 sessionId |
-| `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js` | Skill 列表、筛选、启停、删除、引用方；专门页承接查看/编辑/新建，正文用 Milkdown 渲染、编辑走草稿 |
-| `CMP-experts` | `pages/experts.html` | `experts.js` | 专家列表、五区详情/编辑、Skill/工具组合、启停 |
+| `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js`、共享面板 `skill-panel*.js` | Skill 列表、筛选、启停、删除、引用方；专门页只做外壳，查看/编辑/新建由共享面板 `SKP` 承接（正文用 Milkdown 渲染、编辑走草稿），专家弹层复用同一面板 |
+| `CMP-experts` | `pages/experts.html` | `experts.js` | 专家列表、五区详情/编辑、Skill/工具组合、Skill 行打开共享面板（`SKPM`）查看/编辑 Skill、启停 |
 | `CMP-harnesses` | `pages/harnesses.html` | `harnesses.js` | 设施列表、注册、健康/配额、启停、删除 |
 | `CMP-tools` | `pages/tools.html` | `tools.js` | 工具注册表、注册、模拟调试、引用方、删除保护 |
 | `CMP-analytics` | `pages/analytics.html` | `analytics.js` | KPI、趋势、阶段准出、评审记录、Skill 审计（只读） |
@@ -46,6 +46,7 @@ updated: 2026-11-19
 | 模拟数据 | `assets/js/mock-data.js`（具名导出 `MOCK`） | 集合 + `MOCK.byId/now/m/mts` | 原型夹具；读写都在内存 |
 | 共享数据层 | `assets/js/api.js`（具名导出 `API`） | `list/get/create/update/toggle/remove/document/categories/errorText` | B1 四页共用；revision 缓存 + 文档 ETag/文本缓存；不做 DTO 映射、不回落 MOCK |
 | 工作区共用 | `assets/js/pages/workspace-common.js`（具名导出 `WSC`） | `treeHtml/createdText/readNewWs/saveNewWs/dropNewWs/syncNewWs/pad` | 仅 `CMP-workspaces` 两页使用 |
+| Skill 面板 | `assets/js/pages/skill-panel.js`（`SKP`）+ `skill-panel-render.js`（纯渲染）+ `skill-panel-files.js`（附件操作）+ `skill-panel-modal.js`（`SKPM`） | `SKP.mount`、`SKPM.open` | Skill 查看/编辑/新建的唯一实现；`CMP-skills` 专门页与 `CMP-experts` Skill 弹层共用；Markdown 编辑只经 `SKILL_MD` |
 | 静态服务 | `server.js` | 静态文件 + `/` 302 | 只服务 `pages/` 与 `assets/`，绑定 `127.0.0.1`；拒绝点文件与越界路径 |
 | 同源网关 | `bff/`（`CMP-bff`） | `/api/v1/*`、`/healthz` 透明转发 | 与 `server.js` 同进程；不做 DTO 映射、revision、重试、聚合；详见 `components/bff/spec.md` |
 | 工作流数据服务 | `assets/js/workflow/data.js` | `CMP-workflow-data` §1 的 11 个操作 | B3 工作流唯一读写入口；页面不得直接 `fetch /api/v1/workflows*`；规格见 `components/workflow-data/spec.md` |
@@ -75,6 +76,8 @@ updated: 2026-11-19
 | Skill 正文 / 运行意图 | `shared/markdown-editor` | `mountMarkdown/destroyMarkdown` | 动态 import vendor | 只经适配层使用 Milkdown，页面不直接 import vendor |
 | 运行详情 | `shared/markdown` | `renderMarkdown` | 同步，ESM import | 节点消息只读渲染；不执行原始 HTML |
 | `CMP-workspaces` 两页 | `WSC` | 目录树/跨页联动 | 同步，ESM import | 不供其他页面使用 |
+| `CMP-skills` 两页 | `SKP` | Skill 面板（查看/编辑/新建） | 同步，ESM import | `skill-detail` 只做外壳；页面不复制草稿/保存逻辑、不各自挂载编辑器 |
+| `CMP-experts` | `SKPM` | Skill 面板弹层宿主 | 同步，ESM import | 只传 `id`/`onSaved`/`onClose`；不复制弹层页脚与关闭拦截逻辑 |
 | 页面 ↔ 页面 | — | URL 参数 / sessionStorage 单键 | 跳转或一次性传递 | 禁止互相 `import`/调用 JS |
 | `server.js` | 静态文件 / `CMP-bff` | `/pages/*`、`/assets/*`、`/api/v1/*` | HTTP / 进程内 | 组合根；不承载业务逻辑 |
 | `CMP-bff` | B1 后端 | `/api/v1/*`、`/healthz` | HTTP | 透明转发；不改写 DTO/状态/错误体 |
@@ -88,7 +91,8 @@ updated: 2026-11-19
 - `server.js` 不得承载业务 API；只允许挂载 `CMP-bff` 做透明转发；页面不得依赖 Node 侧能力。
 - `CMP-bff` 不得 import `DF`/`MOCK`/页面代码，不得做 DTO 映射、revision 缓存、重试、聚合或模拟数据。
 - 四页 live 后不得自动回落 MOCK；失败必须显式报错。
-- 同层页面不横调；共享能力下沉到 `DF`/`WSC`，跨页流程上提到 URL 约定。
+- 同层页面不横调；共享能力下沉到 `DF`/`WSC`/`SKP`，跨页流程上提到 URL 约定。
+- Skill 正文的查看/编辑只能经 `SKP`（面板）与 `SKILL_MD`（编辑器适配层）：页面不得直接挂载 Milkdown，也不得复制草稿/保存流程；弹层入口只能用 `SKPM.open`，不得另写一套弹层页脚。
 - 页面 JS 不得引用未登记 `DEP-xxxx` 的第三方脚本/模块，不得出现 `http(s)://` 或协议相对外链；`package.json` 的 `dependencies` 保持为空；`devDependencies` 只允许 `dependencies.md` §7 登记的开发工具（当前 `oxlint`）。
 
 > 可机械判定的部分：`tools/check-architecture.js` 覆盖边 1/3/4/5，并机械检查边 6 的共享模块路径；边 7 由 `tools/check-deps.js` 覆盖。边 2（`DF`/`MOCK` 是否承载业务规则）与边 6 的任意横向耦合仍需人工评审。
@@ -111,8 +115,8 @@ updated: 2026-11-19
 | `CMP-workflow-list` | `#list`、`#create`、`#copy`、`#update`、`#delete`、`#import`、`#export` |
 | `CMP-workflow-editor` | `#open`、`#add-node`、`#connect-edge`、`#inspector`、`#validate`、`#save`、`#dsl` |
 | `CMP-instances` | `#list`、`#launch`、`#detail`、`#cancel`、`#decide`、`#resume-node`、`#session-log`、`#run-files`、`#node-modal` |
-| `CMP-skills` | `#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#document` |
-| `CMP-experts` | `#list`、`#create`、`#edit`、`#toggle`、`#detail`、`#picker` |
+| `CMP-skills` | `#list`、`#create`、`#edit`、`#toggle`、`#delete`、`#detail-page`、`#document`、`#panel` |
+| `CMP-experts` | `#list`、`#create`、`#edit`、`#toggle`、`#detail`、`#picker`、`#skill-open` |
 | `CMP-harnesses` | `#list`、`#register`、`#detail`、`#toggle`、`#delete` |
 | `CMP-tools` | `#list`、`#register`、`#edit`、`#refs`、`#delete` |
 | `CMP-analytics` | `#overview`、`#trend`、`#stage-pass`、`#review-records`、`#skill-audit` |

@@ -17,7 +17,7 @@ updated: 2026-11-21
 ## 运行序
 
 1. 页面通过 `API.list('expert',{limit:200})` 读列表 DTO；卡片显示前 3 个 `skills` 预览、「Skill ×N」（`skillCount`）与 `refCount`，不再展示 `toolCount`；搜索/状态筛选在客户端完成。
-2. 打开详情：`API.get('expert', id)` 取完整 DTO，弹窗固定 80vw × 90vh（页头页脚固定、内容区滚动），五区读取 `duty/skillOrder/verifyOrder/notes/persona/refs/skills/tools`；装配顺序取 `skills[].id` / `tools[].id`。
+2. 打开详情：`API.get('expert', id)` 取完整 DTO，弹窗固定 80vw × 90vh（页头页脚固定、内容区滚动），五区读取 `duty/skillOrder/verifyOrder/notes/persona/refs/skills/tools`；装配顺序取 `skills[].id` / `tools[].id`。② Skill 组合的每一行可点开共享 Skill 面板查看/编辑全文（详见 `SCN-0025`），Skill 保存后只回填该行的名称/描述。
 3. 新建 `POST /experts`（`name/color/role`），用返回 DTO 的 `id` 打开编辑详情；聚合保存 `PATCH /experts/{id}`，body 含五区字段与有序 `skillIds/toolIds`，不含 `enabled/version`。
 4. 启停 `PATCH /enabled`、删除 `DELETE`；引用只显示 DTO `refCount`，B1 不提供引用方明细。
 

@@ -38,6 +38,7 @@ updated: 2026-11-17
 - `DF.modal.open`：`width`/`height` 支持数字（像素）或字符串（`'80vw'`/`'90vh'`/`'90%'`，内部按当前缩放系数换算为视觉尺寸）；`size: 'screen'` 表示视口 90% × 90% 大弹层（头部/底部固定、主体内滚动、resize 重算、Esc/遮罩/× 关闭）；普通弹窗传 `height` 即固定高度（加 `modal-fixed`，头部/底部固定、主体内滚动、高度不随内容变化、不改变 Esc 行为）；`resizable: true` 启用左右拖宽把手（对称展开，范围钳制，双击恢复默认宽）；普通弹窗默认只响应遮罩/×，需要 Esc 时传 `closeOnEsc: true`；
 - `DF.drawer.open`：`noOverlay: true` 表示不加暗色遮罩（用于"抽屉打开时背景仍需可操作"的场景）；工作流编辑器与运行实例详情已不再使用抽屉，改为双击大弹层；
 - `DF.modal.confirm`：Promise 化确认框，内部有 settled 标志防重复解析——不要在页面里再包一层自定义确认逻辑。
+- `SKP`（`assets/js/pages/skill-panel.js`，配 `skill-panel-render.js` / `skill-panel-files.js`）：Skill 查看/编辑/新建的唯一实现（`SKP.mount(root, opts)`）；弹层入口是 `skill-panel-modal.js` 的 `SKPM.open(opts)`。`CMP-skills` 专门页与 `CMP-experts` 的 Skill 弹层都只能用这一份，页面宿主只做外壳与页脚。Markdown 编辑一律经 `shared/markdown-editor.js`（`SKILL_MD` 适配层）：Skill 正文、运行启动意图都只调 `mountMarkdown`，不得各自挂载 Milkdown。
 - `DF.menu(items, x, y, opts)`：右键/更多菜单（fixed 弹层，z-index 250）。调用方统一传**视觉坐标**（`clientX` 与 `rect` 均是视觉值），内部按缩放路径归一（zoom 路径除以 `zoomK`，兜底路径原样）；纵向/横向钳制必须用同一坐标系：`innerWidth/Height` 在 zoom 路径下先除以 `zoomK`，再与 `offsetWidth/Height` 比较，否则底部菜单会越出视口；`opts.alignRight` 为锚定下拉语义：x 视作右缘坐标，量实际宽度反推 left（防溢出钳制 `innerWidth-160` 只作用于默认左缘语义，会破坏右缘锚定）——顶栏用户区下拉用此语义。
 
 ## 5. 引擎兼容的双路径模式（能力探测 → 主路径 + 兜底）

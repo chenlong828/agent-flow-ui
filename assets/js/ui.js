@@ -403,7 +403,8 @@
       return mm ? (parseFloat(mm[1]) / 100 * unitBase / (zK0 || 1)) + 'px' : v;
     };
     /* size:'screen' = 视口 90% × 90%，头部/底部固定、内容区滚动；opt.width/height 可覆盖
-     * opt.height（普通弹窗）= 固定高度，头部/底部固定、内容区滚动，尺寸不随内容变化 */
+     * opt.height（普通弹窗）= 固定高度，头部/底部固定、内容区滚动，尺寸不随内容变化
+     * opt.beforeClose = () => boolean，返回 false 拦截关闭（遮罩/×/Esc 同一条路径） */
     const screen = opt.size === 'screen';
     if (opt.height != null) m.classList.add('modal-fixed');
     const applySize = () => {
@@ -451,6 +452,8 @@
     const onResize = () => applySize();
     const close = () => {
       if (closed) return;
+      // beforeClose 返回 false 可拦截关闭（用于「有未保存修改」的就地确认）
+      if (typeof opt.beforeClose === 'function' && opt.beforeClose() === false) return;
       closed = true;
       w.remove();
       if (escClose) document.removeEventListener('keydown', onKey);

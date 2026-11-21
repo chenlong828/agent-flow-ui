@@ -6,6 +6,7 @@
 
 import { DF } from '../ui.js';
 import { API } from '../api.js';
+import { SKPM } from './skill-panel-modal.js';
 
 
   var PALETTE = ['#2563eb', '#7c3aed', '#16a34a', '#ea580c', '#0d9488', '#dc2626', '#4f46e5', '#0ea5e9'];
@@ -470,10 +471,12 @@ import { API } from '../api.js';
       h += '<div class="ex-sub" style="margin-bottom:6px">尚未组合 Skill' + (edit ? '，可从 Skill 库添加' : '') + '。</div>';
     }
     skills.forEach(function (s, i) {
-      h += '<div class="ex-skill-item"><span class="ex-idx">' + (i + 1) + '</span>' +
+      h += '<div class="ex-skill-item" data-sopen="' + DF.esc(s.id) + '" title="点击查看 / 编辑 Skill 全文">' +
+        '<span class="ex-idx">' + (i + 1) + '</span>' +
         '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
           '<b style="font-size:13px">' + DF.esc(s.name) + '</b>' + DF.tag(categoryLabel(s), categoryColor(s)) + '</div>' +
           '<div class="ex-sum" title="' + DF.esc(s.description || '') + '">' + DF.esc(s.description || '') + '</div></div>' +
+        (edit ? '' : '<span class="ex-skill-open-hint">查看 ›</span>') +
         (edit
           ? '<button class="ex-move" data-smove="up" data-sid="' + DF.esc(s.id) + '" title="上移"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
             '<button class="ex-move" data-smove="down" data-sid="' + DF.esc(s.id) + '" title="下移"' + (i === skills.length - 1 ? ' disabled' : '') + '>↓</button>' +
@@ -531,6 +534,39 @@ import { API } from '../api.js';
     return h;
   }
 
+  /* 专家弹层里的 Skill 行 → 打开共享 Skill 面板弹层（查看/编辑/保存同一套实现） */
+  function openSkillPanelModal(sid) {
+    var cur = d;
+    if (!cur || !sid) return;
+    SKPM.open({
+      id: sid,
+      onSaved: function (skill) { patchSkillSummary(cur, skill); },
+      onClose: function () {
+        // Skill 弹层关闭后回到专家详情弹层；专家草稿在 d.draft 里，不丢
+        if (cur && d !== cur) showDrawer(cur);
+      }
+    });
+  }
+
+  /* Skill 保存后只回填摘要字段，不覆盖专家草稿的其他输入 */
+  function patchSkillSummary(cur, skill) {
+    if (!cur || !skill) return;
+    function patch(list) {
+      (list || []).forEach(function (s) {
+        if (s.id !== skill.id) return;
+        s.name = skill.name;
+        s.description = skill.description;
+        s.categoryCode = skill.categoryCode;
+        s.categoryLabel = skill.categoryLabel;
+        s.enabled = skill.enabled;
+      });
+    }
+    if (cur.dto) patch(cur.dto.skills);
+    if (cur.draft) patch(cur.draft.skills);
+    state.items.forEach(function (it) { if (it.id === cur.id) patch(it.skills); });
+    renderGrid();
+  }
+
   function personaChipsEdit(list) {
     return (list || []).map(function (p) {
       return '<span class="chip">' + DF.esc(p) + '<i class="x" data-pdel="' + DF.esc(p) + '" title="移除">×</i></span>';
@@ -550,6 +586,11 @@ import { API } from '../api.js';
       if (!d) return;
       var t = ev.target;
       if (t.closest('#ex-dretry') || t.closest('[data-act="retry"]')) { reloadDetail(); return; }
+      // 查看态与编辑态都可点 Skill 行打开全文弹层；上移/下移/移除按钮在下面先命中
+      if (!t.closest('[data-smove]') && !t.closest('[data-sremove]')) {
+        var openRow = t.closest('[data-sopen]');
+        if (openRow) { openSkillPanelModal(openRow.getAttribute('data-sopen')); return; }
+      }
       if (!d.edit || !d.draft) return;
       var pdel = t.closest('[data-pdel]');
       if (pdel) {

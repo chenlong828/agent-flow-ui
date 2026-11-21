@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>专家管理 · AgentFlow</title>
 <link rel="stylesheet" href="../assets/css/main.css">
+<link rel="stylesheet" href="../assets/css/skill-panel.css">
 <style>
   /* ===== 专家管理私有样式（前缀 ex-） ===== */
   .ex-sub { font-size:12px; color:var(--t-3); }
@@ -14,6 +15,9 @@
 
   /* ② Skill 有序列表 */
   .ex-skill-item { display:flex; align-items:flex-start; gap:8px; padding:8px 10px; border:1px solid var(--c-line); border-radius:6px; margin-bottom:6px; background:var(--c-panel); }
+  .ex-skill-item[data-sopen] { cursor:pointer; transition:border-color .12s, box-shadow .12s; }
+  .ex-skill-item[data-sopen]:hover { border-color:var(--c-primary); box-shadow:0 0 0 1px var(--c-primary) inset; }
+  .ex-skill-open-hint { font-size:11px; color:var(--t-3); display:inline-flex; align-items:center; gap:3px; flex-shrink:0; margin-top:2px; }
   .ex-skill-item .ex-idx { width:20px; height:20px; border-radius:50%; background:#eef2f7; color:var(--t-2); font-size:11px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
   .ex-move { border:1px solid var(--c-line-2); background:var(--c-panel); border-radius:4px; width:22px; height:22px; line-height:1; cursor:pointer; color:var(--t-2); font-size:13px; flex-shrink:0; padding:0; }
   .ex-move:hover:not(:disabled) { border-color:var(--c-primary); color:var(--c-primary); }
