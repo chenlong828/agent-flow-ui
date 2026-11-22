@@ -74,6 +74,7 @@ updated: 2026-11-19
 | 运行详情 | `run/views/session` | 会话只读视图 + `EventSource` | 同步，ESM import | 只经 `run/data` 取数；unmount 必关流 |
 | 运行两页 | `workflow/data` / `workflow/model` | 工作流图与坐标 | HTTP + 同步 | 详情优先读 `RunDetail.graph`（冻结快照）；仅快照缺失时回退只读工作流图，不改图 |
 | `CMP-experts` | `workflow/data` | `WorkflowSummary.id/name`（`list({limit:200})`） | 同步，ESM import | 仅流程筛选取名字；不读工作流图、不写工作流，筛选结果以 B1 `GET /experts?workflowId=` 为准 |
+| `CMP-experts` | `shared/markdown-editor` / `shared/markdown` | `mountMarkdown/destroyMarkdown`、`renderMarkdown` | 动态 import vendor / 同步 | 职责范围（Markdown）的编辑与只读；页面不得直接 import vendor |
 | Skill 正文 / 运行意图 | `shared/markdown-editor` | `mountMarkdown/destroyMarkdown` | 动态 import vendor | 只经适配层使用 Milkdown，页面不直接 import vendor |
 | 运行详情 | `shared/markdown` | `renderMarkdown` | 同步，ESM import | 节点消息只读渲染；不执行原始 HTML |
 | `CMP-workspaces` 两页 | `WSC` | 目录树/跨页联动 | 同步，ESM import | 不供其他页面使用 |

@@ -1633,13 +1633,25 @@ async function scn0006T1(browser) {
 }
 
 async function scn0006T2(browser) {
-  const ctx = await open(browser, 'experts', '', { wait: 600 });
+  const dutyMd = '## 主要职责\n**必须**先复现问题再改代码\n\n## 重点验证顺序\n1. 回归';
+  const ctx = await open(browser, 'experts', '', {
+    wait: 600,
+    setup: function () { MOCK.experts[0].duty = dutyMd; }
+  });
   try {
     await ctx.page.locator('#ex-grid [data-act="detail"]').first().click();
     await ctx.page.waitForTimeout(150);
-    for (const id of ['ex-sec-role', 'ex-sec-skill', 'ex-sec-tools', 'ex-sec-work', 'ex-sec-refs']) {
+    for (const id of ['ex-sec-role', 'ex-sec-skill']) {
       assert.equal(await ctx.page.locator('#' + id).count(), 1, '缺详情区 ' + id);
     }
+    // ③工具清单 / ④主要工作内容 / ⑤参考知识 已从界面下线（后端把四节合并进 duty）
+    for (const id of ['ex-sec-tools', 'ex-sec-work', 'ex-sec-refs']) {
+      assert.equal(await ctx.page.locator('#' + id).count(), 0, '详情区已下线 ' + id);
+    }
+    const dutyHtml = await ctx.page.locator('#ex-duty-view').innerHTML();
+    assert.match(dutyHtml, /<h2>主要职责<\/h2>/, '职责按 Markdown 渲染标题');
+    assert.match(dutyHtml, /<strong>必须<\/strong>/, '职责按 Markdown 渲染粗体');
+    assert.ok(!dutyHtml.includes('##'), '不得原样输出 Markdown 源码');
     const ex = MOCK.experts[0];
     const text = await ctx.page.locator('.modal').textContent();
     assert.ok(text.includes(ex.role));
@@ -1648,11 +1660,6 @@ async function scn0006T2(browser) {
       if (sk) { assert.ok(text.includes(sk.name)); assert.ok(text.includes(sk.description)); }
     }
     assert.ok(!text.includes('undefined'));
-    for (const tid of (ex.tools || [])) {
-      const tl = MOCK.tools.find((x) => x.id === tid);
-      if (tl) assert.ok(text.includes(tl.name));
-    }
-    for (const r of (ex.refs || [])) assert.ok(text.includes(r.label));
     let refN = 0;
     for (const wf of MOCK.workflows) for (const nd of (wf.graph.nodes || [])) if (nd.expertId === ex.id) refN++;
     assert.match(text, new RegExp('被引用\\s*' + refN + '\\s*处'));
@@ -1662,7 +1669,7 @@ async function scn0006T2(browser) {
 }
 
 async function scn0006T3(browser) {
-  const ctx = await open(browser, 'experts', '', { wait: 600 });
+  const ctx = await open(browser, 'experts', '', { initScript: editorInit, wait: 600 });
   try {
     const before = MOCK.experts.length;
     await ctx.page.locator('#ex-new').click();
@@ -1674,10 +1681,14 @@ async function scn0006T3(browser) {
     assert.equal(MOCK.experts.length, before + 1);
     const created = MOCK.experts.find((x) => x.name === '回归迁移专家');
     assert.ok(created);
-    await ctx.page.locator('#ex-duty').fill('负责回归迁移与校验');
+    await ctx.page.waitForSelector('#ex-duty-editor .sk-md-stub', { state: 'attached' });
+    assert.equal(await ctx.page.locator('#ex-duty-view').count(), 0, '编辑态不应再渲染只读职责块');
+    await ctx.page.evaluate(function () {
+      window.__SK_MOUNT__.opts.onChange('## 主要职责\n负责回归迁移与校验');
+    });
     await ctx.page.locator('#ex-save').click();
     await ctx.page.waitForTimeout(200);
-    assert.equal(created.duty, '负责回归迁移与校验');
+    assert.equal(created.duty, '## 主要职责\n负责回归迁移与校验', '职责按 Markdown 原样提交');
     await closeModal(ctx.page);
 
     const ex = MOCK.experts[0];
@@ -1800,14 +1811,18 @@ async function scn0025T3(browser) {
   const ctx = await openExpertDetail(browser);
   try {
     await ctx.page.locator('#ex-edit').click();
-    await ctx.page.waitForSelector('#ex-duty');
-    await ctx.page.locator('#ex-duty').fill('草稿职责在打开 Skill 弹层后仍保留');
+    await ctx.page.waitForSelector('#ex-duty-editor .sk-md-stub', { state: 'attached' });
+    await ctx.page.evaluate(function () {
+      window.__SK_MOUNT__.opts.onChange('草稿职责在打开 Skill 弹层后仍保留');
+    });
     await ctx.page.waitForTimeout(120);
     await openSkillRowPanel(ctx);
     await ctx.page.locator('#skm-close').click();
     await ctx.page.waitForTimeout(500);
     assert.equal(await ctx.page.locator('#ex-save').count(), 1, '应回到专家编辑态');
-    assert.equal(await ctx.page.locator('#ex-duty').inputValue(), '草稿职责在打开 Skill 弹层后仍保留');
+    await ctx.page.waitForSelector('#ex-duty-editor .sk-md-stub', { state: 'attached' });
+    const keptDuty = await ctx.page.evaluate(function () { return window.__SK_MOUNT__.opts.markdown; });
+    assert.equal(keptDuty, '草稿职责在打开 Skill 弹层后仍保留', '职责草稿在往返回弹层后仍在');
     noErrors(ctx);
   } finally { await ctx.page.close(); }
 }
@@ -2560,8 +2575,8 @@ const SCENARIOS = [
   ]],
   ['SCN-0006', '专家注册与组合配置', [
     ['SCN-0006-T1', '正', '卡片计数与搜索', scn0006T1],
-    ['SCN-0006-T2', '正', '五区详情齐全', scn0006T2],
-    ['SCN-0006-T3', '正', '停用写回 enabled=false', scn0006T3],
+    ['SCN-0006-T2', '正', '两区详情与职责 Markdown 渲染', scn0006T2],
+    ['SCN-0006-T3', '正', '职责 Markdown 编辑回写与停用', scn0006T3],
     ['SCN-0006-T4', '反', '取消停用保持启用', scn0006T4],
     ['SCN-0006-T5', '正', '详情弹窗 90% 视口高、页脚不出视口', scn0006T5]
   ]],

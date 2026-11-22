@@ -8,10 +8,11 @@ import { DF } from '../ui.js';
 import { API } from '../api.js';
 import { SKPM } from './skill-panel-modal.js';
 import { createWorkflowData } from '../workflow/data.js';
+import { mountMarkdown, destroyMarkdown } from '../shared/markdown-editor.js';
+import { renderMarkdown } from '../shared/markdown.js';
 
 
   var PALETTE = ['#2563eb', '#7c3aed', '#16a34a', '#ea580c', '#0d9488', '#dc2626', '#4f46e5', '#0ea5e9'];
-  var REF_TYPES = ['行业规则', '规范', '经验', '运行期注入'];
   var CAT_COLOR = { '编码': 'blue', '检索': 'teal', '审视': 'orange', '测试': 'green' };
 
   /* 列表状态：items 直接保存 ExpertListItem / ExpertDetail DTO */
@@ -72,20 +73,6 @@ import { createWorkflowData } from '../workflow/data.js';
 
   function categoryLabel(s) {
     return s.categoryLabel || s.categoryCode || 'Skill';
-  }
-
-  function toolKindMeta(kind) {
-    if (kind === 'mcp') return { label: 'MCP', color: 'purple' };
-    if (kind === 'cli') return { label: 'CLI', color: 'blue' };
-    if (kind === 'script') return { label: '脚本', color: 'orange' };
-    return { label: kind || '工具', color: 'gray' };
-  }
-
-  function toolStatusMeta(status) {
-    if (status === 'available') return { label: '可用', color: 'green' };
-    if (status === 'unavailable') return { label: '不可用', color: 'red' };
-    if (status === 'unverified') return { label: '未验证', color: 'gray' };
-    return { label: status || '未验证', color: 'gray' };
   }
 
   /* ========== 流程筛选 ========== */
@@ -340,6 +327,38 @@ import { createWorkflowData } from '../workflow/data.js';
     });
   }
 
+  /* 职责范围是 Markdown：查看态用共享渲染器，编辑态用共享 Milkdown 适配层（与 Skill 正文同一入口） */
+  var dutyEditor = null;
+  var dutySeq = 0;
+
+  function destroyDutyEditor() {
+    dutySeq++;
+    if (dutyEditor) { destroyMarkdown(dutyEditor); dutyEditor = null; }
+  }
+
+  function mountDutyEditor() {
+    var cur = d;
+    var el = cur && cur.bodyEl ? cur.bodyEl.querySelector('#ex-duty-editor') : null;
+    if (!el || !cur.edit || !cur.draft) return;
+    destroyDutyEditor();
+    var token = dutySeq;
+    mountMarkdown(el, {
+      markdown: cur.draft.duty || '',
+      editable: true,
+      onChange: function (md) {
+        if (!d || d !== cur || !d.draft) return;
+        d.draft.duty = md;
+      }
+    }).then(function (handle) {
+      if (token !== dutySeq) { destroyMarkdown(handle); return; }
+      dutyEditor = handle;
+    }).catch(function (err) {
+      if (token !== dutySeq) return;
+      el.innerHTML = '<div class="notice">' + DF.icon('warn', 14) +
+        '<span>职责编辑器初始化失败：' + DF.esc(err && err.message ? err.message : '未知错误') + '</span></div>';
+    });
+  }
+
   /* ========== 详情弹窗（查看/编辑） ========== */
   function openDrawer(id, opts) {
     opts = opts || {};
@@ -368,11 +387,13 @@ import { createWorkflowData } from '../workflow/data.js';
       onMount: function (b) {
         st.bodyEl = b;
         bindDrawerBody(b);
+        // 关闭 Skill 弹层后恢复专家弹层时不会重新拉详情，这里补挂职责编辑器
+        if (st.edit && st.dto && !st.loading && !st.error) mountDutyEditor();
         var modalEl = b.closest('.modal');
         var foot = modalEl ? modalEl.querySelector('.d-foot') : null;
         if (foot) bindFooter(foot);
       },
-      onClose: function () { if (d === st) d = null; }
+      onClose: function () { destroyDutyEditor(); if (d === st) d = null; }
     });
   }
 
@@ -436,10 +457,12 @@ import { createWorkflowData } from '../workflow/data.js';
 
   function refreshDrawer() {
     if (!d || !d.bodyEl) return;
+    destroyDutyEditor();
     d.bodyEl.innerHTML = d.loading
       ? loadingBodyHtml()
       : (d.error ? detailErrorHtml() : drawerBodyHtml());
     bindDrawerBody(d.bodyEl);
+    if (d.edit && !d.loading && !d.error) mountDutyEditor();
     var modalEl = d.bodyEl.closest('.modal');
     var foot = modalEl ? modalEl.querySelector('.d-foot') : null;
     if (foot) {
@@ -496,22 +519,13 @@ import { createWorkflowData } from '../workflow/data.js';
       color: dto.color || PALETTE[0],
       role: dto.role || '',
       duty: dto.duty || '',
-      skillOrder: dto.skillOrder || '',
-      verifyOrder: dto.verifyOrder || '',
-      notes: dto.notes || '',
       persona: (dto.persona || []).slice(),
-      refs: (dto.refs || []).map(function (r) {
-        return { label: r.label || '', refType: r.refType || '经验', path: r.path || '' };
-      }),
       skills: (dto.skills || []).map(function (s) {
         return {
           id: s.id, name: s.name,
           categoryCode: s.categoryCode, categoryLabel: s.categoryLabel,
           description: s.description
         };
-      }),
-      tools: (dto.tools || []).map(function (t) {
-        return { id: t.id, name: t.name, kind: t.kind, status: t.status };
       })
     };
   }
@@ -523,7 +537,7 @@ import { createWorkflowData } from '../workflow/data.js';
     var refCount = dto.refCount || 0;
     var h = '';
     h += '<div class="notice">' + DF.icon('warn', 14) +
-      '<span>专家 = 固定人格与职责 + 按任务组合的 Skill 与工具；评审专家绑定到评审节点时承担独立否决视角，不是独立实体。</span></div>';
+      '<span>专家 = 固定人格与职责（Markdown）+ 按任务组合的 Skill；评审专家绑定到评审节点时承担独立否决视角，不是独立实体。</span></div>';
     h += '<div class="kv" style="margin-bottom:2px"><span class="k">状态</span><span style="display:flex;align-items:center;gap:8px">' +
       DF.tag(dto.enabled ? '启用' : '停用', dto.enabled ? 'green' : 'gray') +
       '<span class="ex-sub">被引用 ' + refCount + ' 处 · B1 未提供引用方明细</span></span></div>';
@@ -532,17 +546,18 @@ import { createWorkflowData } from '../workflow/data.js';
     /* ① 角色描述 */
     h += '<div class="section-title" id="ex-sec-role">① 角色描述<span class="line"></span></div>';
     if (edit) {
-      h += '<div class="field"><label>职责范围</label><textarea class="inp" id="ex-duty" rows="3">' + DF.esc(src.duty) + '</textarea></div>';
+      h += '<div class="field"><label>职责范围</label>' +
+        '<div class="ex-md-editor sk-md-body" id="ex-duty-editor"></div>' +
+        '<div class="hint">Markdown；建议按「主要职责 / 技能配合顺序 / 重点验证顺序 / 对承担任务的解读」四节写。</div></div>';
       h += '<div class="field"><label>性格描述</label><div class="chips">' + personaChipsEdit(src.persona) + '</div></div>';
-      h += '<div class="field"><label>关注视角</label><textarea class="inp" id="ex-notes" rows="2">' + DF.esc(src.notes) + '</textarea></div>';
     } else {
-      h += '<div class="kv"><span class="k">职责范围</span><span class="ex-pre">' + DF.esc(src.duty || '—') + '</span></div>';
+      h += '<div class="kv"><span class="k">职责范围</span><div class="ex-md sk-md-body" id="ex-duty-view">' +
+        (String(src.duty || '').trim() ? renderMarkdown(src.duty) : '<span class="ex-sub">—</span>') + '</div></div>';
       h += '<div class="kv" style="margin-top:8px"><span class="k">性格描述</span><span><span class="chips" style="display:inline-flex">' +
         (src.persona || []).map(function (p) {
           return '<span class="tag gray">' + DF.esc(p) + '</span>';
         }).join('') +
         (!(src.persona || []).length ? '<span class="ex-sub">—</span>' : '') + '</span></span></div>';
-      h += '<div class="kv" style="margin-top:8px"><span class="k">关注视角</span><span class="ex-pre">' + DF.esc(src.notes || '—') + '</span></div>';
     }
 
     /* ② Skill 组合（有序） */
@@ -567,52 +582,6 @@ import { createWorkflowData } from '../workflow/data.js';
         '</div>';
     });
 
-    /* ③ 工具清单 */
-    h += '<div class="section-title ex-sec" id="ex-sec-tools">③ 工具清单<span class="line"></span>' +
-      (edit ? '<button class="btn sm" data-act="tool-add">' + DF.icon('plus', 12) + '添加工具</button>' : '') + '</div>';
-    var tools = src.tools || [];
-    if (!tools.length) {
-      h += '<div class="ex-sub" style="margin-bottom:6px">尚未挂载工具' + (edit ? '，可从工具库添加' : '') + '。</div>';
-    }
-    tools.forEach(function (t) {
-      var kind = toolKindMeta(t.kind);
-      var status = toolStatusMeta(t.status);
-      h += '<div class="ex-row"><span class="ex-mono" style="font-weight:600">' + DF.esc(t.name) + '</span>' +
-        DF.tag(kind.label, kind.color) + DF.tag(status.label, status.color) +
-        '<span class="ex-sum" style="flex:1;margin-top:0" title="' + DF.esc(t.description || '') + '">' + DF.esc(t.description || '') + '</span>' +
-        (edit ? '<i class="ex-x" data-tremove="' + DF.esc(t.id) + '" title="移除">×</i>' : '') +
-        '</div>';
-    });
-
-    /* ④ 主要工作内容（渐进式披露） */
-    h += '<div class="section-title ex-sec" id="ex-sec-work">④ 主要工作内容<span class="line"></span></div>';
-    h += '<details class="ex-wc" open><summary>主要职责</summary><div class="ex-pre">' + DF.esc(src.duty || '—') + '</div></details>';
-    h += '<details class="ex-wc"><summary>技能配合顺序</summary><div class="ex-pre">' + DF.esc(src.skillOrder || '—') + '</div></details>';
-    h += '<details class="ex-wc"><summary>重点验证顺序</summary><div class="ex-pre">' + DF.esc(src.verifyOrder || '—') + '</div></details>';
-    h += '<details class="ex-wc"><summary>对承担任务的解读</summary><div class="ex-pre">' + DF.esc(src.notes || '—') + '</div></details>';
-
-    /* ⑤ 参考知识 */
-    h += '<div class="section-title ex-sec" id="ex-sec-refs">⑤ 参考知识<span class="line"></span></div>';
-    var refs = src.refs || [];
-    if (!refs.length) h += '<div class="ex-sub">暂无参考知识。</div>';
-    refs.forEach(function (r, i) {
-      h += '<div class="ex-row">' + DF.tag(r.refType || '经验', 'purple') +
-        '<span style="font-size:13px">' + DF.esc(r.label || '') + '</span>' +
-        (r.path
-          ? '<span class="ex-mono ex-sum" style="flex:1;margin-top:0" title="' + DF.esc(r.path) + '">' + DF.esc(r.path) + '</span>'
-          : '<span style="flex:1"></span>') +
-        (edit ? '<i class="ex-x" data-rremove="' + i + '" title="删除">×</i>' : '') +
-        '</div>';
-    });
-    if (edit) {
-      h += '<div class="ex-ref-add">' +
-        '<input class="inp inp-sm" id="ex-ref-label" placeholder="名称，如: 编码规范约束手册" style="width:200px">' +
-        '<select class="inp inp-sm" id="ex-ref-type">' + REF_TYPES.map(function (t) {
-          return '<option>' + DF.esc(t) + '</option>';
-        }).join('') + '</select>' +
-        '<input class="inp inp-sm" id="ex-ref-path" placeholder="路径（可选），如: workspace:/knowledge/…" style="width:220px">' +
-        '<button class="btn sm" data-act="ref-add">添加</button></div>';
-    }
     return h;
   }
 
@@ -659,11 +628,8 @@ import { createWorkflowData } from '../workflow/data.js';
   }
 
   function bindDrawerBody(b) {
-    b.oninput = function (ev) {
-      if (!d || !d.edit || !d.draft) return;
-      if (ev.target.id === 'ex-duty') d.draft.duty = ev.target.value;
-      else if (ev.target.id === 'ex-notes') d.draft.notes = ev.target.value;
-    };
+    // 职责范围是 Markdown 编辑器，输入同步走 mountDutyEditor 的 onChange，这里只处理纯文本字段
+    b.oninput = function () {};
     b.onclick = function (ev) {
       if (!d) return;
       var t = ev.target;
@@ -692,21 +658,6 @@ import { createWorkflowData } from '../workflow/data.js';
         return;
       }
       if (t.closest('[data-act="skill-add"]')) { openSkillPicker(); return; }
-      if (t.closest('[data-act="tool-add"]')) { openToolPicker(); return; }
-      var trm = t.closest('[data-tremove]');
-      if (trm) {
-        var tid = trm.getAttribute('data-tremove');
-        d.draft.tools = d.draft.tools.filter(function (x) { return x.id !== tid; });
-        refreshDrawer();
-        return;
-      }
-      if (t.closest('[data-act="ref-add"]')) { addRef(b); return; }
-      var rrm = t.closest('[data-rremove]');
-      if (rrm) {
-        d.draft.refs.splice(+rrm.getAttribute('data-rremove'), 1);
-        refreshDrawer();
-        return;
-      }
     };
     b.onkeydown = function (ev) {
       if (d && d.edit && d.draft && ev.target.id === 'ex-persona-inp' && ev.key === 'Enter') {
@@ -740,38 +691,19 @@ import { createWorkflowData } from '../workflow/data.js';
     refreshDrawer();
   }
 
-  function addRef(b) {
-    if (!d || !d.draft) return;
-    var label = (b.querySelector('#ex-ref-label').value || '').trim();
-    if (!label) { DF.toast('请填写参考知识名称', 'warn'); return; }
-    var refType = b.querySelector('#ex-ref-type').value;
-    var path = (b.querySelector('#ex-ref-path').value || '').trim();
-    d.draft.refs.push({ label: label, refType: refType, path: path });
-    refreshDrawer();
-    DF.toast('已添加参考知识', 'ok');
-  }
-
   function saveDraft() {
     if (!d || !d.dto || !d.draft) return;
     var st = d;
     var dto = st.dto;
     var rev = dto.revision != null ? dto.revision : API.revision('expert', st.id);
+    // 后端已把 skillOrder/verifyOrder/notes 合并进 duty；tools/refs/toolIds 过渡期接受但忽略：只提交新结构
     var body = {
       name: st.draft.name,
       color: st.draft.color,
       role: st.draft.role,
       persona: st.draft.persona.slice(),
       duty: st.draft.duty,
-      skillOrder: st.draft.skillOrder,
-      verifyOrder: st.draft.verifyOrder,
-      notes: st.draft.notes,
-      refs: st.draft.refs.map(function (r) {
-        var o = { label: r.label, refType: r.refType };
-        if (r.path) o.path = r.path;
-        return o;
-      }),
-      skillIds: st.draft.skills.map(function (s) { return s.id; }),
-      toolIds: st.draft.tools.map(function (t) { return t.id; })
+      skillIds: st.draft.skills.map(function (s) { return s.id; })
     };
     var modalEl = st.bodyEl ? st.bodyEl.closest('.modal') : null;
     var saveBtn = modalEl ? modalEl.querySelector('#ex-save') : null;
@@ -887,41 +819,6 @@ import { createWorkflowData } from '../workflow/data.js';
       });
     }, function (err) {
       DF.toast('加载 Skill 库失败：' + API.errorText(err), 'err');
-    });
-  }
-
-  function openToolPicker() {
-    if (!d || !d.edit || !d.draft) return;
-    var cur = d;
-    apiCall(function () { return API.list('tool', { limit: 200 }); }).then(function (page) {
-      if (d !== cur || !cur.edit || !cur.draft) return;
-      var taken = {};
-      cur.draft.tools.forEach(function (t) { taken[t.id] = true; });
-      var items = ((page && page.items) || []).filter(function (t) {
-        return !taken[t.id];
-      }).map(function (t) {
-        var kind = toolKindMeta(t.kind);
-        return {
-          id: t.id, name: t.name, mono: true,
-          tag: kind.label, tagColor: kind.color,
-          description: t.description || '',
-          kind: t.kind, status: t.status
-        };
-      });
-      if (!items.length) { DF.toast('工具库中的工具均已加入', 'warn'); return; }
-      openPickerDialog({
-        title: '添加工具（从工具库勾选）',
-        items: items,
-        noneText: '请先勾选要添加的工具',
-        onPick: function (picked) {
-          picked.forEach(function (it) {
-            cur.draft.tools.push({ id: it.id, name: it.name, kind: it.kind, status: it.status });
-          });
-          DF.toast('已添加 ' + picked.length + ' 个工具', 'ok');
-        }
-      });
-    }, function (err) {
-      DF.toast('加载工具库失败：' + API.errorText(err), 'err');
     });
   }
 

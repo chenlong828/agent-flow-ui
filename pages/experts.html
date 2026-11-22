@@ -18,6 +18,12 @@
   .ex-skill-item[data-sopen] { cursor:pointer; transition:border-color .12s, box-shadow .12s; }
   .ex-skill-item[data-sopen]:hover { border-color:var(--c-primary); box-shadow:0 0 0 1px var(--c-primary) inset; }
   .ex-skill-open-hint { font-size:11px; color:var(--t-3); display:inline-flex; align-items:center; gap:3px; flex-shrink:0; margin-top:2px; }
+  /* 职责范围：查看态 Markdown 排版 + 编辑态编辑器外框（排版复用 skill-panel.css 的 .sk-md-body） */
+  .ex-md { font-size:13px; line-height:1.75; color:var(--t-2); min-width:0; }
+  .ex-md > *:first-child { margin-top:0; }
+  .ex-md h1, .ex-md h2, .ex-md h3, .ex-md h4 { color:var(--t-1); }
+  .ex-md-editor { min-height:200px; max-height:360px; overflow:auto; border:1px solid var(--c-line-2); border-radius:6px; padding:8px 12px; background:var(--c-panel); }
+  .ex-md-editor .ProseMirror { min-height:184px; outline:none; }
   .ex-skill-item .ex-idx { width:20px; height:20px; border-radius:50%; background:#eef2f7; color:var(--t-2); font-size:11px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
   .ex-move { border:1px solid var(--c-line-2); background:var(--c-panel); border-radius:4px; width:22px; height:22px; line-height:1; cursor:pointer; color:var(--t-2); font-size:13px; flex-shrink:0; padding:0; }
   .ex-move:hover:not(:disabled) { border-color:var(--c-primary); color:var(--c-primary); }
