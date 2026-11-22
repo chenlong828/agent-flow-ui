@@ -3,7 +3,7 @@ layer: design
 module: global
 status: current
 generated: true
-updated: 2026-11-21
+updated: 2026-11-22
 ---
 
 # 场景索引
@@ -12,9 +12,9 @@ updated: 2026-11-21
 
 ## 统计
 
-- 场景：23
-- 文档用例：127
-- Playwright runner：92
+- 场景：24
+- 文档用例：132
+- Playwright runner：97
 - 其他执行层：35（引擎 / BFF / 真实 B1）
 
 ## 清单
@@ -44,3 +44,4 @@ updated: 2026-11-21
 | SCN-0023 | SCN-0023 运行轨迹图与编辑器画布同源 | operations / instances | verified | `design/scenarios/operations/instances/inspect-run-trace/scenario.md` |
 | SCN-0024 | SCN-0024 发起运行的图片初始资料（提交时上传） | operations / instances | verified | `design/scenarios/operations/instances/start-run-with-images/scenario.md` |
 | SCN-0025 | SCN-0025 从专家弹层查看与编辑 Skill | assets / expert-registry | verified | `design/scenarios/assets/expert-registry/open-skill-panel/scenario.md` |
+| SCN-0026 | SCN-0026 专家列表按工作流筛选 | assets / expert-registry | verified | `design/scenarios/assets/expert-registry/workflow-filter/scenario.md` |

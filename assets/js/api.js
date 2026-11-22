@@ -17,10 +17,15 @@
   function qs(query) {
     if (!query) return '';
     var parts = [];
-    Object.keys(query).forEach(function (k) {
-      var v = query[k];
+    function push(k, v) {
       if (v === undefined || v === null || v === '') return;
       parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+    }
+    Object.keys(query).forEach(function (k) {
+      var v = query[k];
+      // 数组值按同名参数重复（如 workflowId=a&workflowId=b），与 B1 的多值过滤语义一致
+      if (Array.isArray(v)) v.forEach(function (item) { push(k, item); });
+      else push(k, v);
     });
     return parts.length ? '?' + parts.join('&') : '';
   }

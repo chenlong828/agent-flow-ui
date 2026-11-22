@@ -33,6 +33,7 @@ for (const k of Object.keys(MOCK)) {
   var inputDeleteLog = [];
   var inputUploadFailures = [];
   var startFailures = [];
+  var workflowListFailures = [];
   var TINY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
   function resetRuns() {
@@ -978,7 +979,48 @@ for (const k of Object.keys(MOCK)) {
     return Promise.resolve({ status: 200, body: { items: items, total: items.length, limit: 200, offset: 0 } });
   }
 
-  function resource(parts, method, body, headers) {
+  function workflowIdsOf(query) {
+    var raw = query && query.workflowId;
+    if (!raw) return [];
+    return (Array.isArray(raw) ? raw : [raw]).filter(Boolean);
+  }
+
+  /** 流程 → 绑定过的专家 ID（与 B1 的 workflowId 过滤语义一致：多流程并集）。 */
+  function expertIdsBoundTo(workflowIds) {
+    var wanted = {};
+    workflowIds.forEach(function (id) { wanted[id] = true; });
+    var bound = {};
+    (MOCK.workflows || []).forEach(function (w) {
+      if (!wanted[w.id]) return;
+      ((w.graph && w.graph.nodes) || []).forEach(function (n) {
+        if (n && n.expertId) bound[n.expertId] = true;
+      });
+    });
+    return bound;
+  }
+
+  /** 专家列表支持可重复 workflowId：只返回这些流程节点绑定过的专家。 */
+  function workflowListResponse() {
+    if (workflowListFailures.length) return Promise.resolve(workflowListFailures.shift());
+    var items = (MOCK.workflows || []).map(workflowSummary);
+    return Promise.resolve({ status: 200, body: { items: items, total: items.length, limit: 200, offset: 0 } });
+  }
+
+  function listExperts(query) {
+    var ids = workflowIdsOf(query);
+    var arr = MOCK.experts;
+    if (ids.length) {
+      var bound = expertIdsBoundTo(ids);
+      arr = arr.filter(function (e) { return bound[e.id]; });
+    }
+    return list(arr, function (e) { return expertDto(e, false); });
+  }
+
+  function workflowSummary(w) {
+    return { id: w.id, name: w.name, type: w.type, description: w.description, revision: 1 };
+  }
+
+  function resource(parts, method, body, headers, query) {
     var kind = parts[0];
     var id = parts[1];
     var sub = parts[2];
@@ -992,7 +1034,10 @@ for (const k of Object.keys(MOCK)) {
       : function (e) { return expertDto(e, false); };
     var kindName = { harnesses: 'harness', tools: 'tool', skills: 'skill', experts: 'expert' }[kind];
 
-    if (method === 'GET' && parts.length === 1) return list(arr, map);
+    if (method === 'GET' && parts.length === 1) {
+      if (kind === 'experts') return listExperts(query);
+      return list(arr, map);
+    }
     if (method === 'GET' && parts.length === 2) {
       var item = find(arr, id);
       if (!item) return Promise.resolve(notFound());
@@ -1074,6 +1119,9 @@ for (const k of Object.keys(MOCK)) {
     },
     failNextStart: function (status, code, details) {
       startFailures.push({ status: status, code: code, details: details });
+    },
+    failNextWorkflowList: function (status, code) {
+      workflowListFailures.push({ status: status || 500, body: { error: { code: code || 'internal_error', message: '流程列表不可用' } } });
     }
   };
 
@@ -1085,7 +1133,11 @@ for (const k of Object.keys(MOCK)) {
       raw.slice(qIdx + 1).split('&').forEach(function (pair) {
         if (!pair) return;
         var kv = pair.split('=');
-        query[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+        var key = decodeURIComponent(kv[0]);
+        var val = decodeURIComponent(kv[1] || '');
+        if (query[key] === undefined) query[key] = val;
+        else if (Array.isArray(query[key])) query[key].push(val);
+        else query[key] = [query[key], val];
       });
     }
     var u = raw.split('?')[0].replace(/^\/+|\/+$/g, '');
@@ -1099,6 +1151,7 @@ for (const k of Object.keys(MOCK)) {
     if (parts[0] === 'skill-drafts') return draftResource(parts, method, body, headers, query);
     if (parts[0] === 'run-inputs') return Promise.resolve(runInputsResource(parts, method, body));
     if (parts[0] === 'runs') return runResource(parts, method, body, headers, query);
+    if (parts[0] === 'workflows' && parts.length === 1 && method === 'GET') return workflowListResponse();
     if (parts[0] === 'workflows' && parts[2] === 'runs' && method === 'POST') return startRun(parts[1], body);
     if (parts[0] === 'skills' && parts[2] === 'document' && method === 'GET') {
       var s = find(MOCK.skills, parts[1]);
@@ -1110,7 +1163,7 @@ for (const k of Object.keys(MOCK)) {
       if (!dl) return Promise.resolve(notFound());
       return Promise.resolve({ status: 200, body: null, headers: { ETag: '"' + rev('skill', dl.id) + '"', 'Content-Type': 'application/zip' } });
     }
-    return resource(parts, method, body, headers);
+    return resource(parts, method, body, headers, query);
   };
 
 /** 测试注入一条运行记录（不进入默认 5 条列表夹具，避免影响列表计数断言）。 */
@@ -1129,6 +1182,7 @@ export function resetFakeB1() {
   inputDeleteLog = [];
   inputUploadFailures = [];
   startFailures = [];
+  workflowListFailures = [];
   drafts = Object.create(null);
   for (const k of Object.keys(SEED)) MOCK[k] = structuredClone(SEED[k]);
 }

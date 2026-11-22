@@ -31,7 +31,7 @@ updated: 2026-11-19
 | `CMP-run-files` | `instance-detail.html` 节点弹层/页头任务文件 | `run/views/files.js` | 运行任务文件只读浏览：根切换、面包屑、目录懒加载、Markdown/文本/二进制/截断预览 |
 | `CMP-run-session` | `instance-detail.html` 节点弹层执行会话 | `run/views/session.js` | 执行会话只读：详情、历史事件、`EventSource` 实时追加、raw 下载；无 sessionId |
 | `CMP-skills` | `pages/skills.html` + `pages/skill-detail.html?id=&mode=` | `skills.js`、`skill-detail.js`、`skill-common.js`、`skill-detail-markdown.js`、共享面板 `skill-panel*.js` | Skill 列表、筛选、启停、删除、引用方；专门页只做外壳，查看/编辑/新建由共享面板 `SKP` 承接（正文用 Milkdown 渲染、编辑走草稿），专家弹层复用同一面板 |
-| `CMP-experts` | `pages/experts.html` | `experts.js` | 专家列表、五区详情/编辑、Skill/工具组合、Skill 行打开共享面板（`SKPM`）查看/编辑 Skill、启停 |
+| `CMP-experts` | `pages/experts.html` | `experts.js` | 专家列表（搜索/状态/按工作流筛选）、五区详情/编辑、Skill/工具组合、Skill 行打开共享面板（`SKPM`）查看/编辑 Skill、启停 |
 | `CMP-harnesses` | `pages/harnesses.html` | `harnesses.js` | 设施列表、注册、健康/配额、启停、删除 |
 | `CMP-tools` | `pages/tools.html` | `tools.js` | 工具注册表、注册、模拟调试、引用方、删除保护 |
 | `CMP-analytics` | `pages/analytics.html` | `analytics.js` | KPI、趋势、阶段准出、评审记录、Skill 审计（只读） |
@@ -73,6 +73,7 @@ updated: 2026-11-19
 | 运行详情 | `run/views/files` | 文件只读视图 | 同步，ESM import | 只经 `run/data` 取数；不 import 页面 |
 | 运行详情 | `run/views/session` | 会话只读视图 + `EventSource` | 同步，ESM import | 只经 `run/data` 取数；unmount 必关流 |
 | 运行两页 | `workflow/data` / `workflow/model` | 工作流图与坐标 | HTTP + 同步 | 详情优先读 `RunDetail.graph`（冻结快照）；仅快照缺失时回退只读工作流图，不改图 |
+| `CMP-experts` | `workflow/data` | `WorkflowSummary.id/name`（`list({limit:200})`） | 同步，ESM import | 仅流程筛选取名字；不读工作流图、不写工作流，筛选结果以 B1 `GET /experts?workflowId=` 为准 |
 | Skill 正文 / 运行意图 | `shared/markdown-editor` | `mountMarkdown/destroyMarkdown` | 动态 import vendor | 只经适配层使用 Milkdown，页面不直接 import vendor |
 | 运行详情 | `shared/markdown` | `renderMarkdown` | 同步，ESM import | 节点消息只读渲染；不执行原始 HTML |
 | `CMP-workspaces` 两页 | `WSC` | 目录树/跨页联动 | 同步，ESM import | 不供其他页面使用 |

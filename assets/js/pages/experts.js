@@ -7,6 +7,7 @@
 import { DF } from '../ui.js';
 import { API } from '../api.js';
 import { SKPM } from './skill-panel-modal.js';
+import { createWorkflowData } from '../workflow/data.js';
 
 
   var PALETTE = ['#2563eb', '#7c3aed', '#16a34a', '#ea580c', '#0d9488', '#dc2626', '#4f46e5', '#0ea5e9'];
@@ -14,7 +15,11 @@ import { SKPM } from './skill-panel-modal.js';
   var CAT_COLOR = { '编码': 'blue', '检索': 'teal', '审视': 'orange', '测试': 'green' };
 
   /* 列表状态：items 直接保存 ExpertListItem / ExpertDetail DTO */
-  var state = { items: [], loading: true, error: null, q: '', status: 'all' };
+  var state = {
+    items: [], loading: true, error: null, q: '', status: 'all',
+    workflows: [], wfIds: [], wfLoading: false, wfError: ''
+  };
+  var wfData = createWorkflowData();
   var body = null;
   var listSeq = 0;
   var busy = {};
@@ -83,7 +88,25 @@ import { SKPM } from './skill-panel-modal.js';
     return { label: status || '未验证', color: 'gray' };
   }
 
-  /* ========== 列表渲染 ========== */
+  /* ========== 流程筛选 ========== */
+  function wfName(id) {
+    for (var i = 0; i < state.workflows.length; i++) {
+      if (state.workflows[i].id === id) return state.workflows[i].name;
+    }
+    return '未知流程';
+  }
+
+  function wfButtonHtml() {
+    var n = state.wfIds.length;
+    var label = n ? '流程：' + wfName(state.wfIds[0]) + (n > 1 ? ' +' + (n - 1) : '') : '流程：全部';
+    var disabled = state.wfLoading || !!state.wfError || !state.workflows.length;
+    return '<button class="btn" id="ex-wf-btn"' + (disabled ? ' disabled' : '') +
+        ' title="' + DF.esc(state.wfError || (state.wfLoading ? '正在加载流程…' : '只显示所选流程节点绑定过的专家')) + '">' +
+        DF.esc(label) + '</button>' +
+      (n ? '<button class="btn sm" id="ex-wf-clear">清除流程筛选</button>' : '') +
+      (state.wfError ? '<span class="ex-sub" id="ex-wf-err">' + DF.esc(state.wfError) + '，暂时无法按流程筛选</span>' : '');
+  }
+
   function render() {
     body.innerHTML =
       '<div class="toolbar">' +
@@ -93,6 +116,7 @@ import { SKPM } from './skill-panel-modal.js';
           '<option value="on"' + (state.status === 'on' ? ' selected' : '') + '>启用</option>' +
           '<option value="off"' + (state.status === 'off' ? ' selected' : '') + '>停用</option>' +
         '</select>' +
+        wfButtonHtml() +
       '</div>' +
       '<div id="ex-grid"></div>';
     document.getElementById('ex-q').addEventListener('input', function (e) {
@@ -103,7 +127,54 @@ import { SKPM } from './skill-panel-modal.js';
       state.status = e.target.value;
       renderGrid();
     });
+    var wfBtn = document.getElementById('ex-wf-btn');
+    if (wfBtn) wfBtn.onclick = openWorkflowFilter;
+    var wfClear = document.getElementById('ex-wf-clear');
+    if (wfClear) wfClear.onclick = function () { applyWorkflowFilter([]); };
     renderGrid();
+  }
+
+  /* 勾选弹窗：不勾选 = 全部；允许清空（与 DF.modal.picker 的「至少选一项」不同） */
+  function openWorkflowFilter() {
+    if (state.wfError || state.wfLoading || !state.workflows.length) return;
+    var rows = state.workflows.map(function (w) {
+      var checked = state.wfIds.indexOf(w.id) > -1;
+      return '<label class="df-pick-row"><input type="checkbox" value="' + DF.esc(w.id) + '"' + (checked ? ' checked' : '') + '>' +
+        '<span style="font-weight:600;font-size:13px">' + DF.esc(w.name) + '</span></label>';
+    }).join('');
+    DF.modal.form({
+      title: '按流程筛选专家',
+      width: 540,
+      body: '<div class="hint" style="margin-bottom:8px">只显示所选流程节点绑定过的专家；多个流程取并集，不勾选 = 全部专家。</div>' + rows,
+      okText: '应用',
+      onOk: function (b, close) {
+        var ids = Array.prototype.map.call(b.querySelectorAll('input[type="checkbox"]:checked'), function (el) { return el.value; });
+        close();
+        applyWorkflowFilter(ids);
+      }
+    });
+  }
+
+  function applyWorkflowFilter(ids) {
+    state.wfIds = (ids || []).slice();
+    var q = state.wfIds.map(function (id) { return 'workflowId=' + encodeURIComponent(id); }).join('&');
+    try { history.replaceState(null, '', 'experts.html' + (q ? '?' + q : '')); } catch { /* file:// 等环境忽略 */ }
+    render();
+    loadExperts();
+  }
+
+  function loadWorkflows() {
+    state.wfLoading = true;
+    state.wfError = '';
+    apiCall(function () { return wfData.list({ limit: 200 }); }).then(function (page) {
+      state.workflows = ((page && page.items) || []).map(function (w) { return { id: w.id, name: w.name }; });
+      state.wfLoading = false;
+      render();
+    }, function () {
+      state.wfLoading = false;
+      state.wfError = '流程列表加载失败';
+      render();
+    });
   }
 
   function renderGrid() {
@@ -123,6 +194,15 @@ import { SKPM } from './skill-panel-modal.js';
       return;
     }
     if (!state.items.length) {
+      if (state.wfIds.length) {
+        grid.innerHTML = DF.empty({
+          icon: 'file', iconSize: 36, title: '所选流程下没有绑定专家',
+          action: { id: 'ex-wf-empty-clear', label: '清除流程筛选', icon: 'x' }
+        });
+        var clearBtn = grid.querySelector('#ex-wf-empty-clear');
+        if (clearBtn) clearBtn.onclick = function () { applyWorkflowFilter([]); };
+        return;
+      }
       grid.innerHTML = emptyHtml('注册第一位专家，组合 Skill 形成执行角色', true);
       bindEmpty(grid);
       return;
@@ -206,7 +286,9 @@ import { SKPM } from './skill-panel-modal.js';
     state.loading = true;
     state.error = null;
     renderGrid();
-    apiCall(function () { return API.list('expert', { limit: 200 }); }).then(function (page) {
+    var query = { limit: 200 };
+    if (state.wfIds.length) query.workflowId = state.wfIds.slice();
+    apiCall(function () { return API.list('expert', query); }).then(function (page) {
       if (seq !== listSeq) return;
       state.items = (page && page.items) || [];
       state.loading = false;
@@ -903,7 +985,11 @@ import { SKPM } from './skill-panel-modal.js';
     subtitle: '注册并管理执行智能体角色',
     actions: '<button class="btn primary" id="ex-new">' + DF.icon('plus', 14) + '新建专家</button>'
   });
+  try {
+    state.wfIds = new URLSearchParams(location.search).getAll('workflowId').filter(Boolean);
+  } catch { state.wfIds = []; }
   render();
   var newBtn = document.getElementById('ex-new');
   if (newBtn) newBtn.onclick = openNewModal;
+  loadWorkflows();
   loadExperts();

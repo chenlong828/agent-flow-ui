@@ -1831,6 +1831,86 @@ async function scn0025T4(browser) {
   } finally { await ctx.page.close(); }
 }
 
+/* ----------------------------- SCN-0026 ----------------------------- */
+/** 流程筛选的夹具：w1 绑定 5 位专家，w3 绑定 1 位，w6 绑定 2 位（含公共的评审专家）。 */
+const WF_W1 = 'w1';
+const WF_W3 = 'w3';
+const WF_W6 = 'w6';
+const WF_EMPTY = '00000000-0000-4000-8000-000000000000';
+
+const cardTitles = (page) => page.locator('#ex-grid .item-card .ic-title').allTextContents();
+
+async function scn0026T1(browser) {
+  const ctx = await open(browser, 'experts', 'workflowId=' + WF_W1, { wait: 700 });
+  try {
+    assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), 5, '单流程只显示该流程绑定的 5 位专家');
+    assert.deepEqual((await cardTitles(ctx.page)).sort(),
+      ['需求分析专家', '方案设计专家', '测试验证专家', '评审专家', '集成验证专家'].sort());
+    assert.match(await ctx.page.locator('#ex-wf-btn').textContent(), /研发四阶段主流程/, '筛选按钮显示已选流程名');
+    assert.ok(await ctx.page.locator('#ex-wf-clear').count(), '过滤中应提供清除入口');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0026T2(browser) {
+  const ctx = await open(browser, 'experts', 'workflowId=' + WF_W3 + '&workflowId=' + WF_W6, { wait: 700 });
+  try {
+    assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), 3, '多流程取并集（1 + 2，评审专家去重）');
+    assert.deepEqual((await cardTitles(ctx.page)).sort(), ['代码审视专家', '知识库运营专家', '评审专家'].sort());
+    assert.match(await ctx.page.locator('#ex-wf-btn').textContent(), /批量代码审视 \+1/);
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0026T3(browser) {
+  const ctx = await open(browser, 'experts', '', { wait: 700 });
+  try {
+    assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), MOCK.experts.length, '未筛选时返回全部专家');
+    await ctx.page.locator('#ex-wf-btn').click();
+    await ctx.page.waitForTimeout(200);
+    assert.match(await ctx.page.locator('.modal .d-head').textContent(), /按流程筛选专家/);
+    await ctx.page.locator('.modal label.df-pick-row', { hasText: '批量代码审视' }).locator('input').check();
+    await ctx.page.locator('.modal .d-foot .btn.primary').click();
+    await ctx.page.waitForTimeout(500);
+    assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), 1, '筛选后只剩该流程绑定的专家');
+    assert.match(ctx.page.url(), /workflowId=w3/, '筛选条件写入 URL');
+    await ctx.page.locator('#ex-wf-clear').click();
+    await ctx.page.waitForTimeout(500);
+    assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), MOCK.experts.length, '清除后恢复全部专家');
+    assert.ok(!/workflowId=/.test(ctx.page.url()), '清除后 URL 不带筛选参数');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0026T4(browser) {
+  // openPage 会在打开前重置 fake B1，失败注入必须放在 setup 里
+  const ctx = await open(browser, 'experts', '', {
+    wait: 700,
+    setup: function () { fakeB1.failNextWorkflowList(500, 'internal_error'); }
+  });
+  try {
+    assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), MOCK.experts.length, '流程列表失败不影响专家列表');
+    assert.ok(await ctx.page.locator('#ex-wf-btn').isDisabled(), '流程列表失败时筛选按钮禁用');
+    assert.match(await ctx.page.locator('#ex-wf-err').textContent(), /流程列表加载失败/);
+    await ctx.page.locator('#ex-wf-btn').click({ force: true });
+    await ctx.page.waitForTimeout(200);
+    assert.equal(await ctx.page.locator('.modal').count(), 0, '禁用时点击不打开筛选弹窗');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
+async function scn0026T5(browser) {
+  const ctx = await open(browser, 'experts', 'workflowId=' + WF_EMPTY, { wait: 700 });
+  try {
+    assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), 0, '未知流程返回空集');
+    assert.match(await ctx.page.locator('#ex-grid').textContent(), /所选流程下没有绑定专家/);
+    await ctx.page.locator('#ex-wf-empty-clear').click();
+    await ctx.page.waitForTimeout(500);
+    assert.equal(await ctx.page.locator('#ex-grid .item-card').count(), MOCK.experts.length, '空态里的清除按钮恢复全部专家');
+    noErrors(ctx);
+  } finally { await ctx.page.close(); }
+}
+
 /* ----------------------------- SCN-0007 ----------------------------- */
 async function scn0007T1(browser) {
   const ctx = await open(browser, 'harnesses', '', { wait: 600 });
@@ -2490,6 +2570,13 @@ const SCENARIOS = [
     ['SCN-0025-T2', '正', '弹层内编辑保存后回填专家详情', scn0025T2],
     ['SCN-0025-T3', '正', '关闭后回到专家弹层且草稿不丢', scn0025T3],
     ['SCN-0025-T4', '反', '未保存时关闭被拦截', scn0025T4]
+  ]],
+  ['SCN-0026', '专家列表按工作流筛选', [
+    ['SCN-0026-T1', '正', '单流程筛选', scn0026T1],
+    ['SCN-0026-T2', '正', '多流程并集', scn0026T2],
+    ['SCN-0026-T3', '正', '弹窗筛选、URL 同步与清除', scn0026T3],
+    ['SCN-0026-T4', '反', '流程列表失败不影响专家列表', scn0026T4],
+    ['SCN-0026-T5', '正', '空结果与清除', scn0026T5]
   ]],
   ['SCN-0014', 'Skill 专门页面查看、编辑与下载', [
     ['SCN-0014-T1', '正', '查看态正文与文件清单', scn0014T1],
